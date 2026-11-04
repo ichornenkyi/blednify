@@ -1,6 +1,40 @@
-import { Hono } from "hono";
+import { createApp, createContext, VERSION } from "./app";
+import { loadConfig } from "./config";
 
-export const app = new Hono();
-app.get("/api/health", (c) => c.json({ ok: true, name: "blednify", version: "0.1.0", trackCount: 0 }));
+export { createApp, createContext } from "./app";
 
-export default { port: Number(process.env.PORT ?? 8787), fetch: app.fetch };
+if (import.meta.main) {
+  const config = loadConfig();
+  const ctx = createContext(config);
+  const app = createApp(ctx);
+
+  const server = Bun.serve({
+    port: config.port,
+    fetch: app.fetch,
+    // Hard backstop only: the upload route's bodyLimit enforces MAX_UPLOAD_MB with a JSON 413.
+    maxRequestBodySize: config.maxUploadBytes * 4,
+    idleTimeout: 60,
+  });
+
+  console.log(
+    `blednify-server ${VERSION} on http://${server.hostname}:${server.port}` +
+      ` · music ${config.musicDir} · data ${config.dataDir}` +
+      ` · writes ${config.adminToken ? "require ADMIN_TOKEN" : "OPEN (no ADMIN_TOKEN)"}` +
+      ` · search ${ctx.db.fts ? "fts5" : "like"}`,
+  );
+
+  // Answer requests immediately; index in the background.
+  setTimeout(() => ctx.scanner.scan().catch((err) => console.error("[scan] failed:", err)), 0);
+
+  const shutdown = (signal: string) => {
+    console.log(`${signal}: shutting down`);
+    // Let in-flight requests finish, but don't let a long-lived audio stream hold shutdown hostage.
+    setTimeout(() => process.exit(0), 5000).unref();
+    void server.stop().finally(() => {
+      ctx.db.sql.close();
+      process.exit(0);
+    });
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}

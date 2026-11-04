@@ -1,0 +1,279 @@
+import { useCallback, useState, type ReactNode } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import {
+  player,
+  useLikedTracks,
+  useLocalAlbums,
+  useLocalTracks,
+  useRecentlyPlayed,
+  useRemoteAlbums,
+  useRemoteTracks,
+  useServerStatus,
+  type AlbumView,
+  type AppTrack,
+} from '@/core';
+import { importMusic } from '@/ui/actions';
+import { AlbumCard } from '@/ui/components/AlbumCard';
+import { Artwork } from '@/ui/components/Artwork';
+import { EmptyState } from '@/ui/components/EmptyState';
+import { Icon } from '@/ui/components/Icon';
+import { IconButton } from '@/ui/components/IconButton';
+import { PressableScale } from '@/ui/components/PressableScale';
+import { PrimaryButton } from '@/ui/components/PrimaryButton';
+import { Rail, RAIL_CARD_WIDTH } from '@/ui/components/Rail';
+import { Text } from '@/ui/components/Text';
+import { openTrackActions } from '@/ui/components/TrackActions';
+import { haptics } from '@/ui/haptics';
+import { nav } from '@/ui/nav';
+import { colors, radius, space } from '@/ui/theme';
+
+function greeting(date = new Date()) {
+  const h = date.getHours();
+  if (h < 5) return 'Good night';
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const albumKey = (a: AlbumView) => `${a.origin}:${a.id}`;
+const trackKey = (t: AppTrack) => t.key;
+
+export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  const server = useServerStatus();
+  const recent = useRecentlyPlayed(5);
+  const liked = useLikedTracks();
+  const localTracks = useLocalTracks();
+  const localAlbums = useLocalAlbums();
+  const newOnServer = useRemoteTracks({ sort: 'added' });
+  const remoteAlbums = useRemoteAlbums();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fresh = newOnServer.tracks.slice(0, 20);
+  const albums = remoteAlbums.albums.slice(0, 20);
+  const hasServer = server.serverUrl.length > 0;
+  const hasLibrary = localTracks.length > 0 || recent.length > 0 || liked.length > 0;
+  const showWelcome = !hasServer && !hasLibrary;
+  const showOffline = hasServer && !server.isLoading && !server.online && fresh.length === 0;
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    newOnServer.refetch();
+    remoteAlbums.refetch();
+    // Queries are stale-while-revalidate; the spinner is only a gesture acknowledgement.
+    setTimeout(() => setRefreshing(false), 700);
+  }, [newOnServer, remoteAlbums]);
+
+  return (
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={{ paddingTop: insets.top + space.md, paddingBottom: space.xxl }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        hasServer ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+            progressBackgroundColor={colors.surface2}
+          />
+        ) : undefined
+      }>
+      <View style={styles.header}>
+        <View style={styles.headerText}>
+          <Text variant="display" numberOfLines={1} adjustsFontSizeToFit>
+            {greeting()}
+          </Text>
+          <ServerPill online={server.online} loading={server.isLoading} hasServer={hasServer} trackCount={server.trackCount} />
+        </View>
+        <IconButton icon="arrow-down-circle-outline" label="Downloads" onPress={nav.downloads} />
+        <IconButton icon="settings-outline" label="Settings" onPress={nav.settings} />
+      </View>
+
+      {showWelcome ? (
+        <EmptyState
+          icon="musical-notes"
+          title="Your music, nothing else"
+          message="Connect your Blednify server to stream your collection, or import audio files already on this phone.">
+          <PrimaryButton label="Connect server" icon="server-outline" onPress={nav.settings} />
+          <PrimaryButton label="Import music" icon="add" variant="surface" onPress={importMusic} />
+        </EmptyState>
+      ) : (
+        <>
+          <QuickGrid recent={recent} likedCount={liked.length} />
+
+          {showOffline ? (
+            <View style={styles.notice}>
+              <Icon name="cloud-offline-outline" size={22} color={colors.textSecondary} />
+              <View style={styles.noticeText}>
+                <Text variant="bodyStrong">Server unreachable</Text>
+                <Text variant="caption">Playing from your phone. Check the address in Settings.</Text>
+              </View>
+              <IconButton icon="chevron-forward" label="Open settings" onPress={nav.settings} />
+            </View>
+          ) : null}
+
+          <Rail
+            title="New on server"
+            data={fresh}
+            keyExtractor={trackKey}
+            renderItem={({ item, index }) => (
+              <AlbumCard
+                width={RAIL_CARD_WIDTH}
+                title={item.title}
+                subtitle={item.artist}
+                artworkUri={item.artworkUri}
+                recyclingKey={item.key}
+                onPress={() => {
+                  haptics.tap();
+                  player.playTracks(fresh, index);
+                }}
+                onLongPress={() => openTrackActions(item)}
+              />
+            )}
+          />
+          <Rail
+            title="Albums"
+            data={albums}
+            keyExtractor={albumKey}
+            renderItem={({ item }) => (
+              <AlbumCard
+                width={RAIL_CARD_WIDTH}
+                title={item.title}
+                subtitle={item.artist}
+                artworkUri={item.artworkUri}
+                recyclingKey={albumKey(item)}
+                onPress={() => nav.album(item.id, item.origin)}
+              />
+            )}
+            actionLabel="See all"
+            onAction={() => nav.library('albums')}
+          />
+          <Rail
+            title="On this phone"
+            data={localAlbums}
+            keyExtractor={albumKey}
+            renderItem={({ item }) => (
+              <AlbumCard
+                width={RAIL_CARD_WIDTH}
+                title={item.title}
+                subtitle={item.artist}
+                artworkUri={item.artworkUri}
+                recyclingKey={albumKey(item)}
+                onPress={() => nav.album(item.id, item.origin)}
+              />
+            )}
+            actionLabel="Import"
+            onAction={importMusic}
+          />
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+function ServerPill({ online, loading, hasServer, trackCount }: { online: boolean; loading: boolean; hasServer: boolean; trackCount: number }) {
+  if (!hasServer) return <Text variant="caption">Local library</Text>;
+  const label = loading ? 'Connecting…' : online ? `Server · ${trackCount.toLocaleString()} tracks` : 'Server offline';
+  return (
+    <View style={styles.pill}>
+      <View style={[styles.pillDot, { backgroundColor: online ? colors.success : loading ? colors.textTertiary : colors.danger }]} />
+      <Text variant="caption">{label}</Text>
+    </View>
+  );
+}
+
+/** Two-column quick-access tiles: Liked songs + recently played. */
+function QuickGrid({ recent, likedCount }: { recent: AppTrack[]; likedCount: number }) {
+  if (recent.length === 0 && likedCount === 0) return null;
+  return (
+    <View style={styles.grid}>
+      <QuickTile
+        title="Liked songs"
+        subtitle={`${likedCount} ${likedCount === 1 ? 'track' : 'tracks'}`}
+        art={<Artwork uri={null} label="Liked" size={56} radius={0} fallbackIcon="heart" />}
+        onPress={() => nav.library('liked')}
+      />
+      {recent.map((t, i) => (
+        <QuickTile
+          key={t.key}
+          title={t.title}
+          subtitle={t.artist}
+          art={<Artwork uri={t.artworkUri} label={t.album || t.title} size={56} radius={0} recyclingKey={t.key} />}
+          onPress={() => {
+            haptics.tap();
+            player.playTracks(recent, i);
+          }}
+          onLongPress={() => openTrackActions(t)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function QuickTile({
+  title,
+  subtitle,
+  art,
+  onPress,
+  onLongPress,
+}: {
+  title: string;
+  subtitle: string;
+  art: ReactNode;
+  onPress: () => void;
+  onLongPress?: () => void;
+}) {
+  return (
+    <PressableScale accessibilityRole="button" accessibilityLabel={title} onPress={onPress} onLongPress={onLongPress} style={styles.tile}>
+      {art}
+      <View style={styles.tileText}>
+        <Text variant="bodyStrong" numberOfLines={1} style={styles.tileTitle}>
+          {title}
+        </Text>
+        <Text variant="caption" numberOfLines={1} style={styles.tileSub}>
+          {subtitle}
+        </Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  header: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.lg, paddingRight: space.sm, marginBottom: space.xl },
+  headerText: { flex: 1, gap: space.xs },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  pillDot: { width: 7, height: 7, borderRadius: 4 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.lg, gap: space.sm, marginBottom: space.xxl },
+  tile: {
+    width: '48.6%',
+    flexGrow: 1,
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface2,
+    overflow: 'hidden',
+  },
+  tileText: { flex: 1, minWidth: 0, paddingHorizontal: space.sm + 2 },
+  tileTitle: { fontSize: 13, lineHeight: 17 },
+  tileSub: { fontSize: 11, lineHeight: 14 },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginHorizontal: space.lg,
+    marginBottom: space.xxl,
+    padding: space.md,
+    paddingLeft: space.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  noticeText: { flex: 1, gap: 2 },
+});

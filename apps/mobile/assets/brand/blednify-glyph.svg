@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#F0484B"/><stop offset="1" stop-color="#B8161B"/>
+  </linearGradient>
+  <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+    <rect width="1024" height="1024" fill="#fff"/>
+    <path d="M130 503C160 503 170 473 200 473S262 533 292 533S354 473 384 473S446 533 476 533S538 473 568 473S630 533 660 533S722 473 752 473S814 533 844 533S906 473 936 473" fill="none" stroke="#000" stroke-width="30" stroke-linecap="round"/>
+  </mask></defs><g transform="translate(512 512) scale(0.8) translate(-512 -512)"><g transform="translate(-43 0)"><path d="M318 280Q318 236 362 236H584C700 236 770 296 770 384C770 438 742 480 694 502C756 524 792 574 792 642C792 734 718 788 604 788H362Q318 788 318 744ZM444 340H570C614 340 642 362 642 398C642 434 614 456 570 456H444ZM444 550H584C636 550 664 576 664 616C664 658 636 684 584 684H444Z" fill="#FFFFFF" fill-rule="evenodd" mask="url(#cut)"/></g></g></svg>

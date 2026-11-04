@@ -14,12 +14,17 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
-        ]
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "Blednify connects to your self-hosted music server on your local network."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0B0B0F",
+        "backgroundColor": "#E5383B",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -27,20 +32,29 @@
       "predictiveBackGestureEnabled": true,
       "package": "pro.vetos.blednify",
       "versionCode": 1,
-      "edgeToEdgeEnabled": true
-    },
-    "web": {
-      "output": "server",
-      "favicon": "./assets/images/favicon.png"
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0B0B0F",
+          "backgroundColor": "#0A0A0C",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 96
         }
       ],
       "expo-sqlite",
@@ -48,7 +62,9 @@
         "expo-audio",
         {
           "microphonePermission": false,
-          "enableBackgroundPlayback": true
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false
         }
       ],
       [
@@ -59,14 +75,17 @@
             "enableShrinkResourcesInReleaseBuilds": true,
             "buildArchs": [
               "arm64-v8a"
-            ]
+            ],
+            "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "backgroundColor": "#0A0A0C"
   }
 }

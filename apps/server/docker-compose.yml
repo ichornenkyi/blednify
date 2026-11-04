@@ -1,0 +1,22 @@
+# Example deployment. `docker compose up -d` from apps/server (builds locally),
+# or drop `build:` to pull the CI-published image.
+services:
+  blednify:
+    image: ghcr.io/vetos5/blednify-server:latest
+    build: .
+    container_name: blednify
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      # Required for uploads/deletes/rescans from the network. Leave empty only on a trusted LAN.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      MAX_UPLOAD_MB: "200"
+    # The image runs as uid/gid 1000 ("bun"); the music folder must be writable by it for uploads/deletes.
+    # user: "1000:1000"
+    volumes:
+      - ./music:/music
+      - blednify-data:/data
+
+volumes:
+  blednify-data:

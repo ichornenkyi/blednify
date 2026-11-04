@@ -1,0 +1,295 @@
+import { File } from 'expo-file-system';
+import { addNetworkStateListener, getNetworkStateAsync, NetworkStateType, type NetworkState } from 'expo-network';
+import { useMemo } from 'react';
+import { create } from 'zustand';
+
+import { trackArtworkUrl, trackStreamUrl } from './api';
+import { getDb, writeTx } from './db';
+import { libIndex, setDownload } from './lib-index';
+import { DIRS, deleteQuietly, ensureDir, fileAt } from './paths';
+import { refreshQueueTracks } from './player/engine';
+import { invalidate, libKeys } from './query-client';
+import { getServerBase, kv, settingsStore } from './settings';
+import { parseTrack, serializeTrack } from './tracks';
+import type { AppTrack, DownloadStatus } from './types';
+import { errorMessage, extForMime } from './util';
+
+const CONCURRENCY = 2;
+const PROGRESS_THROTTLE_MS = 250;
+const QUEUE_KEY = 'downloads.queue.v1';
+
+type Item = { track: AppTrack; status: Exclude<DownloadStatus, 'none' | 'done'>; progress: number; error?: string };
+type DlState = { items: Record<string, Item>; order: string[] };
+
+const dlStore = create<DlState>(() => ({ items: {}, order: [] }));
+
+const controllers = new Map<string, { ctrl: AbortController; requeue: boolean }>();
+let running = 0;
+
+// --- State helpers ---------------------------------------------------------------------------
+
+function patch(key: string, p: Partial<Item>) {
+  const { items } = dlStore.getState();
+  const it = items[key];
+  if (!it) return;
+  dlStore.setState({ items: { ...items, [key]: { ...it, ...p } } });
+}
+
+function drop(key: string) {
+  const { items, order } = dlStore.getState();
+  if (!items[key]) return;
+  const { [key]: _removed, ...rest } = items;
+  dlStore.setState({ items: rest, order: order.filter((k) => k !== key) });
+  persistQueue();
+}
+
+function persistQueue() {
+  const { items, order } = dlStore.getState();
+  const pending = order.filter((k) => items[k].status !== 'error').map((k) => serializeTrack(items[k].track));
+  kv.set(QUEUE_KEY, JSON.stringify(pending));
+}
+
+// --- Network policy --------------------------------------------------------------------------
+
+const UNMETERED = new Set<NetworkStateType | undefined>([NetworkStateType.WIFI, NetworkStateType.ETHERNET]);
+
+function allowedOn(net: NetworkState): boolean {
+  if (net.isConnected === false) return false;
+  return !settingsStore.getState().downloadOnWifiOnly || UNMETERED.has(net.type);
+}
+
+let netSub: { remove(): void } | null = null;
+
+function watchNetwork() {
+  netSub ??= addNetworkStateListener((net) => {
+    if (allowedOn(net)) {
+      pump();
+      return;
+    }
+    // Switched to a disallowed network: stop active transfers and put them back in the queue.
+    for (const entry of controllers.values()) {
+      entry.requeue = true;
+      entry.ctrl.abort();
+    }
+  });
+}
+
+// --- Worker ----------------------------------------------------------------------------------
+
+let pumping = false;
+let pumpAgain = false;
+
+async function pump(): Promise<void> {
+  if (pumping) {
+    pumpAgain = true;
+    return;
+  }
+  pumping = true;
+  try {
+    do {
+      pumpAgain = false;
+      const { items, order } = dlStore.getState();
+      if (running >= CONCURRENCY || !order.some((k) => items[k].status === 'queued')) break;
+      if (!getServerBase()) break;
+      watchNetwork();
+      let net: NetworkState;
+      try {
+        net = await getNetworkStateAsync();
+      } catch {
+        net = { isConnected: true, type: NetworkStateType.UNKNOWN };
+      }
+      if (!allowedOn(net)) break;
+      while (running < CONCURRENCY) {
+        const s = dlStore.getState();
+        const key = s.order.find((k) => s.items[k].status === 'queued');
+        if (!key) break;
+        running++;
+        void run(key).finally(() => {
+          running--;
+          void pump();
+        });
+      }
+    } while (pumpAgain);
+  } finally {
+    pumping = false;
+  }
+}
+
+async function run(key: string): Promise<void> {
+  const item = dlStore.getState().items[key];
+  if (!item) return;
+  const { track } = item;
+  const base = getServerBase();
+  const ctrl = new AbortController();
+  const handle = { ctrl, requeue: false };
+  controllers.set(key, handle);
+  patch(key, { status: 'downloading', progress: 0, error: undefined });
+
+  const dir = ensureDir(DIRS.music);
+  const fileRel = `${DIRS.music}/${track.id}.${extForMime(track.mimeType)}`;
+  const artRel = `${DIRS.music}/${track.id}.jpg`;
+  const part = new File(dir, `${track.id}.part`);
+  let lastTick = 0;
+
+  try {
+    await File.downloadFileAsync(trackStreamUrl(base, track.id), part, {
+      idempotent: true,
+      signal: ctrl.signal,
+      onProgress: ({ bytesWritten, totalBytes }) => {
+        const now = Date.now();
+        if (now - lastTick < PROGRESS_THROTTLE_MS) return;
+        lastTick = now;
+        const total = totalBytes > 0 ? totalBytes : track.sizeBytes;
+        if (total > 0) patch(key, { progress: Math.min(0.99, bytesWritten / total) });
+      },
+    });
+    const final = fileAt(fileRel);
+    await part.move(final, { overwrite: true });
+
+    let art: string | null = null;
+    if (track.artworkUri) {
+      try {
+        await File.downloadFileAsync(`${trackArtworkUrl(base, track.id)}?size=512`, fileAt(artRel), {
+          idempotent: true,
+          signal: ctrl.signal,
+        });
+        art = artRel;
+      } catch {
+        // Artwork is optional; the remote URL remains the fallback.
+        deleteQuietly(artRel);
+      }
+    }
+
+    const size = final.size || track.sizeBytes;
+    await writeTx((db) =>
+      db.runAsync(
+        `INSERT OR REPLACE INTO downloads (key, track, album_id, artist_id, file, art, size_bytes, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        key,
+        serializeTrack(track),
+        track.albumId,
+        track.artistId,
+        fileRel,
+        art,
+        size,
+        Date.now(),
+      ),
+    );
+    setDownload(key, { file: fileRel, art, size });
+    drop(key);
+    refreshQueueTracks();
+    invalidate(libKeys.all);
+  } catch (e) {
+    deleteQuietly(`${DIRS.music}/${track.id}.part`);
+    if (ctrl.signal.aborted) {
+      if (handle.requeue) patch(key, { status: 'queued', progress: 0 });
+      // Cancelled: the item was already removed by `cancelDownload`.
+    } else {
+      patch(key, { status: 'error', error: errorMessage(e) });
+      persistQueue();
+    }
+  } finally {
+    controllers.delete(key);
+  }
+}
+
+// --- Public API ------------------------------------------------------------------------------
+
+/** Queue remote tracks for offline use. Local and already-downloaded tracks are ignored; failed ones retry. */
+export function downloadTracks(tracks: AppTrack[]): void {
+  const { downloads } = libIndex.getState();
+  const { items, order } = dlStore.getState();
+  const nextItems = { ...items };
+  const nextOrder = order.slice();
+  let changed = false;
+  for (const t of tracks) {
+    if (t.origin !== 'remote' || downloads.has(t.key)) continue;
+    const existing = nextItems[t.key];
+    if (existing && existing.status !== 'error') continue;
+    nextItems[t.key] = { track: t, status: 'queued', progress: 0 };
+    if (!existing) nextOrder.push(t.key);
+    changed = true;
+  }
+  if (!changed) return;
+  dlStore.setState({ items: nextItems, order: nextOrder });
+  persistQueue();
+  void pump();
+}
+
+export function cancelDownload(key: string): void {
+  const active = controllers.get(key);
+  drop(key);
+  if (active) {
+    active.requeue = false;
+    active.ctrl.abort();
+  }
+}
+
+export async function removeDownload(key: string): Promise<void> {
+  cancelDownload(key);
+  const entry = libIndex.getState().downloads.get(key);
+  if (!entry) return;
+  await writeTx((db) => db.runAsync('DELETE FROM downloads WHERE key = ?', key));
+  setDownload(key, null);
+  deleteQuietly(entry.file);
+  deleteQuietly(entry.art);
+  refreshQueueTracks();
+  invalidate(libKeys.all);
+}
+
+/** Restore the pending queue persisted across launches and drop rows whose files vanished. */
+export async function resumeDownloads(): Promise<void> {
+  const raw = kv.getString(QUEUE_KEY);
+  if (raw) {
+    try {
+      const tracks = (JSON.parse(raw) as string[]).map(parseTrack).filter((t): t is AppTrack => !!t);
+      downloadTracks(tracks);
+    } catch {
+      kv.remove(QUEUE_KEY);
+    }
+  }
+  const missing = [...libIndex.getState().downloads].filter(([, e]) => !fileAt(e.file).exists).map(([k]) => k);
+  if (!missing.length) return;
+  const db = await getDb();
+  for (const key of missing) {
+    await db.runAsync('DELETE FROM downloads WHERE key = ?', key);
+    setDownload(key, null);
+  }
+  refreshQueueTracks();
+  invalidate(libKeys.all);
+}
+
+// Downloads waiting on the Wi-Fi-only policy start as soon as the setting is relaxed.
+settingsStore.subscribe((s, prev) => {
+  if (s.downloadOnWifiOnly !== prev.downloadOnWifiOnly || s.serverUrl !== prev.serverUrl) void pump();
+});
+
+// --- Hooks -----------------------------------------------------------------------------------
+
+export function useDownloadState(key: string): { status: DownloadStatus; progress: number } {
+  const done = libIndex((s) => s.downloads.has(key));
+  const status = dlStore((s) => s.items[key]?.status);
+  const progress = dlStore((s) => s.items[key]?.progress ?? 0);
+  if (done) return { status: 'done', progress: 1 };
+  return { status: status ?? 'none', progress };
+}
+
+export function useDownloads(): {
+  active: { track: AppTrack; status: DownloadStatus; progress: number }[];
+  completedCount: number;
+  bytesUsed: number;
+} {
+  const items = dlStore((s) => s.items);
+  const order = dlStore((s) => s.order);
+  const downloads = libIndex((s) => s.downloads);
+  const active = useMemo(
+    () => order.map((k) => ({ track: items[k].track, status: items[k].status, progress: items[k].progress })),
+    [items, order],
+  );
+  const bytesUsed = useMemo(() => {
+    let n = 0;
+    for (const e of downloads.values()) n += e.size;
+    return n;
+  }, [downloads]);
+  return { active, completedCount: downloads.size, bytesUsed };
+}

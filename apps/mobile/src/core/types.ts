@@ -1,0 +1,68 @@
+export type Origin = 'remote' | 'local'; // remote = from server, local = user-imported file
+
+export type AppTrack = {
+  key: string; // globally unique: `r:${remoteId}` or `l:${localId}`
+  id: string; // remote track id or local id
+  origin: Origin;
+  title: string;
+  artist: string;
+  album: string;
+  albumId: string; // remote: server albumId; local: `l:` + hash(artist+album)
+  artistId: string;
+  durationMs: number;
+  trackNumber: number | null;
+  discNumber: number | null;
+  year: number | null;
+  genre: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  artworkUri: string | null; // http(s) URL or file:// — pass straight to expo-image
+  streamUri: string; // what the player loads: local file if present, else server stream URL
+  localUri: string | null; // file:// when downloaded or imported, else null
+  addedAt: string;
+};
+
+export type AlbumView = {
+  id: string;
+  origin: Origin;
+  title: string;
+  artist: string;
+  artistId: string;
+  year: number | null;
+  trackCount: number;
+  durationMs: number;
+  artworkUri: string | null;
+};
+
+export type ArtistView = {
+  id: string;
+  origin: Origin;
+  name: string;
+  albumCount: number;
+  trackCount: number;
+  artworkUri: string | null;
+};
+
+export type Playlist = {
+  id: string;
+  name: string;
+  trackCount: number;
+  createdAt: string;
+  updatedAt: string;
+  artworkUris: string[]; // up to 4 for mosaic
+};
+
+export type RepeatMode = 'off' | 'all' | 'one';
+
+export type DownloadStatus = 'none' | 'queued' | 'downloading' | 'done' | 'error';
+
+export type PlayerState = {
+  queue: AppTrack[];
+  index: number;
+  current: AppTrack | null;
+  isPlaying: boolean;
+  isBuffering: boolean;
+  repeat: RepeatMode;
+  shuffle: boolean;
+  error: string | null;
+};

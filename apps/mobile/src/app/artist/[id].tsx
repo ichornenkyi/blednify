@@ -1,0 +1,103 @@
+import { FlashList } from '@shopify/flash-list';
+import { router, useLocalSearchParams } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { player, useArtist, type AlbumView, type AppTrack } from '@/core';
+import { AlbumCard } from '@/ui/components/AlbumCard';
+import { Artwork } from '@/ui/components/Artwork';
+import { DetailHeader } from '@/ui/components/DetailHeader';
+import { EmptyState } from '@/ui/components/EmptyState';
+import { Loading } from '@/ui/components/Loading';
+import { DockedMiniPlayer } from '@/ui/components/MiniPlayer';
+import { PrimaryButton } from '@/ui/components/PrimaryButton';
+import { Rail, RAIL_CARD_WIDTH } from '@/ui/components/Rail';
+import { FloatingBack } from '@/ui/components/ScreenHeader';
+import { SectionHeader } from '@/ui/components/SectionHeader';
+import { openTrackActions } from '@/ui/components/TrackActions';
+import { TrackRow } from '@/ui/components/TrackRow';
+import { plural } from '@/ui/format';
+import { haptics } from '@/ui/haptics';
+import { nav, parseOrigin } from '@/ui/nav';
+import { colors, space } from '@/ui/theme';
+
+const onMore = (track: AppTrack) => openTrackActions(track, { hideArtist: true });
+const albumKey = (a: AlbumView) => `${a.origin}:${a.id}`;
+
+export default function ArtistScreen() {
+  const params = useLocalSearchParams<{ id: string; origin?: string }>();
+  const origin = parseOrigin(params.origin);
+  const insets = useSafeAreaInsets();
+  const { artist, albums, tracks, isLoading } = useArtist(params.id, origin);
+
+  if (!artist) {
+    return (
+      <View style={styles.root}>
+        {isLoading ? (
+          <Loading />
+        ) : (
+          <View style={[styles.root, styles.center]}>
+            <EmptyState icon="person-outline" title="Artist not found" message="It may have been removed from the server or this device.">
+              <PrimaryButton label="Go back" variant="surface" onPress={() => router.back()} />
+            </EmptyState>
+          </View>
+        )}
+        <FloatingBack />
+      </View>
+    );
+  }
+
+  const play = (index: number) => {
+    haptics.tap();
+    player.playTracks(tracks, index);
+  };
+  const backdrop = artist.artworkUri ?? albums.find((a) => a.artworkUri)?.artworkUri ?? null;
+
+  return (
+    <View style={styles.root}>
+      <FlashList
+        data={tracks}
+        keyExtractor={(t) => t.key}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }}
+        ListHeaderComponent={
+          <>
+            <DetailHeader
+              renderArtwork={(size) => <Artwork uri={backdrop} label={artist.name} size={size} round priority="high" />}
+              backdropUri={backdrop}
+              eyebrow="Artist"
+              title={artist.name}
+              meta={[plural(artist.albumCount || albums.length, 'album'), plural(artist.trackCount || tracks.length, 'track')].join(' · ')}
+              onPlay={tracks.length ? () => player.playTracks(tracks, 0) : undefined}
+              onShuffle={tracks.length ? () => player.playTracks(tracks, 0, { shuffle: true }) : undefined}
+            />
+            <Rail
+              title="Albums"
+              data={albums}
+              keyExtractor={albumKey}
+              renderItem={({ item }) => (
+                <AlbumCard
+                  width={RAIL_CARD_WIDTH}
+                  title={item.title}
+                  subtitle={item.year ? String(item.year) : `${item.trackCount} tracks`}
+                  artworkUri={item.artworkUri}
+                  recyclingKey={albumKey(item)}
+                  onPress={() => nav.album(item.id, item.origin)}
+                />
+              )}
+            />
+            {tracks.length > 0 ? <SectionHeader title="Songs" /> : null}
+          </>
+        }
+        ListEmptyComponent={isLoading ? <Loading /> : null}
+        renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onMore} />}
+      />
+      <FloatingBack />
+      <DockedMiniPlayer />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg },
+  center: { justifyContent: 'center' },
+});
