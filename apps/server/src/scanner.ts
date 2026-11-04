@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { readdir, realpath, stat } from "node:fs/promises";
+import { link, readdir, realpath, rename, rm, stat } from "node:fs/promises";
 import { basename, extname, join, relative, sep } from "node:path";
 import { parseFile } from "music-metadata";
 import type { ArtworkCache } from "./artwork";
@@ -10,30 +10,36 @@ export type ScanResult = { added: number; removed: number; total: number };
 
 type FoundFile = { abs: string; rel: string; size: number; mtimeMs: number; birthMs: number };
 
+/** An uploaded file failed validation (maps to 422; anything else from `indexUploads` is a server-side failure). */
+export class InvalidAudioError extends Error {}
+
 const PARSE_CONCURRENCY = 4;
 const BATCH = 200;
 
 /** `a/b/c.mp3`, always `/`-separated so ids are stable across platforms. */
 const toRel = (root: string, abs: string) => relative(root, abs).split(sep).join("/");
 
-/** Recursively lists supported audio files; follows symlinks, skips dot-files/dirs, survives unreadable dirs. */
-async function walk(root: string): Promise<FoundFile[]> {
+/**
+ * Recursively lists supported audio files; follows symlinks, skips dot-files/dirs. Throws when the root itself is
+ * unreadable. Unreadable subdirectories are reported in `unreadable` (relative paths) so their tracks are kept.
+ */
+async function walk(root: string): Promise<{ files: FoundFile[]; unreadable: string[] }> {
   const out: FoundFile[] = [];
+  const unreadable: string[] = [];
   const seenDirs = new Set<string>();
   const visit = async (dir: string): Promise<void> => {
+    const isRoot = dir === root;
     let real: string;
-    try {
-      real = await realpath(dir);
-    } catch {
-      return;
-    }
-    if (seenDirs.has(real)) return; // symlink loop
-    seenDirs.add(real);
     let entries;
     try {
+      real = await realpath(dir);
+      if (seenDirs.has(real)) return; // symlink loop
+      seenDirs.add(real);
       entries = await readdir(dir, { withFileTypes: true });
     } catch (err) {
+      if (isRoot) throw new Error(`music folder ${root} is not readable: ${(err as Error).message}`);
       console.warn(`[scan] cannot read ${dir}: ${(err as Error).message}`);
+      unreadable.push(toRel(root, dir));
       return;
     }
     for (const e of entries) {
@@ -57,7 +63,7 @@ async function walk(root: string): Promise<FoundFile[]> {
     }
   };
   await visit(root);
-  return out;
+  return { files: out, unreadable };
 }
 
 /** "01 - Artist - Title" / "01. Title" / "Artist - Title" → parts. */
@@ -119,6 +125,18 @@ async function readTrack(f: FoundFile, addedAt: string, strict = false): Promise
   };
 }
 
+/** Moves an upload into place without clobbering (hard link), falling back to rename where links are unsupported. */
+async function place(tmp: string, final: string): Promise<void> {
+  try {
+    await link(tmp, final);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EEXIST") throw err;
+    await rename(tmp, final);
+    return;
+  }
+  await rm(tmp, { force: true });
+}
+
 async function pool<T>(items: T[], n: number, fn: (item: T) => Promise<void>): Promise<void> {
   let i = 0;
   await Promise.all(
@@ -131,6 +149,7 @@ async function pool<T>(items: T[], n: number, fn: (item: T) => Promise<void>): P
 export class Scanner {
   private running: Promise<ScanResult> | null = null;
   private queued: Promise<ScanResult> | null = null;
+  private queuedAllowEmpty = false;
   /** rel path → "size:mtime" of files that failed to parse; skipped until they change. */
   private readonly unreadable = new Map<string, string>();
 
@@ -146,35 +165,56 @@ export class Scanner {
     return this.running !== null;
   }
 
-  /** Runs an incremental scan. Calls during a running scan coalesce into one follow-up scan. */
-  scan(): Promise<ScanResult> {
+  /**
+   * Runs an incremental scan. Calls during a running scan coalesce into one follow-up scan.
+   * A walk that finds no files while tracks are indexed (unmounted or empty volume) removes nothing unless
+   * `allowEmpty` is set (an explicit rescan).
+   */
+  scan(allowEmpty = false): Promise<ScanResult> {
     if (!this.running) {
-      this.running = this.run().finally(() => {
+      this.running = this.run(allowEmpty).finally(() => {
         this.running = null;
       });
       return this.running;
     }
+    this.queuedAllowEmpty ||= allowEmpty;
     this.queued ??= this.running
       .catch(() => undefined)
       .then(() => {
+        const queuedAllowEmpty = this.queuedAllowEmpty;
         this.queued = null;
-        return this.scan();
+        this.queuedAllowEmpty = false;
+        return this.scan(queuedAllowEmpty);
       });
     return this.queued;
   }
 
-  /** Indexes files immediately (uploads). All-or-nothing: throws before touching the DB if any file is unreadable. */
-  async indexFiles(paths: string[]): Promise<Track[]> {
+  /**
+   * Indexes uploads. Each `tmp` is a dot-file (invisible to scans) that is validated strictly, then moved to
+   * `final` (whose relative path defines the id). All-or-nothing: an invalid file throws `InvalidAudioError`
+   * before anything is placed or indexed.
+   */
+  async indexUploads(items: { tmp: string; final: string }[]): Promise<Track[]> {
     const addedAt = new Date().toISOString();
     const rows: TrackRow[] = [];
-    for (const abs of paths) {
-      const st = await stat(abs);
-      const f = { abs, rel: toRel(this.musicDir, abs), size: st.size, mtimeMs: Math.floor(st.mtimeMs), birthMs: 0 };
+    for (const { tmp, final } of items) {
+      const st = await stat(tmp);
+      const f = { abs: tmp, rel: toRel(this.musicDir, final), size: st.size, mtimeMs: Math.floor(st.mtimeMs), birthMs: 0 };
       try {
         rows.push(await readTrack(f, addedAt, true));
       } catch (err) {
-        throw new Error(`${basename(abs)}: ${(err as Error).message}`);
+        throw new InvalidAudioError(`${basename(final)}: ${(err as Error).message}`);
       }
+    }
+    const placed: string[] = [];
+    try {
+      for (const { tmp, final } of items) {
+        await place(tmp, final);
+        placed.push(final);
+      }
+    } catch (err) {
+      await Promise.all(placed.map((p) => rm(p, { force: true })));
+      throw err;
     }
     await Promise.all(rows.map((r) => this.art.invalidate(r.id)));
     this.lib.upsertTracks(rows);
@@ -182,9 +222,9 @@ export class Scanner {
     return rows.map(toTrack);
   }
 
-  private async run(): Promise<ScanResult> {
+  private async run(allowEmpty: boolean): Promise<ScanResult> {
     const started = performance.now();
-    const files = await walk(this.musicDir);
+    const { files, unreadable } = await walk(this.musicDir);
     const known = this.lib.fileStates();
     const now = Date.now();
 
@@ -218,9 +258,20 @@ export class Scanner {
     });
     flush();
 
-    // Rows whose file is gone. Re-check existence so files uploaded during the walk aren't dropped.
+    // Rows whose file is gone. Re-check existence so files uploaded during the walk aren't dropped, and keep
+    // rows under directories that could not be read (e.g. an unmounted symlinked library).
     const present = new Set(files.map((f) => f.rel));
-    const gone = [...known].filter(([rel]) => !present.has(rel) && !existsSync(join(this.musicDir, rel)));
+    const inUnreadable = (rel: string) => unreadable.some((d) => rel.startsWith(`${d}/`));
+    let gone = [...known].filter(
+      ([rel]) => !present.has(rel) && !inUnreadable(rel) && !existsSync(join(this.musicDir, rel)),
+    );
+    if (files.length === 0 && known.size > 0 && !allowEmpty) {
+      console.warn(
+        `[scan] ${this.musicDir} has no audio files but ${known.size} tracks are indexed; keeping them ` +
+          "(volume not mounted?). Run POST /api/rescan to remove them.",
+      );
+      gone = [];
+    }
     this.lib.deleteTracks(gone.map(([, k]) => k.id));
     await Promise.all(gone.map(([, k]) => this.art.invalidate(k.id)));
 

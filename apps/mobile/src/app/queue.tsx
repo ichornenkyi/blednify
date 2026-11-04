@@ -1,8 +1,18 @@
 import { FlashList } from '@shopify/flash-list';
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  measure,
+  useAnimatedRef,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  type AnimatedRef,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
@@ -24,8 +34,8 @@ type DragState = {
   dy: SharedValue<number>;
   /** Top of the dragged row relative to the list container, captured on drag start. */
   top: SharedValue<number>;
-  /** Container top in window coordinates. */
-  listTop: SharedValue<number>;
+  /** List container; measured on the UI thread at drag start (never mid-transition). */
+  container: AnimatedRef<Animated.View>;
   count: SharedValue<number>;
 };
 
@@ -44,16 +54,15 @@ export default function QueueScreen() {
   const from = useSharedValue(-1);
   const dy = useSharedValue(0);
   const top = useSharedValue(0);
-  const listTop = useSharedValue(0);
+  const container = useAnimatedRef<Animated.View>();
   const count = useSharedValue(upNext.length);
-  const drag = useMemo<DragState>(() => ({ from, dy, top, listTop, count }), [from, dy, top, listTop, count]);
+  const drag = useMemo<DragState>(() => ({ from, dy, top, container, count }), [from, dy, top, container, count]);
 
   useEffect(() => {
     count.set(upNext.length);
   }, [count, upNext.length]);
 
   const [dragging, setDragging] = useState<number | null>(null);
-  const containerRef = useRef<ComponentRef<typeof View>>(null);
 
   const startDrag = (rel: number) => {
     haptics.press();
@@ -78,14 +87,7 @@ export default function QueueScreen() {
   return (
     <View style={styles.root}>
       <ScreenHeader title="Queue" backIcon="chevron-down" />
-      <View
-        ref={containerRef}
-        style={styles.flex}
-        onLayout={() =>
-          containerRef.current?.measureInWindow((_x, y) => {
-            listTop.set(y);
-          })
-        }>
+      <Animated.View ref={container} style={styles.flex}>
         <FlashList
           data={upNext}
           keyExtractor={(item) => `${item.abs}:${item.track.key}`}
@@ -128,7 +130,7 @@ export default function QueueScreen() {
           renderItem={({ item }) => <QueueRow item={item} drag={drag} onDragStart={startDrag} onDragEnd={endDrag} />}
         />
         {ghost ? <Ghost track={ghost.track} drag={drag} /> : null}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -183,7 +185,7 @@ const QueueRow = memo(function QueueRow({
     minDistance: 1,
     onActivate: (e) => {
       'worklet';
-      drag.top.set(e.absoluteY - e.y - drag.listTop.get());
+      drag.top.set(e.absoluteY - e.y - (measure(drag.container)?.pageY ?? 0));
       drag.dy.set(0);
       drag.from.set(rel);
       scheduleOnRN(onDragStart, rel);

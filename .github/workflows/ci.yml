@@ -38,6 +38,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+      # Expo CLI, Metro and RN 0.88 tooling run under `node` (engines: ^22.13 || ^24.3 || >=26).
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
       - run: bunx expo lint
@@ -57,6 +61,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

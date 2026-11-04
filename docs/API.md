@@ -3,13 +3,13 @@
 Single source of truth between `apps/server` and `apps/mobile`. Change both sides together.
 
 Base URL: configurable in the app (Settings → Server). Default from `EXPO_PUBLIC_API_URL`.
-All JSON. No auth for reads. Writes (upload/delete) require `Authorization: Bearer <ADMIN_TOKEN>` when the server has `ADMIN_TOKEN` set.
+All JSON. No auth for reads. Writes (upload/delete/rescan) require `Authorization: Bearer <ADMIN_TOKEN>`; a server without `ADMIN_TOKEN` refuses them with `403` unless it runs with `ALLOW_OPEN_WRITES=1`.
 
 ## Types
 
 ```ts
 type Track = {
-  id: string;            // stable: sha1 of relative file path, hex, first 16 chars
+  id: string;            // stable: sha1 of relative file path, hex, first 16 chars; uploads never reuse a deleted id
   title: string;
   artist: string;        // "Unknown Artist" fallback
   album: string;         // "Unknown Album" fallback

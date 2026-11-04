@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
-import { useLocalSearchParams } from 'expo-router';
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import type { ReactElement, ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -36,15 +36,9 @@ function isFilter(v: unknown): v is LibraryFilter {
 
 export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
+  // The route param is the single source of truth, so shortcuts (Home → Liked) always win over a stale chip.
   const params = useLocalSearchParams<{ filter?: string }>();
-  const [filter, setFilter] = useState<LibraryFilter>(isFilter(params.filter) ? params.filter : 'playlists');
-  const [appliedParam, setAppliedParam] = useState(params.filter);
-
-  // Deep links / shortcuts (e.g. Home → Liked) switch the filter when the route param changes.
-  if (params.filter !== appliedParam) {
-    setAppliedParam(params.filter);
-    if (isFilter(params.filter)) setFilter(params.filter);
-  }
+  const filter: LibraryFilter = isFilter(params.filter) ? params.filter : 'playlists';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.md }]}>
@@ -57,7 +51,7 @@ export default function LibraryScreen() {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
         {FILTERS.map((f) => (
-          <Chip key={f.key} label={f.label} selected={filter === f.key} onPress={() => setFilter(f.key)} />
+          <Chip key={f.key} label={f.label} selected={filter === f.key} onPress={() => router.setParams({ filter: f.key })} />
         ))}
       </ScrollView>
       {filter === 'playlists' ? <PlaylistsList /> : null}
@@ -205,7 +199,7 @@ function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactE
               {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
             </Text>
             {extra}
-            <IconButton icon="shuffle" label="Shuffle" variant="filled" haptic onPress={() => player.playTracks(tracks, 0, { shuffle: true })} />
+            <IconButton icon="shuffle" label="Shuffle" variant="filled" haptic onPress={() => player.playTracks(tracks, undefined, { shuffle: true })} />
             <IconButton icon="play" label="Play all" variant="accent" haptic size={22} diameter={48} onPress={() => player.playTracks(tracks, 0)} />
           </View>
         ) : null

@@ -74,7 +74,7 @@ export type DownloadStatus = 'none' | 'queued' | 'downloading' | 'done' | 'error
   `playNext(tracks: AppTrack[])`, `addToQueue(tracks: AppTrack[])`, `removeFromQueue(index: number)`, `moveInQueue(from: number, to: number)`, `jumpTo(index: number)`,
   `setRepeat(mode: RepeatMode)`, `cycleRepeat()`, `toggleShuffle()`
 - `usePlayer<T>(selector: (s: PlayerState) => T): T` — zustand selector hook, where
-  `PlayerState = { queue: AppTrack[]; index: number; current: AppTrack | null; isPlaying: boolean; isBuffering: boolean; repeat: RepeatMode; shuffle: boolean; error: string | null }`
+  `PlayerState = { queue: AppTrack[]; index: number; current: AppTrack | null; isPlaying: boolean; isBuffering: boolean; repeat: RepeatMode; shuffle: boolean; error: string | null; errorId: number /* increments per error */ }`
 - `useProgress(): { positionMs: number; durationMs: number }` — ~4 Hz, isolated so only progress UI re-renders
 - Background playback + lock-screen / notification controls with title, artist, artwork are core's job.
 - Queue + position persisted (MMKV) and restored paused on cold start.

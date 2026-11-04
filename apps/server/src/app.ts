@@ -1,5 +1,6 @@
-import { timingSafeEqual, createHash } from "node:crypto";
-import { open, rm, mkdir } from "node:fs/promises";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdir, rm } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -11,9 +12,9 @@ import pkg from "../package.json";
 import { ArtworkCache } from "./artwork";
 import type { Config } from "./config";
 import { openDb, type Db } from "./db";
-import { audioMime } from "./ids";
+import { audioMime, trackId } from "./ids";
 import { Library, toTrack } from "./library";
-import { Scanner } from "./scanner";
+import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
 
 export const VERSION: string = pkg.version;
@@ -32,7 +33,7 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 const ART_CACHE = "public, max-age=2592000";
 const ID_RE = /^[0-9a-f]{16}$/;
 
-const fail = (status: 400 | 401 | 404 | 413 | 415 | 422, error: string): never => {
+const fail = (status: 400 | 401 | 403 | 404 | 413 | 415 | 422, error: string): never => {
   throw new HTTPException(status, { message: error });
 };
 
@@ -70,7 +71,8 @@ function param(c: Context): string {
 
 const digest = (s: string) => createHash("sha256").update(s).digest();
 
-function adminOnly(token: string | null): MiddlewareHandler {
+/** Bearer-token guard for writes. Fails closed: with no token configured, writes need `ALLOW_OPEN_WRITES=1`. */
+function adminOnly(token: string | null, allowOpen: boolean): MiddlewareHandler {
   const expected = token ? digest(token) : null;
   return async (c, next) => {
     if (expected) {
@@ -79,6 +81,8 @@ function adminOnly(token: string | null): MiddlewareHandler {
         c.header("WWW-Authenticate", 'Bearer realm="blednify"');
         fail(401, "unauthorized");
       }
+    } else if (!allowOpen) {
+      fail(403, "writes are disabled: set ADMIN_TOKEN on the server (or ALLOW_OPEN_WRITES=1 on a trusted LAN)");
     }
     await next();
   };
@@ -90,39 +94,70 @@ function noIdleTimeout(c: Context): void {
   server?.timeout?.(c.req.raw, 0);
 }
 
-/** Safe single path segment: no separators/control chars, no leading dots, bounded length, lowercase ext. */
+/** Max UTF-8 bytes of a sanitized stem: leaves room for ` (999)` + extension under the 255-byte name limit. */
+const MAX_STEM_BYTES = 200;
+
+/** Truncates to at most `max` UTF-8 bytes without splitting a code point. */
+function truncateUtf8(s: string, max: number): string {
+  if (Buffer.byteLength(s) <= max) return s;
+  let out = "";
+  let bytes = 0;
+  for (const ch of s) {
+    bytes += Buffer.byteLength(ch);
+    if (bytes > max) break;
+    out += ch;
+  }
+  return out;
+}
+
+/** Safe single path segment: no separators/control chars, no leading dots, bounded byte length, lowercase ext. */
 export function sanitizeFileName(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? "";
   const ext = extname(base).toLowerCase();
-  const stem = base
+  const cleaned = base
     .slice(0, base.length - ext.length)
     .normalize("NFC")
     .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, "")
     .replace(/\s+/g, " ")
-    .replace(/^[.\s]+|[.\s]+$/g, "")
-    .slice(0, 150);
+    .replace(/^[.\s]+/, "");
+  const stem = truncateUtf8(cleaned, MAX_STEM_BYTES).replace(/[.\s]+$/, "");
   return `${stem || `upload-${Date.now()}`}${ext}`;
 }
 
-/** Atomically reserves a non-existing path `dir/name`, `dir/name (1)`, ... */
-async function reservePath(dir: string, name: string): Promise<string> {
-  const ext = extname(name);
-  const stem = name.slice(0, name.length - ext.length);
-  for (let i = 0; ; i++) {
-    const path = join(dir, i === 0 ? name : `${stem} (${i})${ext}`);
-    try {
-      await (await open(path, "wx")).close();
-      return path;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST" || i > 999) throw err;
-    }
-  }
+/** Maps filesystem failures during an upload to an honest status (never "bad audio file"). */
+function storageError(err: unknown): { status: 500 | 507; error: string } | null {
+  const code = (err as NodeJS.ErrnoException | null)?.code;
+  if (!code) return null;
+  if (code === "ENOSPC" || code === "EDQUOT") return { status: 507, error: `server storage is full (${code})` };
+  if (code === "EACCES" || code === "EPERM" || code === "EROFS")
+    return { status: 500, error: `server cannot write to its music folder (${code}); check MUSIC_DIR permissions` };
+  return { status: 500, error: `server could not store the upload (${code})` };
 }
 
 export function createApp(ctx: AppContext): Hono {
   const { config, lib, scanner, art } = ctx;
   const app = new Hono();
-  const admin = adminOnly(config.adminToken);
+  const admin = adminOnly(config.adminToken, config.allowOpenWrites);
+  const uploadsDir = join(config.musicDir, "uploads");
+  /** Upload paths chosen by in-flight requests (not yet on disk). */
+  const claimed = new Set<string>();
+
+  /**
+   * Picks `uploads/name`, `uploads/name (1)`, ... that is free on disk, not claimed by a concurrent upload and
+   * whose track id was never used before (ids must never point at different audio).
+   */
+  const claimUploadPath = (name: string): string => {
+    const ext = extname(name);
+    const stem = name.slice(0, name.length - ext.length);
+    for (let i = 0; i <= 999; i++) {
+      const file = i === 0 ? name : `${stem} (${i})${ext}`;
+      const path = join(uploadsDir, file);
+      if (claimed.has(path) || existsSync(path) || lib.isIdTaken(trackId(`uploads/${file}`))) continue;
+      claimed.add(path);
+      return path;
+    }
+    throw new HTTPException(409, { message: `too many files named ${name}` });
+  };
 
   if (config.logRequests) {
     app.use(async (c, next) => {
@@ -211,21 +246,27 @@ export function createApp(ctx: AppContext): Hono {
       if (unsupported.length)
         fail(415, `unsupported file type: ${unsupported.map((f) => f.name).join(", ")} (mp3, flac, m4a, aac, ogg, opus, wav)`);
 
-      const dir = join(config.musicDir, "uploads");
-      await mkdir(dir, { recursive: true });
-      const saved: string[] = [];
+      // Written under dot-names (scans skip them) and moved into place only once every file validated.
+      const items: { tmp: string; final: string }[] = [];
       try {
+        await mkdir(uploadsDir, { recursive: true });
         for (const f of files) {
-          const path = await reservePath(dir, sanitizeFileName(f.name));
-          saved.push(path);
-          await Bun.write(path, f);
+          const final = claimUploadPath(sanitizeFileName(f.name));
+          const tmp = join(uploadsDir, `.upload-${randomUUID()}${extname(final)}`);
+          items.push({ tmp, final });
+          await Bun.write(tmp, f);
         }
-        return c.json({ items: await scanner.indexFiles(saved) }, 201);
+        return c.json({ items: await scanner.indexUploads(items) }, 201);
       } catch (err) {
-        await Promise.all(saved.map((p) => rm(p, { force: true })));
         if (err instanceof HTTPException) throw err;
-        const msg = (err as Error).message;
-        return fail(422, `not a readable audio file: ${msg}`);
+        if (err instanceof InvalidAudioError) return fail(422, `not a readable audio file: ${err.message}`);
+        const storage = storageError(err);
+        if (!storage) throw err;
+        console.error(`[upload] ${storage.error}: ${(err as Error).message}`);
+        return c.json({ error: storage.error }, storage.status);
+      } finally {
+        await Promise.all(items.map(({ tmp }) => rm(tmp, { force: true })));
+        for (const { final } of items) claimed.delete(final);
       }
     },
   );
@@ -241,7 +282,7 @@ export function createApp(ctx: AppContext): Hono {
 
   app.post("/api/rescan", admin, async (c) => {
     noIdleTimeout(c);
-    return c.json(await scanner.scan());
+    return c.json(await scanner.scan(true));
   });
 
   // ---------- albums / artists / search ----------

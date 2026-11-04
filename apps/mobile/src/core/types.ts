@@ -65,4 +65,6 @@ export type PlayerState = {
   repeat: RepeatMode;
   shuffle: boolean;
   error: string | null;
+  /** Increments on every playback error, so repeated identical messages are still distinguishable. */
+  errorId: number;
 };

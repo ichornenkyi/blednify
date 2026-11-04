@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { createContext, use, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { BackHandler, Keyboard, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { GestureDetector, ScrollView, usePanGesture, type PanGesture } from 'react-native-gesture-handler';
+import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
@@ -15,6 +15,9 @@ import { TopLayer } from './TopLayer';
 
 const OPEN_SPRING = { damping: 26, stiffness: 300, mass: 0.9 };
 
+/** Lets scrollable sheet content cooperate with the drag-to-dismiss pan (see `SheetScrollView`). */
+const SheetGesture = createContext<{ pan: PanGesture; scrollY: SharedValue<number> } | null>(null);
+
 /**
  * Global bottom sheet host (mounted once in the root layout). Content is pushed with `showSheet(<…/>)`.
  * Built on Reanimated + Gesture Handler: drag down / tap scrim / back button to dismiss.
@@ -26,6 +29,10 @@ export function ActionSheetHost() {
   const insets = useSafeAreaInsets();
   const offset = useSharedValue(screenH);
   const keyboard = useSharedValue(0);
+  /** Scroll offset of the sheet's inner `SheetScrollView` (0 when there is none). */
+  const scrollY = useSharedValue(0);
+  /** The current drag started while the inner list was scrolled, so it belongs to the list. */
+  const listDrag = useSharedValue(false);
 
   // Mount new content immediately; keep old content mounted while animating out.
   if (sheet && sheet !== rendered) setRendered(sheet);
@@ -69,12 +76,17 @@ export function ActionSheetHost() {
   const pan = usePanGesture({
     activeOffsetY: 8,
     failOffsetX: [-24, 24],
+    onActivate: () => {
+      'worklet';
+      listDrag.set(scrollY.get() > 0);
+    },
     onUpdate: (e) => {
       'worklet';
-      offset.set(Math.max(0, e.translationY));
+      if (!listDrag.get()) offset.set(Math.max(0, e.translationY));
     },
     onDeactivate: (e) => {
       'worklet';
+      if (listDrag.get()) return;
       if (e.translationY > 110 || e.velocityY > 900) {
         scheduleOnRN(closeSheet);
       } else {
@@ -101,11 +113,39 @@ export function ActionSheetHost() {
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + space.sm, maxHeight: screenH * 0.86 }, sheetStyle]}>
             <View style={styles.grabber} />
-            <View key={rendered.id}>{rendered.content}</View>
+            <SheetGesture value={{ pan, scrollY }}>
+              <View key={rendered.id}>{rendered.content}</View>
+            </SheetGesture>
           </Animated.View>
         </GestureDetector>
       </View>
     </TopLayer>
+  );
+}
+
+/**
+ * Scrollable sheet content. Runs alongside the dismiss pan: a downward drag scrolls the list while it is
+ * scrolled, and only drags the sheet once the list is at the top.
+ */
+export function SheetScrollView(props: ComponentProps<typeof ScrollView>) {
+  const ctx = use(SheetGesture);
+  const scrollY = ctx?.scrollY;
+  useEffect(() => {
+    scrollY?.set(0);
+    return () => scrollY?.set(0);
+  }, [scrollY]);
+  return (
+    <ScrollView
+      bounces={false}
+      overScrollMode="never"
+      {...props}
+      simultaneousWith={ctx?.pan}
+      scrollEventThrottle={16}
+      onScroll={(e) => {
+        scrollY?.set(e.nativeEvent.contentOffset.y);
+        props.onScroll?.(e);
+      }}
+    />
   );
 }
 

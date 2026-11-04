@@ -18,6 +18,10 @@ The server answers immediately on startup and indexes `MUSIC_DIR` in the backgro
 incremental: files whose size and mtime are unchanged are skipped and rows for deleted files are removed.
 Trigger one with `POST /api/rescan` or `bun run scan` (safe while the server is running).
 
+Scans never wipe the library because a volume is missing. An unreadable `MUSIC_DIR` fails the scan, tracks under
+an unreadable subfolder are kept, and a background scan that finds no files at all while tracks are indexed
+removes nothing (it logs a warning). Only an explicit `POST /api/rescan` reconciles an intentionally emptied folder.
+
 Supported files: `mp3 flac m4a aac ogg opus wav` (case-insensitive). Dot-files and dot-directories are skipped,
 symlinks are followed. A file that fails to parse is logged and skipped until its size or mtime changes.
 
@@ -28,7 +32,8 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `PORT` | `8787` | HTTP port |
 | `MUSIC_DIR` | `./music` | Library root (scanned recursively). Uploads go to `MUSIC_DIR/uploads/`. |
 | `DATA_DIR` | `./data` | `blednify.db` (SQLite index) and `art/` (artwork cache). Safe to delete; it is rebuilt by a scan. |
-| `ADMIN_TOKEN` | unset | When set, `POST /api/tracks`, `DELETE /api/tracks/:id` and `POST /api/rescan` need `Authorization: Bearer <token>`. When unset, writes are open, so set it on anything reachable from outside your LAN. Reads are always public. |
+| `ADMIN_TOKEN` | unset | When set, `POST /api/tracks`, `DELETE /api/tracks/:id` and `POST /api/rescan` need `Authorization: Bearer <token>`. When unset, those writes return `403`. Reads are always public. |
+| `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
 | `MAX_UPLOAD_MB` | `200` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
 | `PUBLIC` | unset | Reserved. Has no effect yet. |
 | `LOG_REQUESTS` | `1` | `0` turns off the one-line-per-request log. Successful `/api/health` calls are never logged. |
@@ -57,9 +62,12 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
   original is served. Covers that are neither JPEG nor PNG are converted to JPEG. Cache policy is
   `public, max-age=2592000` plus an ETag.
 - **Uploads**: multipart field `file`, repeatable. Filenames are sanitized (no path parts or control/reserved
-  characters) and made unique with a ` (n)` suffix. Each file is parsed before it is accepted; an unreadable or
+  characters, at most 200 UTF-8 bytes) and made unique with a ` (n)` suffix. A name whose track id was used
+  before (a deleted track) is never reused, since clients cache streams and downloads by id. Files are written
+  under hidden temp names and moved into place only after every file in the request parsed; an unreadable or
   corrupt file returns `422`, and nothing from that request is kept. Unsupported extensions return `415`.
-  Success returns `201 {"items": Track[]}`, already indexed.
+  Storage failures return `507` (disk full) or `500` with the errno (for example a read-only or wrongly owned
+  `MUSIC_DIR`). Success returns `201 {"items": Track[]}`, already indexed.
 - **Errors** are always JSON: `{ "error": "..." }`. JSON responses are gzip/deflate-compressed when the client
   accepts it. CORS allows all origins.
 

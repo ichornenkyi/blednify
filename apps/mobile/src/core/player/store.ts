@@ -11,6 +11,7 @@ export const playerStore = create<PlayerState>(() => ({
   repeat: 'off',
   shuffle: false,
   error: null,
+  errorId: 0,
 }));
 
 type Progress = { positionMs: number; durationMs: number };

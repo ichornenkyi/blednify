@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { dismissToast, useOverlay, type ToastKind } from '../overlay';
+import { usePlayer } from '@/core';
+
+import { dismissToast, showToast, useOverlay, type ToastKind } from '../overlay';
 import { colors, radius, space } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
@@ -18,6 +21,7 @@ const ICONS: Record<Exclude<ToastKind, 'progress'>, { name: IconName; color: str
 export function ToastHost() {
   const toast = useOverlay((s) => s.toast);
   const insets = useSafeAreaInsets();
+  usePlaybackErrorToasts();
   return (
     <TopLayer>
       <View pointerEvents="box-none" style={[styles.host, { top: insets.top + space.sm }]}>
@@ -43,6 +47,15 @@ export function ToastHost() {
       </View>
     </TopLayer>
   );
+}
+
+/** Surfaces every playback error app-wide; `errorId` changes even when the message repeats. */
+function usePlaybackErrorToasts() {
+  const error = usePlayer((s) => s.error);
+  const errorId = usePlayer((s) => s.errorId);
+  useEffect(() => {
+    if (error) showToast(error, 'error');
+  }, [error, errorId]);
 }
 
 const styles = StyleSheet.create({

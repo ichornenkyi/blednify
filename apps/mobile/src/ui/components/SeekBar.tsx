@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -32,28 +32,21 @@ export function SeekBar({ fallbackDurationMs }: { fallbackDurationMs: number }) 
   const lastSec = useSharedValue(-1);
   const duration = useSharedValue(durationMs);
   const [scrubMs, setScrubMs] = useState<number | null>(null);
-  const pendingSeek = useRef<{ ms: number; at: number } | null>(null);
 
   useEffect(() => {
     duration.set(durationMs);
   }, [durationMs, duration]);
 
-  // Follow playback unless the user is scrubbing or a seek is still settling.
+  // Follow playback unless the user is scrubbing. Core holds `positionMs` at a seek target until the
+  // native player arrives there, so neither the thumb nor the time label bounces back while it settles.
   useEffect(() => {
     if (scrubMs !== null) return;
-    const pending = pendingSeek.current;
-    if (pending) {
-      if (Math.abs(positionMs - pending.ms) > 1500 && Date.now() - pending.at < 1500) return;
-      pendingSeek.current = null;
-    }
     const r = durationMs > 0 ? clamp01(positionMs / durationMs) : 0;
     ratio.set(Math.abs(ratio.get() - r) > 0.02 ? r : withTiming(r, { duration: 260, easing: Easing.linear }));
   }, [positionMs, durationMs, scrubMs, ratio]);
 
   const commit = (r: number) => {
-    const ms = Math.round(r * durationMs);
-    pendingSeek.current = { ms, at: Date.now() };
-    player.seekTo(ms);
+    player.seekTo(Math.round(r * durationMs));
     setScrubMs(null);
     haptics.select();
   };

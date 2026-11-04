@@ -58,6 +58,10 @@ CREATE TABLE IF NOT EXISTS artists (
 );
 CREATE INDEX IF NOT EXISTS artists_name ON artists(name COLLATE NOCASE, id);
 
+-- ids of tracks that were deleted/removed. Uploads never reuse them: clients cache streams immutably and key
+-- downloads by id, so an id must never point at different audio.
+CREATE TABLE IF NOT EXISTS retired_ids (id TEXT PRIMARY KEY) WITHOUT ROWID;
+
 -- every album an artist appears on, as track artist or album artist
 CREATE TABLE IF NOT EXISTS artist_albums (
   artist_id TEXT NOT NULL,

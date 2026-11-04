@@ -24,6 +24,8 @@ type DlState = { items: Record<string, Item>; order: string[] };
 const dlStore = create<DlState>(() => ({ items: {}, order: [] }));
 
 const controllers = new Map<string, { ctrl: AbortController; requeue: boolean }>();
+/** In-flight `run` per key, so `removeDownload` can wait for a cancelled run to finish cleaning up. */
+const runs = new Map<string, Promise<void>>();
 let running = 0;
 
 // --- State helpers ---------------------------------------------------------------------------
@@ -104,10 +106,12 @@ async function pump(): Promise<void> {
         const key = s.order.find((k) => s.items[k].status === 'queued');
         if (!key) break;
         running++;
-        void run(key).finally(() => {
+        const r = run(key).finally(() => {
+          runs.delete(key);
           running--;
           void pump();
         });
+        runs.set(key, r);
       }
     } while (pumpAgain);
   } finally {
@@ -130,6 +134,11 @@ async function run(key: string): Promise<void> {
   const artRel = `${DIRS.music}/${track.id}.jpg`;
   const part = new File(dir, `${track.id}.part`);
   let lastTick = 0;
+  // A network-policy abort (`requeue`) after the audio landed is ignored: finishing is cheaper than refetching.
+  const cancelled = () => ctrl.signal.aborted && !handle.requeue;
+  const bail = () => {
+    if (cancelled()) throw new Error('Download cancelled');
+  };
 
   try {
     await File.downloadFileAsync(trackStreamUrl(base, track.id), part, {
@@ -143,8 +152,10 @@ async function run(key: string): Promise<void> {
         if (total > 0) patch(key, { progress: Math.min(0.99, bytesWritten / total) });
       },
     });
+    bail();
     const final = fileAt(fileRel);
     await part.move(final, { overwrite: true });
+    bail();
 
     let art: string | null = null;
     if (track.artworkUri) {
@@ -154,11 +165,13 @@ async function run(key: string): Promise<void> {
           signal: ctrl.signal,
         });
         art = artRel;
-      } catch {
-        // Artwork is optional; the remote URL remains the fallback.
+      } catch (e) {
         deleteQuietly(artRel);
+        if (cancelled()) throw e;
+        // Otherwise artwork is optional; the remote URL remains the fallback.
       }
     }
+    bail();
 
     const size = final.size || track.sizeBytes;
     await writeTx((db) =>
@@ -175,12 +188,21 @@ async function run(key: string): Promise<void> {
         Date.now(),
       ),
     );
+    if (cancelled()) {
+      await writeTx((db) => db.runAsync('DELETE FROM downloads WHERE key = ?', key));
+      bail();
+    }
     setDownload(key, { file: fileRel, art, size });
     drop(key);
     refreshQueueTracks();
     invalidate(libKeys.all);
   } catch (e) {
     deleteQuietly(`${DIRS.music}/${track.id}.part`);
+    if (cancelled()) {
+      // Never committed: drop whatever reached its final location.
+      deleteQuietly(fileRel);
+      deleteQuietly(artRel);
+    }
     if (ctrl.signal.aborted) {
       if (handle.requeue) patch(key, { status: 'queued', progress: 0 });
       // Cancelled: the item was already removed by `cancelDownload`.
@@ -226,7 +248,10 @@ export function cancelDownload(key: string): void {
 }
 
 export async function removeDownload(key: string): Promise<void> {
+  const inFlight = runs.get(key);
   cancelDownload(key);
+  // A run that was past its transfer may still commit or clean up; settle it before reading the index.
+  await inFlight;
   const entry = libIndex.getState().downloads.get(key);
   if (!entry) return;
   await writeTx((db) => db.runAsync('DELETE FROM downloads WHERE key = ?', key));

@@ -9,11 +9,12 @@ services:
     ports:
       - "8787:8787"
     environment:
-      # Required for uploads/deletes/rescans from the network. Leave empty only on a trusted LAN.
+      # Uploads, deletes and rescans need this token. Without it they are refused (403); reads still work.
+      # ALLOW_OPEN_WRITES: "1" lifts that on a trusted LAN only.
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       MAX_UPLOAD_MB: "200"
-    # The image runs as uid/gid 1000 ("bun"); the music folder must be writable by it for uploads/deletes.
-    # user: "1000:1000"
+    # The image runs as uid/gid 1000 ("bun") and must be able to write the music folder for uploads/deletes.
+    # Create it first so Docker does not create it as root: `mkdir -p music && sudo chown 1000:1000 music`.
     volumes:
       - ./music:/music
       - blednify-data:/data

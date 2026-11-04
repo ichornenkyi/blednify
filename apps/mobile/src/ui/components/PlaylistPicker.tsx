@@ -1,5 +1,4 @@
 import { StyleSheet, View } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
 
 import { addToPlaylist, createPlaylist, usePlaylists, type AppTrack } from '@/core';
 
@@ -7,7 +6,7 @@ import { attempt } from '../actions';
 import { haptics } from '../haptics';
 import { closeSheet, showSheet } from '../overlay';
 import { colors, space } from '../theme';
-import { SheetAction, SheetHeader } from './ActionSheet';
+import { SheetAction, SheetHeader, SheetScrollView } from './ActionSheet';
 import { Icon } from './Icon';
 import { ListRow } from './ListRow';
 import { PlaylistArtwork } from './PlaylistArtwork';
@@ -37,7 +36,7 @@ export function PlaylistPicker({ tracks }: { tracks: AppTrack[] }) {
         }
       />
       {playlists.length > 0 ? (
-        <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        <SheetScrollView style={styles.list} contentContainerStyle={styles.listContent}>
           {playlists.map((p) => (
             <ListRow
               key={p.id}
@@ -51,7 +50,7 @@ export function PlaylistPicker({ tracks }: { tracks: AppTrack[] }) {
               }}
             />
           ))}
-        </ScrollView>
+        </SheetScrollView>
       ) : (
         <View style={styles.empty}>
           <Icon name="list" size={18} color={colors.textTertiary} />

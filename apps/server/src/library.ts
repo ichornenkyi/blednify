@@ -282,11 +282,27 @@ export class Library {
     return added;
   }
 
+  /** Deletes tracks and retires their ids (see `isIdTaken`). */
   deleteTracks(ids: string[]): void {
     const del = this.sql.query<unknown, [string]>("DELETE FROM tracks WHERE id = ?");
+    const retire = this.sql.query<unknown, [string]>("INSERT OR IGNORE INTO retired_ids (id) VALUES (?)");
     this.sql.transaction(() => {
-      for (const id of ids) del.run(id);
+      for (const id of ids) {
+        del.run(id);
+        retire.run(id);
+      }
     })();
+  }
+
+  /** True when `id` is indexed now or was ever deleted; new uploads must pick a path with a fresh id. */
+  isIdTaken(id: string): boolean {
+    return (
+      this.sql
+        .query<{ x: number }, [string, string]>(
+          "SELECT 1 AS x FROM tracks WHERE id = ? UNION ALL SELECT 1 FROM retired_ids WHERE id = ? LIMIT 1",
+        )
+        .get(id, id) != null
+    );
   }
 
   /** Recomputes albums / artists / artist_albums (and their FTS indexes) from tracks. */

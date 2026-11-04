@@ -10,7 +10,12 @@ export const nav = {
   queue: () => router.push('/queue'),
   settings: () => router.push('/settings'),
   downloads: () => router.push('/downloads'),
-  library: (filter?: LibraryFilter) => router.navigate({ pathname: '/library', params: filter ? { filter } : {} }),
+  /** From a root-stack screen, pop back to the existing tabs instead of stacking a second tab navigator. */
+  library: (filter?: LibraryFilter) => {
+    const href = { pathname: '/library', params: filter ? { filter } : {} } as const;
+    if (router.canDismiss()) router.dismissTo(href);
+    else router.navigate(href);
+  },
 };
 
 export type LibraryFilter = 'playlists' | 'albums' | 'liked' | 'downloaded' | 'device';

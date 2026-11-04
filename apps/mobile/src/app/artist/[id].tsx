@@ -68,7 +68,7 @@ export default function ArtistScreen() {
               title={artist.name}
               meta={[plural(artist.albumCount || albums.length, 'album'), plural(artist.trackCount || tracks.length, 'track')].join(' · ')}
               onPlay={tracks.length ? () => player.playTracks(tracks, 0) : undefined}
-              onShuffle={tracks.length ? () => player.playTracks(tracks, 0, { shuffle: true }) : undefined}
+              onShuffle={tracks.length ? () => player.playTracks(tracks, undefined, { shuffle: true }) : undefined}
             />
             <Rail
               title="Albums"

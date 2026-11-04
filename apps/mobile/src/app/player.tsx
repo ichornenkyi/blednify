@@ -22,7 +22,7 @@ import { Text } from '@/ui/components/Text';
 import { openTrackActions } from '@/ui/components/TrackActions';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
-import { showSheet, showToast } from '@/ui/overlay';
+import { showSheet } from '@/ui/overlay';
 import { colors, radius, space } from '@/ui/theme';
 
 const DISMISS_DISTANCE = 140;
@@ -191,11 +191,6 @@ function Transport() {
   const isBuffering = usePlayer((s) => s.isBuffering);
   const shuffle = usePlayer((s) => s.shuffle);
   const repeat = usePlayer((s) => s.repeat);
-  const error = usePlayer((s) => s.error);
-
-  useEffect(() => {
-    if (error) showToast(error, 'error');
-  }, [error]);
 
   return (
     <View style={styles.transport}>

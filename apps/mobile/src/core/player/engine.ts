@@ -34,6 +34,9 @@ const RECENT_AFTER_MS = 10_000;
 const LOAD_TIMEOUT_MS = 20_000;
 const MAX_ERROR_STREAK = 3;
 const POSITION_SAVE_MS = 5_000;
+/** How long status events reporting the pre-seek position are ignored while a seek settles. */
+const SEEK_SETTLE_MS = 6_000;
+const SEEK_TOLERANCE_MS = 1_500;
 const QUEUE_KEY = 'player.queue.v1';
 const STATE_KEY = 'player.state.v1';
 const POSITION_KEY = 'player.position.v1';
@@ -52,8 +55,9 @@ let index = -1;
 
 let nat: AudioPlaylist | null = null;
 let natSub: { remove(): void } | null = null;
-/** Entry uid per native slot. */
+/** Entry uid and loaded URI per native slot (URIs change when a download lands or the server moves). */
 let natUids: number[] = [];
+let natUris: string[] = [];
 let natCur = -1;
 /** Native holds the current entry and can be played without a reload. */
 let natReady = false;
@@ -67,6 +71,8 @@ let lockActive = false;
 
 let wantPlay = false;
 let pendingSeekMs: number | null = null;
+/** Target of the latest seek; progress holds there until native reports arriving (or the guard expires). */
+let seekGuard: { ms: number; until: number } | null = null;
 let curLoaded = false;
 let watchdog: ReturnType<typeof setTimeout> | null = null;
 let errorStreak = 0;
@@ -148,11 +154,17 @@ function setProgress(positionMs: number, durationMs: number) {
     progressStore.setState({ positionMs, durationMs });
 }
 
+/** Per-track state. Also drops a seek aimed at the previous track; resumes playback it was holding back. */
 function resetTrackCounters() {
   listenedMs = 0;
   lastTimeS = 0;
   recorded = false;
   curLoaded = false;
+  seekGuard = null;
+  if (pendingSeekMs !== null) {
+    pendingSeekMs = null;
+    if (wantPlay && natReady) startNative();
+  }
 }
 
 function clearWatchdog() {
@@ -193,6 +205,7 @@ function createNative(): AudioPlaylist {
   natSub = p.addListener('playlistStatusUpdate', onStatus);
   nat = p;
   natUids = [];
+  natUris = [];
   natCur = -1;
   natBroken = false;
   awaitingClear = false;
@@ -243,14 +256,17 @@ function syncNext() {
   const src = next ? sourceOf(next.track) : null;
   const want = next && src ? next.uid : null;
   const tail = natUids.length - natCur - 1;
-  if ((want === null && tail === 0) || (tail === 1 && natUids[natCur + 1] === want)) return;
+  if (want === null ? tail === 0 : tail === 1 && natUids[natCur + 1] === want && natUris[natCur + 1] === src?.uri)
+    return;
   for (let i = natUids.length - 1; i > natCur; i--) {
     nat.remove(i);
     natUids.pop();
+    natUris.pop();
   }
   if (want !== null && src) {
     nat.add(src);
     natUids.push(want);
+    natUris.push(src.uri);
   }
 }
 
@@ -263,6 +279,7 @@ function load(idx: number, play: boolean, positionMs = 0) {
   if (!cur) return stopAll();
   clearWatchdog();
   index = idx;
+  pendingSeekMs = null;
   resetTrackCounters();
   wantPlay = play;
   lastCommandAt = Date.now();
@@ -282,20 +299,24 @@ function load(idx: number, play: boolean, positionMs = 0) {
   awaitingClear = true;
   n.clear();
   natUids = [];
+  natUris = [];
   const prev = entries[idx - 1];
   const prevSrc = prev ? sourceOf(prev.track) : null;
   if (prev && prevSrc) {
     n.add(prevSrc);
     natUids.push(prev.uid);
+    natUris.push(prevSrc.uri);
   }
   n.add(src);
   natUids.push(cur.uid);
+  natUris.push(src.uri);
   natCur = natUids.length - 1;
   n.skipTo(natCur);
   natReady = true;
   syncNext();
 
   pendingSeekMs = positionMs > 0 ? positionMs : null;
+  if (pendingSeekMs !== null) guardSeek(pendingSeekMs);
   publishIndex({ isPlaying: play, isBuffering: play });
   if (play) {
     activateLockScreen(cur.track);
@@ -317,6 +338,7 @@ function stopAll() {
   }
   lockActive = false;
   natUids = [];
+  natUris = [];
   natCur = -1;
   natReady = false;
   entries = [];
@@ -336,6 +358,11 @@ function onNativeIndex(ci: number) {
   if (idx < 0) {
     // The entry native moved to was removed from the queue in the meantime.
     load(Math.min(Math.max(index, 0), entries.length - 1), wantPlay);
+    return;
+  }
+  if (natUris[ci] !== sourceOf(entries[idx].track)?.uri) {
+    // Slot was queued before its URI changed (download removed, server moved): reload it fresh.
+    load(idx, wantPlay);
     return;
   }
   index = idx;
@@ -394,7 +421,9 @@ function onStatus(s: NativeStatus) {
     wantPlay = s.playing;
 
   const positionMs = Math.max(0, s.currentTime * 1000);
-  setProgress(positionMs, s.duration > 0 ? s.duration * 1000 : (cur?.durationMs ?? 0));
+  if (seekGuard && (Math.abs(positionMs - seekGuard.ms) < SEEK_TOLERANCE_MS || Date.now() > seekGuard.until))
+    seekGuard = null;
+  if (!seekGuard) setProgress(positionMs, s.duration > 0 ? s.duration * 1000 : (cur?.durationMs ?? 0));
 
   if (s.playing) {
     const d = s.currentTime - lastTimeS;
@@ -432,13 +461,16 @@ function onNativeFinished() {
 }
 
 function onPlaybackError(message: string) {
+  // Auto-skip only while the user wants playback; a paused/stopped player just reports the error.
+  const resume = wantPlay;
   clearWatchdog();
   natBroken = true;
   natReady = false;
+  pendingSeekMs = null;
   errorStreak++;
-  playerStore.setState({ error: message, isBuffering: false });
+  playerStore.setState({ error: message, errorId: S().errorId + 1, isBuffering: false });
   const ni = nextIndex();
-  if (errorStreak >= Math.min(MAX_ERROR_STREAK, entries.length) || ni === null) {
+  if (!resume || errorStreak >= Math.min(MAX_ERROR_STREAK, entries.length) || ni === null) {
     wantPlay = false;
     playerStore.setState({ isPlaying: false });
     return;
@@ -525,7 +557,10 @@ export function refreshQueueTracks() {
       changed = true;
     }
   }
-  if (changed) publishQueue();
+  if (!changed) return;
+  publishQueue();
+  // A pre-buffered next slot may still point at the old URI (deleted file, old server address).
+  syncNext();
 }
 
 /** Drop every queue entry whose track key is in `keys` (e.g. deleted local files). */
@@ -577,10 +612,15 @@ function pause() {
   savePosition();
 }
 
+function guardSeek(ms: number) {
+  seekGuard = { ms, until: Date.now() + SEEK_SETTLE_MS };
+}
+
 function seekTo(ms: number) {
   const dur = progressStore.getState().durationMs;
   const target = Math.max(0, dur > 0 ? Math.min(ms, dur) : ms);
   setProgress(target, dur);
+  guardSeek(target);
   lastTimeS = target / 1000;
   if (nat && natReady && !natBroken) {
     if (curLoaded) void nat.seekTo(target / 1000).catch(() => undefined);
@@ -602,11 +642,11 @@ function next() {
   if (nat && natReady && !natBroken && natUids[natCur + 1] === entries[ni].uid && nat.trackCount === natUids.length) {
     // Already pre-buffered natively: let native advance; `onNativeIndex` finalizes state.
     index = ni;
+    nat.next();
     resetTrackCounters();
     lastCommandAt = Date.now();
     setProgress(0, entries[ni].track.durationMs);
     publishIndex();
-    nat.next();
     return;
   }
   load(ni, playing);
@@ -697,6 +737,8 @@ function moveInQueue(from: number, to: number) {
   const [moved] = list.splice(from, 1);
   list.splice(to, 0, moved);
   entries = list;
+  // Unshuffled, `original` mirrors the visible order, so a later shuffle round-trip keeps the edit.
+  if (!S().shuffle) original = list.slice();
   index = list.findIndex((e) => e.uid === curUid);
   publishQueue();
   syncNext();

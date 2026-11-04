@@ -67,7 +67,7 @@ export default function PlaylistScreen() {
             title={playlist.name}
             meta={tracks.length ? `${plural(tracks.length, 'track')} · ${humanDuration(totalMs)}` : 'Empty playlist'}
             onPlay={tracks.length ? () => player.playTracks(tracks, 0) : undefined}
-            onShuffle={tracks.length ? () => player.playTracks(tracks, 0, { shuffle: true }) : undefined}
+            onShuffle={tracks.length ? () => player.playTracks(tracks, undefined, { shuffle: true }) : undefined}
             actions={
               <>
                 {remoteMissing.length > 0 ? (

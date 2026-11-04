@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, rmSync, utimesSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { albumId, artistId, hash16, trackId } from "../src/ids";
 import type { Album, Artist, Page, Track } from "../src/library";
+import { sanitizeFileName } from "../src/app";
 import { png, testServer, wav, type TestServer } from "./fixtures";
 
 type AlbumDetail = Album & { tracks: Track[] };
@@ -74,6 +75,38 @@ describe("scan", () => {
     rmSync(join(srv.musicDir, "new/fresh.wav"));
     expect(await srv.ctx.scanner.scan()).toEqual({ added: 0, removed: 1, total: 6 });
     expect((await get(`/api/tracks/${idOf("new/fresh.wav")}`)).status).toBe(404);
+  });
+
+  test("an empty or unreadable music folder never wipes the library", async () => {
+    const s = testServer({ "a/one.wav": wav({ title: "One" }), "b/two.wav": wav({ title: "Two" }) });
+    try {
+      expect((await s.ctx.scanner.scan()).total).toBe(2);
+      // Unmounted volume: the mount point is empty.
+      for (const d of ["a", "b"]) rmSync(join(s.musicDir, d), { recursive: true });
+      expect(await s.ctx.scanner.scan()).toEqual({ added: 0, removed: 0, total: 2 });
+      // Root not readable at all: the scan fails instead of deleting.
+      rmSync(s.musicDir, { recursive: true });
+      await expect(s.ctx.scanner.scan()).rejects.toThrow(/not readable/);
+      expect(s.ctx.lib.trackCount()).toBe(2);
+      // An explicit rescan does reconcile an intentionally emptied folder.
+      mkdirSync(s.musicDir);
+      expect(await s.ctx.scanner.scan(true)).toEqual({ added: 0, removed: 2, total: 0 });
+    } finally {
+      s.close();
+    }
+  });
+
+  test.skipIf(process.getuid?.() === 0)("keeps tracks under an unreadable subfolder", async () => {
+    const s = testServer({ "keep/one.wav": wav({ title: "One" }), "other/two.wav": wav({ title: "Two" }) });
+    const dir = join(s.musicDir, "keep");
+    try {
+      expect((await s.ctx.scanner.scan()).total).toBe(2);
+      chmodSync(dir, 0o000);
+      expect(await s.ctx.scanner.scan()).toEqual({ added: 0, removed: 0, total: 2 });
+    } finally {
+      chmodSync(dir, 0o755);
+      s.close();
+    }
   });
 
   test("concurrent scans coalesce", async () => {
@@ -310,6 +343,19 @@ describe("writes", () => {
     return fd;
   };
 
+  test("writes are refused without ADMIN_TOKEN unless explicitly opened", async () => {
+    const s = testServer({}, { ALLOW_OPEN_WRITES: "" });
+    try {
+      const up = await s.app.request("/api/tracks", { method: "POST", body: form(["a.wav", wav({ title: "Up" })]) });
+      expect(up.status).toBe(403);
+      expect((await s.app.request("/api/rescan", { method: "POST" })).status).toBe(403);
+      expect((await s.app.request("/api/tracks/0123456789abcdef", { method: "DELETE" })).status).toBe(403);
+      expect((await s.app.request("/api/tracks")).status).toBe(200);
+    } finally {
+      s.close();
+    }
+  });
+
   test("auth required when ADMIN_TOKEN is set", async () => {
     const s = testServer({}, { ADMIN_TOKEN: "s3cret" });
     try {
@@ -357,6 +403,40 @@ describe("writes", () => {
       expect(existsSync(join(s.musicDir, "uploads/evilname.wav"))).toBe(false);
       expect((await s.app.request(`/api/tracks/${items[0]!.id}`)).status).toBe(404);
       expect((await s.app.request(`/api/tracks/${items[0]!.id}`, { method: "DELETE" })).status).toBe(404);
+
+      // A new upload with the deleted name must not inherit the retired id (clients cache streams by id).
+      const again = await s.app.request("/api/tracks", { method: "POST", body: form(["evilname.wav", wav({ title: "Different" })]) });
+      expect(again.status).toBe(201);
+      const [fresh] = ((await again.json()) as { items: Track[] }).items;
+      expect(fresh!.id).not.toBe(items[0]!.id);
+      expect(fresh!.id).toBe(trackId("uploads/evilname (2).wav"));
+      expect(readdirSync(join(s.musicDir, "uploads")).sort()).toEqual(["evilname (1).wav", "evilname (2).wav"]); // no temp files left
+    } finally {
+      s.close();
+    }
+  });
+
+  test("long non-ASCII names are truncated by bytes, not characters", async () => {
+    const name = sanitizeFileName(`${"音".repeat(100)}.wav`);
+    expect(Buffer.byteLength(name)).toBeLessThanOrEqual(205);
+    expect(name.endsWith("音.wav")).toBe(true);
+    const s = testServer();
+    try {
+      const res = await s.app.request("/api/tracks", { method: "POST", body: form([`${"Ж".repeat(200)}.wav`, wav({ title: "Long" })]) });
+      expect(res.status).toBe(201);
+    } finally {
+      s.close();
+    }
+  });
+
+  test("filesystem failures are not reported as bad audio", async () => {
+    const s = testServer();
+    try {
+      // `uploads` exists as a file, so the server cannot create the folder.
+      s.write("uploads", Buffer.from("x"));
+      const res = await s.app.request("/api/tracks", { method: "POST", body: form(["a.wav", wav({ title: "A" })]) });
+      expect(res.status).toBe(500);
+      expect(((await res.json()) as { error: string }).error).toContain("could not store the upload");
     } finally {
       s.close();
     }

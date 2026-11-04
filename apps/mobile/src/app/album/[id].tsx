@@ -71,7 +71,7 @@ export default function AlbumScreen() {
             onSubtitlePress={() => nav.artist(album.artistId, album.origin)}
             meta={meta}
             onPlay={tracks.length ? () => player.playTracks(tracks, 0) : undefined}
-            onShuffle={tracks.length ? () => player.playTracks(tracks, 0, { shuffle: true }) : undefined}
+            onShuffle={tracks.length ? () => player.playTracks(tracks, undefined, { shuffle: true }) : undefined}
             actions={
               <>
                 {remoteMissing.length > 0 ? (
