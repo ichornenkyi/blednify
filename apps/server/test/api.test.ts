@@ -63,6 +63,15 @@ describe("scan", () => {
     expect(loose).toMatchObject({ title: "Untagged Song", artist: "Zed", album: "Unknown Album", hasArtwork: false });
   });
 
+  test("untagged files take artist/album from Artist/Album folders", async () => {
+    const abs = srv.write("Folder Artist/Folder Album/CD1/03 - Plain.wav", wav({}, 300));
+    await srv.ctx.scanner.scan();
+    const t = await json<Track>(`/api/tracks/${idOf("Folder Artist/Folder Album/CD1/03 - Plain.wav")}`);
+    expect(t).toMatchObject({ title: "Plain", artist: "Folder Artist", album: "Folder Album", trackNumber: 3 });
+    rmSync(join(abs, "../../.."), { recursive: true }); // "Folder Artist/"
+    await srv.ctx.scanner.scan();
+  });
+
   test("is incremental, picks up changes and removals", async () => {
     expect(await srv.ctx.scanner.scan()).toEqual({ added: 0, removed: 0, total: 6 });
 

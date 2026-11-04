@@ -80,6 +80,16 @@ function parseFileName(path: string): { title: string; artist: string | null; tr
   return { artist: null, title: name || basename(path), trackNo };
 }
 
+/** Untagged files in an "Artist/Album/track.ext" layout → artist and album from the folders. */
+function parseFolders(rel: string): { artist: string | null; album: string | null } {
+  const dirs = rel
+    .split(/[\\/]/)
+    .slice(0, -1)
+    .filter((d) => d && d !== "uploads" && !/^(cd|dis[ck])\s*\d+$/i.test(d));
+  if (dirs.length >= 2) return { artist: dirs[dirs.length - 2]!, album: dirs[dirs.length - 1]! };
+  return { artist: null, album: null };
+}
+
 const clean = (s: string | undefined | null) => s?.replace(/\u0000/g, "").trim() || null;
 const posInt = (n: number | null | undefined) => (n != null && Number.isInteger(n) && n > 0 ? n : null);
 
@@ -97,8 +107,10 @@ async function readTrack(f: FoundFile, addedAt: string, strict = false): Promise
       throw new Error("corrupt audio file");
   }
   const fromName = parseFileName(f.rel);
-  const artist = clean(common.artist) ?? clean(common.artists?.join(", ")) ?? fromName.artist ?? UNKNOWN_ARTIST;
-  const album = clean(common.album) ?? UNKNOWN_ALBUM;
+  const fromDirs = parseFolders(f.rel);
+  const artist =
+    clean(common.artist) ?? clean(common.artists?.join(", ")) ?? fromName.artist ?? fromDirs.artist ?? UNKNOWN_ARTIST;
+  const album = clean(common.album) ?? fromDirs.album ?? UNKNOWN_ALBUM;
   const albumArtist = clean(common.albumartist) ?? artist;
   const year = posInt(common.year);
   return {

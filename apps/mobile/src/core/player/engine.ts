@@ -1,11 +1,16 @@
 /**
  * Playback engine.
  *
- * One long-lived native `AudioPlaylist` (ExoPlayer playlist on Android, AVQueuePlayer on iOS) is
- * used as a short *window* over the JS queue: [previous?, current, next]. The native side therefore
- * pre-buffers the next track and transitions gaplessly, and lock-screen / notification next/previous
- * work natively even while JS is throttled. The JS queue (`entries`) stays authoritative; whenever it
- * changes, only the native slot after the current one is re-synced (never touching the playing item).
+ * One long-lived native `AudioPlaylist` (ExoPlayer playlist on Android, AVQueuePlayer on iOS) holds a
+ * window over the JS queue: [previous?, current, up to WINDOW_AHEAD upcoming]. Native pre-buffers the
+ * next track and transitions gaplessly, and lock-screen / notification next/previous work natively even
+ * while JS is throttled. The JS queue (`entries`) stays authoritative.
+ *
+ * IMPORTANT (Android): expo-audio's Media3 lock-screen session does not see playlist edits made after
+ * it was attached; the notification's MediaController then crashes the app with
+ * "Invalid PlayerInfo update" on the next transition. So auto-advance never edits the native playlist,
+ * and every edit goes through `editNative`, which detaches the session, edits, and re-attaches it.
+ * Edits that would happen while the app is in the background are deferred (`windowDirty`).
  */
 import {
   createAudioPlaylist,
@@ -66,6 +71,10 @@ let natBroken = false;
 /** Ignore status events until the one emitted by `clear()` (trackCount 0) arrives. */
 let awaitingClear = false;
 let lockActive = false;
+/** The native upcoming window differs from the queue; re-sync when it is safe (foreground). */
+let windowDirty = false;
+/** Upcoming tracks kept in the native playlist after the current one. */
+const WINDOW_AHEAD = 200;
 
 // --- Playback intent / bookkeeping -----------------------------------------------------------
 
@@ -226,10 +235,10 @@ function ensureNotificationPermission() {
   requestNotificationPermissionsAsync().catch((e) => console.warn('[player] notification permission', e));
 }
 
-function activateLockScreen(t: AppTrack) {
+function activateLockScreen(t: AppTrack, force = false) {
   if (!nat) return;
   ensureNotificationPermission();
-  if (lockActive) {
+  if (lockActive && !force) {
     nat.updateLockScreenMetadata(metadataOf(t));
     return;
   }
@@ -242,32 +251,60 @@ function activateLockScreen(t: AppTrack) {
   lockActive = true;
 }
 
-/** Make the native slot after the current one equal the queue's next entry (or nothing). */
-function syncNext() {
+/** Run a native playlist edit with the lock-screen session detached (see header), then re-attach it. */
+function editNative(edit: (n: AudioPlaylist) => void) {
+  if (!nat) return;
+  const reattach = lockActive;
+  if (reattach) {
+    nat.clearLockScreenControls();
+    lockActive = false;
+  }
+  edit(nat);
+  const cur = entries[index];
+  if (reattach && cur) activateLockScreen(cur.track, true);
+}
+
+/** Upcoming playable entries that should follow the current one natively (no repeat-all wrap). */
+function desiredTail(): Entry[] {
+  const out: Entry[] = [];
+  for (let i = index + 1; i < entries.length && out.length < WINDOW_AHEAD; i++) {
+    if (!sourceOf(entries[i].track)) break;
+    out.push(entries[i]);
+  }
+  return out;
+}
+
+/** Make the native slots after the current one equal the queue's upcoming entries. */
+function syncWindow() {
   if (!nat || !natReady) return;
   // Native may have advanced before its event reached JS; catch up first.
   const live = nat.currentIndex;
-  if (live !== natCur && live >= 0 && live < natUids.length && nat.trackCount === natUids.length) {
-    onNativeIndex(live);
+  if (live !== natCur && live >= 0 && live < natUids.length && nat.trackCount === natUids.length) onNativeIndex(live);
+  const want = desiredTail();
+  const have = natUids.slice(natCur + 1);
+  if (want.length === have.length && want.every((e, k) => e.uid === have[k])) {
+    windowDirty = false;
     return;
   }
-  const ni = nextIndex();
-  const next = ni === null ? null : entries[ni];
-  const src = next ? sourceOf(next.track) : null;
-  const want = next && src ? next.uid : null;
-  const tail = natUids.length - natCur - 1;
-  if (want === null ? tail === 0 : tail === 1 && natUids[natCur + 1] === want && natUris[natCur + 1] === src?.uri)
+  if (lockActive && AppState.currentState !== 'active') {
+    windowDirty = true;
     return;
-  for (let i = natUids.length - 1; i > natCur; i--) {
-    nat.remove(i);
-    natUids.pop();
-    natUris.pop();
   }
-  if (want !== null && src) {
-    nat.add(src);
-    natUids.push(want);
-    natUris.push(src.uri);
-  }
+  windowDirty = false;
+  editNative((n) => {
+    for (let i = natUids.length - 1; i > natCur; i--) {
+      n.remove(i);
+      natUids.pop();
+      natUris.pop();
+    }
+    for (const e of want) {
+      const src = sourceOf(e.track);
+      if (!src) break;
+      n.add(src);
+      natUids.push(e.uid);
+      natUris.push(src.uri);
+    }
+  });
 }
 
 /**
@@ -296,6 +333,11 @@ function load(idx: number, play: boolean, positionMs = 0) {
   }
 
   const n = !nat || natBroken ? createNative() : nat;
+  const reattach = lockActive;
+  if (reattach) {
+    n.clearLockScreenControls();
+    lockActive = false;
+  }
   awaitingClear = true;
   n.clear();
   natUids = [];
@@ -311,9 +353,16 @@ function load(idx: number, play: boolean, positionMs = 0) {
   natUids.push(cur.uid);
   natUris.push(src.uri);
   natCur = natUids.length - 1;
+  for (const e of desiredTail()) {
+    const s2 = sourceOf(e.track);
+    if (!s2) break;
+    n.add(s2);
+    natUids.push(e.uid);
+    natUris.push(s2.uri);
+  }
   n.skipTo(natCur);
   natReady = true;
-  syncNext();
+  windowDirty = false;
 
   pendingSeekMs = positionMs > 0 ? positionMs : null;
   if (pendingSeekMs !== null) guardSeek(pendingSeekMs);
@@ -322,8 +371,8 @@ function load(idx: number, play: boolean, positionMs = 0) {
     activateLockScreen(cur.track);
     if (pendingSeekMs === null) startNative();
     armWatchdog();
-  } else if (lockActive) {
-    n.updateLockScreenMetadata(metadataOf(cur.track));
+  } else if (reattach) {
+    activateLockScreen(cur.track, true);
   }
 }
 
@@ -360,11 +409,6 @@ function onNativeIndex(ci: number) {
     load(Math.min(Math.max(index, 0), entries.length - 1), wantPlay);
     return;
   }
-  if (natUris[ci] !== sourceOf(entries[idx].track)?.uri) {
-    // Slot was queued before its URI changed (download removed, server moved): reload it fresh.
-    load(idx, wantPlay);
-    return;
-  }
   index = idx;
   resetTrackCounters();
   const t = entries[idx].track;
@@ -372,7 +416,8 @@ function onNativeIndex(ci: number) {
   kv.set(POSITION_KEY, 0);
   publishIndex();
   if (lockActive) nat?.updateLockScreenMetadata(metadataOf(t));
-  syncNext();
+  // Only touch the native playlist when it is out of date or about to run dry; never routinely.
+  if (windowDirty || (natCur >= natUids.length - 1 && index + 1 < entries.length)) syncWindow();
   armWatchdog();
 }
 
@@ -537,6 +582,7 @@ function restore() {
 restore();
 
 AppState.addEventListener('change', (state) => {
+  if (state === 'active' && windowDirty) syncWindow();
   if (state !== 'active') {
     savePosition();
     if (persistTimer) {
@@ -558,9 +604,10 @@ export function refreshQueueTracks() {
     }
   }
   if (!changed) return;
+  // Pre-buffered native slots keep their old URIs (a stream URL keeps working after a download lands;
+  // a stale one fails and goes through the normal error path). Editing here would mean a lock-screen
+  // session rebuild, possibly in the background.
   publishQueue();
-  // A pre-buffered next slot may still point at the old URI (deleted file, old server address).
-  syncNext();
 }
 
 /** Drop every queue entry whose track key is in `keys` (e.g. deleted local files). */
@@ -581,7 +628,7 @@ export function removeKeysFromQueue(keys: ReadonlySet<string>) {
   }
   index = entries.findIndex((e) => e.uid === curUid);
   publishQueue();
-  syncNext();
+  syncWindow();
 }
 
 // --- Public imperative API -------------------------------------------------------------------
@@ -690,7 +737,7 @@ function playNext(tracks: AppTrack[]) {
   const oi = original.indexOf(cur);
   original = [...original.slice(0, oi + 1), ...add, ...original.slice(oi + 1)];
   publishQueue();
-  syncNext();
+  syncWindow();
 }
 
 function addToQueue(tracks: AppTrack[]) {
@@ -706,7 +753,7 @@ function addToQueue(tracks: AppTrack[]) {
     setProgress(0, entries[0].track.durationMs);
   }
   publishQueue();
-  syncNext();
+  syncWindow();
 }
 
 function removeFromQueue(i: number) {
@@ -718,7 +765,7 @@ function removeFromQueue(i: number) {
   if (i < index) {
     index--;
     publishQueue();
-    syncNext();
+    syncWindow();
   } else if (i === index) {
     index = Math.min(i, entries.length - 1);
     publishQueue();
@@ -726,7 +773,7 @@ function removeFromQueue(i: number) {
     else setProgress(0, entries[index].track.durationMs);
   } else {
     publishQueue();
-    syncNext();
+    syncWindow();
   }
 }
 
@@ -741,7 +788,7 @@ function moveInQueue(from: number, to: number) {
   if (!S().shuffle) original = list.slice();
   index = list.findIndex((e) => e.uid === curUid);
   publishQueue();
-  syncNext();
+  syncWindow();
 }
 
 function jumpTo(i: number) {
@@ -754,7 +801,7 @@ function jumpTo(i: number) {
 function setRepeat(mode: RepeatMode) {
   playerStore.setState({ repeat: mode });
   applyLoop();
-  syncNext();
+  syncWindow();
   persistState();
 }
 
@@ -777,7 +824,7 @@ function toggleShuffle() {
     }
   }
   publishQueue({ shuffle });
-  syncNext();
+  syncWindow();
 }
 
 export const player = {

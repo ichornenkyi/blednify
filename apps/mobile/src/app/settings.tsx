@@ -80,7 +80,7 @@ export default function SettingsScreen() {
               setUrl(v);
               setResult(null);
             }}
-            placeholder="http://192.168.1.10:3000"
+            placeholder="http://192.168.1.10:8787"
             placeholderTextColor={colors.textTertiary}
             autoCapitalize="none"
             autoCorrect={false}
