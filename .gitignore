@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+.DS_Store
+.env
+.env.local
+*.keystore
+!debug.keystore
+*.jks
+apps/mobile/android/
+apps/mobile/ios/
+apps/server/data/
+apps/server/music/
+coverage/

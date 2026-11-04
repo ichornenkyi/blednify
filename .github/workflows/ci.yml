@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  server:
+    name: Server · typecheck + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+
+  mobile-check:
+    name: Mobile · typecheck + lint + doctor
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - run: bunx expo lint
+      - run: bunx expo-doctor || echo "::warning::expo-doctor reported issues"
+
+  android:
+    name: Android · release APK
+    needs: [mobile-check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      EXPO_PUBLIC_API_URL: ${{ vars.BLEDNIFY_API_URL }}
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx6g -XX:+UseParallelGC" -Dorg.gradle.workers.max=4
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v5
+      - run: bun install --frozen-lockfile
+
+      - name: Stamp version
+        run: |
+          node -e '
+            const fs = require("fs");
+            const j = JSON.parse(fs.readFileSync("app.json"));
+            const n = Number(process.env.GITHUB_RUN_NUMBER);
+            j.expo.android.versionCode = n;
+            j.expo.version = j.expo.version.split(".").slice(0, 2).join(".") + "." + n;
+            fs.writeFileSync("app.json", JSON.stringify(j, null, 2));
+            console.log("version", j.expo.version, "code", n);
+          '
+
+      - name: Prebuild native project
+        run: bunx expo prebuild --platform android --no-install --clean
+
+      - name: Configure release signing (optional secrets)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::notice::No release keystore secret; APK is signed with the template debug key."
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > android/app/release.keystore
+          cat >> android/gradle.properties <<EOF
+          BLEDNIFY_STORE_FILE=release.keystore
+          BLEDNIFY_STORE_PASSWORD=$KEYSTORE_PASSWORD
+          BLEDNIFY_KEY_ALIAS=$KEY_ALIAS
+          BLEDNIFY_KEY_PASSWORD=$KEY_PASSWORD
+          EOF
+          python3 - <<'PY'
+          import re, pathlib
+          p = pathlib.Path("android/app/build.gradle")
+          s = p.read_text()
+          s = s.replace("signingConfigs {", """signingConfigs {
+                  release {
+                      storeFile file(BLEDNIFY_STORE_FILE)
+                      storePassword BLEDNIFY_STORE_PASSWORD
+                      keyAlias BLEDNIFY_KEY_ALIAS
+                      keyPassword BLEDNIFY_KEY_PASSWORD
+                  }""", 1)
+          s = re.sub(r"(release \{[^}]*?)signingConfig signingConfigs\.debug", r"\1signingConfig signingConfigs.release", s, count=1, flags=re.S)
+          p.write_text(s)
+          PY
+
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon --build-cache -PreactNativeArchitectures=arm64-v8a
+
+      - name: Collect APK
+        id: apk
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          OUT="blednify-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
+          cp "$APK" "$OUT"
+          echo "path=apps/mobile/$OUT" >> "$GITHUB_OUTPUT"
+          echo "name=$OUT" >> "$GITHUB_OUTPUT"
+          ls -lh "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blednify-apk
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+
+      - name: Publish rolling "latest" release (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp "${{ steps.apk.outputs.name }}" blednify-latest.apk
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest blednify-latest.apk "${{ steps.apk.outputs.name }}" \
+            --title "Blednify latest (#${GITHUB_RUN_NUMBER})" \
+            --notes "Automated build of ${GITHUB_SHA} — install blednify-latest.apk on Android." \
+            --prerelease --target "$GITHUB_SHA"
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "${{ steps.apk.outputs.name }}" --title "Blednify $GITHUB_REF_NAME" --generate-notes
+
+  server-image:
+    name: Server · Docker image
+    needs: [server]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: apps/server
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/blednify-server:latest
+            ghcr.io/${{ github.repository_owner }}/blednify-server:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

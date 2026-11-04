@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Blednify",
+    "slug": "blednify",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "blednify",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "pro.vetos.blednify",
+      "supportsTablet": false,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0B0F",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "package": "pro.vetos.blednify",
+      "versionCode": 1,
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "output": "server",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0B0F",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-sqlite",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "buildArchs": [
+              "arm64-v8a"
+            ]
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
