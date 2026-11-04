@@ -1,3 +1,4 @@
+import { useStore } from 'zustand';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { SQLiteDatabase } from 'expo-sqlite';
@@ -177,7 +178,7 @@ export function useLikedTracks(): AppTrack[] {
 }
 
 export function useIsLiked(key: string): boolean {
-  return libIndex((s) => s.liked.has(key));
+  return useStore(libIndex, (s) => s.liked.has(key));
 }
 
 export async function toggleLike(track: AppTrack): Promise<void> {

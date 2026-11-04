@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, useStore } from 'zustand';
 
 import type { PlayerState } from '../types';
 
@@ -20,11 +20,11 @@ type Progress = { positionMs: number; durationMs: number };
 export const progressStore = create<Progress>(() => ({ positionMs: 0, durationMs: 0 }));
 
 export function usePlayer<T>(selector: (s: PlayerState) => T): T {
-  return playerStore(selector);
+  return useStore(playerStore, selector);
 }
 
 export function useProgress(): Progress {
-  const positionMs = progressStore((s) => s.positionMs);
-  const durationMs = progressStore((s) => s.durationMs);
+  const positionMs = useStore(progressStore, (s) => s.positionMs);
+  const durationMs = useStore(progressStore, (s) => s.durationMs);
   return { positionMs, durationMs };
 }

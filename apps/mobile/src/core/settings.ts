@@ -1,5 +1,5 @@
 import { createMMKV } from 'react-native-mmkv';
-import { create } from 'zustand';
+import { create, useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 /** Single synchronous key-value store for settings and small persisted state. */
@@ -25,7 +25,7 @@ export function normalizeServerUrl(url: string): string {
 export const getServerBase = (): string => normalizeServerUrl(settingsStore.getState().serverUrl);
 
 export function useServerBase(): string {
-  return normalizeServerUrl(settingsStore((s) => s.serverUrl));
+  return normalizeServerUrl(useStore(settingsStore, (s) => s.serverUrl));
 }
 
 function setServerUrl(url: string) {
@@ -45,6 +45,6 @@ export function useSettings(): {
   downloadOnWifiOnly: boolean;
   setDownloadOnWifiOnly(v: boolean): void;
 } {
-  const { serverUrl, downloadOnWifiOnly } = settingsStore(useShallow((s) => s));
+  const { serverUrl, downloadOnWifiOnly } = useStore(settingsStore, useShallow((s) => s));
   return { serverUrl, setServerUrl, downloadOnWifiOnly, setDownloadOnWifiOnly };
 }

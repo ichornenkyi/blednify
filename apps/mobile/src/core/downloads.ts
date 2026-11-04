@@ -1,7 +1,7 @@
 import { File } from 'expo-file-system';
 import { addNetworkStateListener, getNetworkStateAsync, NetworkStateType, type NetworkState } from 'expo-network';
 import { useMemo } from 'react';
-import { create } from 'zustand';
+import { create, useStore } from 'zustand';
 
 import { trackArtworkUrl, trackStreamUrl } from './api';
 import { getDb, writeTx } from './db';
@@ -292,9 +292,9 @@ settingsStore.subscribe((s, prev) => {
 // --- Hooks -----------------------------------------------------------------------------------
 
 export function useDownloadState(key: string): { status: DownloadStatus; progress: number } {
-  const done = libIndex((s) => s.downloads.has(key));
-  const status = dlStore((s) => s.items[key]?.status);
-  const progress = dlStore((s) => s.items[key]?.progress ?? 0);
+  const done = useStore(libIndex, (s) => s.downloads.has(key));
+  const status = useStore(dlStore, (s) => s.items[key]?.status);
+  const progress = useStore(dlStore, (s) => s.items[key]?.progress ?? 0);
   if (done) return { status: 'done', progress: 1 };
   return { status: status ?? 'none', progress };
 }
@@ -304,9 +304,9 @@ export function useDownloads(): {
   completedCount: number;
   bytesUsed: number;
 } {
-  const items = dlStore((s) => s.items);
-  const order = dlStore((s) => s.order);
-  const downloads = libIndex((s) => s.downloads);
+  const items = useStore(dlStore, (s) => s.items);
+  const order = useStore(dlStore, (s) => s.order);
+  const downloads = useStore(libIndex, (s) => s.downloads);
   const active = useMemo(
     () => order.map((k) => ({ track: items[k].track, status: items[k].status, progress: items[k].progress })),
     [items, order],

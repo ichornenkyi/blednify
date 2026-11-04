@@ -1,3 +1,4 @@
+import { useStore } from 'zustand';
 import { useMemo } from 'react';
 
 import { trackArtworkUrl, trackStreamUrl, type ApiAlbum, type ApiArtist, type ApiTrack } from './api';
@@ -13,7 +14,7 @@ export const currentCtx = (): ResolveCtx => ({ base: getServerBase(), downloads:
 
 export function useResolveCtx(): ResolveCtx {
   const base = useServerBase();
-  const downloads = libIndex((s) => s.downloads);
+  const downloads = useStore(libIndex, (s) => s.downloads);
   return useMemo(() => ({ base, downloads }), [base, downloads]);
 }
 
