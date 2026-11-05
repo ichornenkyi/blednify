@@ -1,9 +1,0 @@
-node_modules
-data
-music
-test
-*.md
-Dockerfile
-docker-compose.yml
-.dockerignore
-*.log

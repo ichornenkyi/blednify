@@ -53,6 +53,9 @@ export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDo
 // Import
 export { deleteLocalTrack, importFromDevice } from './import/importer';
 
+// Platform
+export { supportsOffline } from './platform';
+
 // Settings
 export { useSettings } from './settings';
 

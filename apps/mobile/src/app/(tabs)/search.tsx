@@ -4,7 +4,7 @@ import { useDeferredValue, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { player, useSearch, type AlbumView, type AppTrack, type ArtistView } from '@/core';
+import { player, supportsOffline, useSearch, type AlbumView, type AppTrack, type ArtistView } from '@/core';
 import { importMusic } from '@/ui/actions';
 import { Artwork } from '@/ui/components/Artwork';
 import { EmptyState } from '@/ui/components/EmptyState';
@@ -133,14 +133,15 @@ export default function SearchScreen() {
   );
 }
 
-const BROWSE: { label: string; icon: IconName; colors: readonly [string, string]; filter?: LibraryFilter; action?: () => void }[] = [
+const ALL_BROWSE: { label: string; icon: IconName; colors: readonly [string, string]; filter?: LibraryFilter; action?: () => void; offline?: boolean }[] = [
   { label: 'Liked songs', icon: 'heart', colors: ['#E5383B', '#6A1214'], filter: 'liked' },
-  { label: 'Downloaded', icon: 'arrow-down-circle', colors: ['#2B5876', '#101C2B'], filter: 'downloaded' },
-  { label: 'On this device', icon: 'phone-portrait', colors: ['#1F8A70', '#0B2B24'], filter: 'device' },
+  { label: 'Downloaded', icon: 'arrow-down-circle', colors: ['#2B5876', '#101C2B'], filter: 'downloaded', offline: true },
+  { label: 'On this device', icon: 'phone-portrait', colors: ['#1F8A70', '#0B2B24'], filter: 'device', offline: true },
   { label: 'Playlists', icon: 'list', colors: ['#8E2DE2', '#2A0E4A'], filter: 'playlists' },
   { label: 'Albums', icon: 'disc', colors: ['#C06C2B', '#3B1A08'], filter: 'albums' },
-  { label: 'Import music', icon: 'add-circle', colors: ['#4A5BD6', '#141A45'], action: importMusic },
+  { label: 'Import music', icon: 'add-circle', colors: ['#4A5BD6', '#141A45'], action: importMusic, offline: true },
 ];
+const BROWSE = ALL_BROWSE.filter((b) => supportsOffline || !b.offline);
 
 function BrowseGrid() {
   return (

@@ -16,6 +16,7 @@ import { audioMime, trackId } from "./ids";
 import { Library, toTrack } from "./library";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
+import { mountWebApp } from "./web";
 
 export const VERSION: string = pkg.version;
 
@@ -176,7 +177,7 @@ export function createApp(ctx: AppContext): Hono {
       maxAge: 86400,
     }),
   );
-  app.use(compress({ contentTypeFilter: /^application\/json/ }));
+  app.use(compress({ contentTypeFilter: /^(application\/json|text\/|application\/(javascript|manifest\+json))/ }));
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message || "error" }, err.status);
@@ -295,6 +296,8 @@ export function createApp(ctx: AppContext): Hono {
     const { q, limit } = query(c, searchQuery);
     return c.json(lib.search(q, limit));
   });
+
+  if (config.webDir) mountWebApp(app, config.webDir);
 
   return app;
 }

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 import { create, useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -10,8 +11,12 @@ const K_WIFI = 'settings.downloadOnWifiOnly';
 
 type SettingsValues = { serverUrl: string; downloadOnWifiOnly: boolean };
 
+/** The web app is normally served by the music server itself, so its own origin is the default. */
+const defaultServerUrl = (): string =>
+  process.env.EXPO_PUBLIC_API_URL ?? (Platform.OS === 'web' ? window.location.origin : '');
+
 export const settingsStore = create<SettingsValues>(() => ({
-  serverUrl: kv.getString(K_SERVER) ?? process.env.EXPO_PUBLIC_API_URL ?? '',
+  serverUrl: kv.getString(K_SERVER) ?? defaultServerUrl(),
   downloadOnWifiOnly: kv.getBoolean(K_WIFI) ?? true,
 }));
 

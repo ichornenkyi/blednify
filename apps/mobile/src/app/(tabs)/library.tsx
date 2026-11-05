@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { player, useLikedTracks, useLocalAlbums, useLocalTracks, usePlaylists, useRemoteAlbums, type AlbumView, type AppTrack } from '@/core';
+import { player, supportsOffline, useLikedTracks, useLocalAlbums, useLocalTracks, usePlaylists, useRemoteAlbums, type AlbumView, type AppTrack } from '@/core';
 import { importMusic } from '@/ui/actions';
 import { AlbumCard } from '@/ui/components/AlbumCard';
 import { Chip } from '@/ui/components/Chip';
@@ -22,13 +22,14 @@ import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
 import { colors, radius, space } from '@/ui/theme';
 
-const FILTERS: { key: LibraryFilter; label: string }[] = [
+const ALL_FILTERS: { key: LibraryFilter; label: string; offline?: boolean }[] = [
   { key: 'playlists', label: 'Playlists' },
   { key: 'albums', label: 'Albums' },
   { key: 'liked', label: 'Liked' },
-  { key: 'downloaded', label: 'Downloaded' },
-  { key: 'device', label: 'On this device' },
+  { key: 'downloaded', label: 'Downloaded', offline: true },
+  { key: 'device', label: 'On this device', offline: true },
 ];
+const FILTERS = ALL_FILTERS.filter((f) => supportsOffline || !f.offline);
 
 function isFilter(v: unknown): v is LibraryFilter {
   return FILTERS.some((f) => f.key === v);
@@ -47,7 +48,7 @@ export default function LibraryScreen() {
           Library
         </Text>
         <IconButton icon="add" label="New playlist" size={26} onPress={promptNewPlaylist} />
-        <IconButton icon="folder-open-outline" label="Import music from device" onPress={importMusic} />
+        {supportsOffline ? <IconButton icon="folder-open-outline" label="Import music from device" onPress={importMusic} /> : null}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
         {FILTERS.map((f) => (

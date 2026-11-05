@@ -45,6 +45,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
       - run: bunx expo lint
+      - run: bunx expo export --platform web
       - run: bunx expo-doctor || echo "::warning::expo-doctor reported issues"
 
   android:
@@ -177,7 +178,8 @@ jobs:
           password: ${{ github.token }}
       - uses: docker/build-push-action@v6
         with:
-          context: apps/server
+          context: .
+          file: apps/server/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/blednify-server:latest

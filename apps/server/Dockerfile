@@ -1,7 +1,14 @@
 # syntax=docker/dockerfile:1
+# Build from the repository root: docker build -f apps/server/Dockerfile .
+FROM node:24-slim AS web
+RUN npm install --global bun
+WORKDIR /app
+COPY apps/mobile/ ./
+RUN bun install --frozen-lockfile && bunx expo export --platform web --output-dir /web
+
 FROM oven/bun:1-alpine AS deps
 WORKDIR /app
-COPY package.json bun.lock ./
+COPY apps/server/package.json apps/server/bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 FROM oven/bun:1-alpine
@@ -9,10 +16,12 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8787 \
     MUSIC_DIR=/music \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    WEB_DIR=/app/web
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json tsconfig.json ./
-COPY src ./src
+COPY --from=web /web ./web
+COPY apps/server/package.json apps/server/tsconfig.json ./
+COPY apps/server/src ./src
 RUN mkdir -p /music /data && chown -R bun:bun /music /data
 USER bun
 VOLUME ["/music", "/data"]

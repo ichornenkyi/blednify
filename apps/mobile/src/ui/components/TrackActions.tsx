@@ -6,6 +6,7 @@ import {
   player,
   removeDownload,
   removeFromPlaylist,
+  supportsOffline,
   toggleLike,
   useDownloadState,
   useIsLiked,
@@ -80,7 +81,7 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
         label={liked ? 'Remove from Liked' : 'Like'}
         onPress={() => void attempt(toggleLike(track), liked ? 'Removed from Liked' : 'Added to Liked')}
       />
-      {track.origin === 'remote' ? <DownloadAction track={track} status={download.status} progress={download.progress} /> : null}
+      {supportsOffline && track.origin === 'remote' ? <DownloadAction track={track} status={download.status} progress={download.progress} /> : null}
       {playlist ? (
         <SheetAction
           icon="remove-circle-outline"

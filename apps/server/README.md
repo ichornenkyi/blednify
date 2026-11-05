@@ -35,6 +35,7 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `ADMIN_TOKEN` | unset | When set, `POST /api/tracks`, `DELETE /api/tracks/:id` and `POST /api/rescan` need `Authorization: Bearer <token>`. When unset, those writes return `403`. Reads are always public. |
 | `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
 | `MAX_UPLOAD_MB` | `200` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
+| `WEB_DIR` | unset (`/app/web` in Docker) | Folder with the exported web app, served at `/` next to the API. Unset: API only. |
 | `PUBLIC` | unset | Reserved. Has no effect yet. |
 | `LOG_REQUESTS` | `1` | `0` turns off the one-line-per-request log. Successful `/api/health` calls are never logged. |
 
@@ -74,8 +75,8 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 ## Docker
 
 ```sh
-cd apps/server
-docker build -t blednify-server .
+# from the repository root: the image also bundles the web app
+docker build -f apps/server/Dockerfile -t blednify-server .
 docker run -d --name blednify -p 8787:8787 \
   -e ADMIN_TOKEN=change-me \
   -v /path/to/music:/music -v blednify-data:/data \

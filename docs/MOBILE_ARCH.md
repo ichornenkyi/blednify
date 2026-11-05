@@ -1,7 +1,20 @@
 # Blednify mobile architecture (contract between `core` and `ui`)
 
 Expo SDK 58 · React Native 0.88 (New Architecture, Hermes, React Compiler on) · expo-router · TypeScript strict.
-Phones only (Android 16 primary, iOS). No web target. No ads, no tracking, no analytics, no accounts.
+Phones (Android 16 primary, iOS) plus a streaming-only web app for iPhone home screens. No ads, no tracking, no analytics, no accounts.
+
+## Web target
+
+`bun run build:web` exports the same routes and UI. Metro picks `*.web.ts` over the native module, so native code paths are untouched:
+
+| Module | On web |
+|---|---|
+| `core/player/audio.web.ts` | one reused `<audio>` element + Media Session, in place of expo-audio (see the file header for why) |
+| `core/library.web.ts`, `core/lib-index-load.web.ts` | likes, recents and playlists in localStorage; never expo-sqlite, whose web storage needs HTTPS |
+| `core/downloads.web.ts`, `core/import/importer.web.ts` | inert; the UI hides them behind `supportsOffline` from `@/core` |
+| `core/paths.web.ts` | identity functions: there are no local files |
+
+Anything new that needs a file system or SQLite must get a web counterpart or sit behind `supportsOffline`.
 
 ## Ownership
 

@@ -3,7 +3,10 @@
 services:
   blednify:
     image: ghcr.io/vetos5/blednify-server:latest
-    build: .
+    # The image also bundles the web app, so the build needs the whole repository as context.
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
     container_name: blednify
     restart: unless-stopped
     ports:

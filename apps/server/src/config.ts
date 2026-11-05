@@ -9,6 +9,8 @@ export type Config = {
   /** Without an admin token, writes are refused (403) unless this is set (`ALLOW_OPEN_WRITES=1`). */
   allowOpenWrites: boolean;
   maxUploadBytes: number;
+  /** Folder with the exported web app, served at `/` next to the API. Null: API only. */
+  webDir: string | null;
   /** Reserved; currently has no effect (reads are always public). */
   public: boolean;
   logRequests: boolean;
@@ -29,6 +31,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     adminToken: env.ADMIN_TOKEN?.trim() || null,
     allowOpenWrites: /^(1|true|yes)$/i.test(env.ALLOW_OPEN_WRITES ?? ""),
     maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 200) * 1024 * 1024,
+    webDir: env.WEB_DIR?.trim() ? resolve(env.WEB_DIR.trim()) : null,
     public: /^(1|true|yes)$/i.test(env.PUBLIC ?? ""),
     logRequests: env.NODE_ENV !== "test" && env.LOG_REQUESTS !== "0",
   };

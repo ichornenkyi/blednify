@@ -8,7 +8,7 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { player, usePlayer, type AppTrack, type RepeatMode } from '@/core';
+import { player, supportsOffline, usePlayer, type AppTrack, type RepeatMode } from '@/core';
 import { Artwork } from '@/ui/components/Artwork';
 import { DownloadButton } from '@/ui/components/DownloadButton';
 import { EmptyState } from '@/ui/components/EmptyState';
@@ -141,7 +141,7 @@ function NowPlaying({ track }: { track: AppTrack }) {
       <Transport />
 
       <View style={styles.bottomRow}>
-        <DownloadButton track={track} />
+        {supportsOffline ? <DownloadButton track={track} /> : null}
         <IconButton icon="add-circle-outline" label="Add to playlist" size={26} onPress={() => showSheet(<PlaylistPicker tracks={[track]} />)} />
         <IconButton icon="list" label="Queue" size={26} onPress={nav.queue} />
       </View>

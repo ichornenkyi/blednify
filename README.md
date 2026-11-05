@@ -2,8 +2,8 @@
 
 # Blednify
 
-A fast, ad-free, Spotify-like music player for phones (Android 16 first, iOS too), backed by your own
-self-hosted music server. No ads, no tracking, no accounts.
+A fast, ad-free, Spotify-like music player for phones (Android 16 first, iOS too, plus an installable web app
+for iPhone), backed by your own self-hosted music server. No ads, no tracking, no accounts.
 
 - **Stream or download** from a Blednify server that indexes a folder of your audio files
   (mp3, flac, m4a, aac, ogg, opus, wav).
@@ -46,6 +46,21 @@ bunx expo run:android        # development build on a device or emulator (Expo G
 In the app open **Settings → Server**, enter the server address (for example `192.168.1.10:8787`; `http://` is
 added if missing) and tap **Test**. To bake in a default, set `EXPO_PUBLIC_API_URL` at build time.
 More in [`apps/mobile/README.md`](apps/mobile/README.md).
+
+## iPhone web app
+
+The server image also serves a web version of the app at its own address, so no App Store or Xcode is needed.
+Open `http://<server>:8787` in Safari, then **Share → Add to Home Screen**. It connects to the server it was
+opened from. Without Docker: `bun run build:web` in `apps/mobile`, then start the server with
+`WEB_DIR=<path to apps/mobile/dist>`.
+
+It covers streaming: browsing, search, queue, lock-screen controls, likes and playlists. Likes and playlists are
+stored in that browser, not on the server. Compared to the native app:
+
+- No downloads, file import or offline playback.
+- Track changes are not gapless, because the browser loads each file as the previous one ends.
+- Ogg files need a recent iOS; mp3, m4a, aac, flac and wav are the safe formats.
+- Plain `http://` works on a LAN. Put HTTPS in front (reverse proxy, Tailscale) to use it away from home.
 
 ## CI and downloads
 

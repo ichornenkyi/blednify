@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatBytes, testServer, useDownloads, useServerStatus, useSettings } from '@/core';
+import { formatBytes, supportsOffline, testServer, useDownloads, useServerStatus, useSettings } from '@/core';
 import { errorMessage, importMusic } from '@/ui/actions';
 import { BrandMark } from '@/ui/components/BrandMark';
 import { Icon, type IconName } from '@/ui/components/Icon';
@@ -73,7 +73,9 @@ export default function SettingsScreen() {
       <ScreenHeader title="Settings" />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]} keyboardShouldPersistTaps="handled">
         <Section title="Server" icon="server-outline">
-          <Text variant="caption">Address of your self-hosted Blednify server. Leave empty to use only music on this phone.</Text>
+          <Text variant="caption">
+            Address of your self-hosted Blednify server.{supportsOffline ? ' Leave empty to use only music on this phone.' : ''}
+          </Text>
           <TextInput
             value={url}
             onChangeText={(v) => {
@@ -123,41 +125,45 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="Downloads" icon="arrow-down-circle-outline">
-          <View style={styles.toggleRow}>
-            <View style={styles.flex}>
-              <Text variant="bodyStrong">Download on Wi-Fi only</Text>
-              <Text variant="caption">Pause downloads on mobile data.</Text>
-            </View>
-            <Switch
-              value={settings.downloadOnWifiOnly}
-              onValueChange={(v) => {
-                haptics.select();
-                settings.setDownloadOnWifiOnly(v);
-              }}
-              trackColor={{ false: colors.surface3, true: colors.accent }}
-              thumbColor={colors.white}
-              ios_backgroundColor={colors.surface3}
-            />
-          </View>
-        </Section>
+        {supportsOffline ? (
+          <>
+            <Section title="Downloads" icon="arrow-down-circle-outline">
+              <View style={styles.toggleRow}>
+                <View style={styles.flex}>
+                  <Text variant="bodyStrong">Download on Wi-Fi only</Text>
+                  <Text variant="caption">Pause downloads on mobile data.</Text>
+                </View>
+                <Switch
+                  value={settings.downloadOnWifiOnly}
+                  onValueChange={(v) => {
+                    haptics.select();
+                    settings.setDownloadOnWifiOnly(v);
+                  }}
+                  trackColor={{ false: colors.surface3, true: colors.accent }}
+                  thumbColor={colors.white}
+                  ios_backgroundColor={colors.surface3}
+                />
+              </View>
+            </Section>
 
-        <View style={styles.card}>
-          <ListRow
-            leading={<RowIcon name="folder-outline" />}
-            title="Storage used"
-            subtitle={`${formatBytes(bytesUsed)} · ${plural(completedCount, 'download')}`}
-            chevron
-            onPress={nav.downloads}
-          />
-          <ListRow
-            leading={<RowIcon name="add-circle-outline" />}
-            title="Import music"
-            subtitle="Add audio files from this phone"
-            chevron
-            onPress={importMusic}
-          />
-        </View>
+            <View style={styles.card}>
+              <ListRow
+                leading={<RowIcon name="folder-outline" />}
+                title="Storage used"
+                subtitle={`${formatBytes(bytesUsed)} · ${plural(completedCount, 'download')}`}
+                chevron
+                onPress={nav.downloads}
+              />
+              <ListRow
+                leading={<RowIcon name="add-circle-outline" />}
+                title="Import music"
+                subtitle="Add audio files from this phone"
+                chevron
+                onPress={importMusic}
+              />
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.about}>
           <BrandMark size={64} />

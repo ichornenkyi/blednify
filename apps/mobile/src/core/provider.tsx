@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, type ReactNode } from 'react';
 
 import { resumeDownloads } from './downloads';
-import { loadLibIndex } from './lib-index';
+import { loadLibIndex } from './lib-index-load';
 import { configureAudio, refreshQueueTracks } from './player/engine';
 import { queryClient } from './query-client';
 import { settingsStore } from './settings';
