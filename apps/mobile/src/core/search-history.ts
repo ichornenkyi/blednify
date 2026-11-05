@@ -12,7 +12,7 @@
  *   - 'artist' : an artist the user tapped from results
  */
 import { useMemo } from 'react';
-import { create } from 'zustand';
+import { create, useStore } from 'zustand';
 
 import { absUri, relUri } from './paths';
 import { kv } from './settings';
@@ -180,7 +180,9 @@ export function clearSearchHistory(): void {
 
 /** Subscribable hook — re-renders whenever history changes; URIs follow the current server and downloads. */
 export function useSearchHistory(): SearchHistoryEntry[] {
-  const entries = searchHistoryStore((s) => s.entries);
+  // Through useStore, not `searchHistoryStore(...)`: React Compiler only treats `use*` calls as hooks and would
+  // otherwise memoize this one away, shifting hook order (crashed Search on typing).
+  const entries = useStore(searchHistoryStore, (s) => s.entries);
   const ctx = useResolveCtx();
   return useMemo(() => entries.map((e) => resolveEntry(e, ctx)), [entries, ctx]);
 }
