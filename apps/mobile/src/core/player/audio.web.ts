@@ -10,11 +10,13 @@
  */
 import type { AudioMetadata, AudioPlaylist, AudioPlaylistStatus } from 'expo-audio';
 
+// Circular with the engine, which is safe: `player` is only read when a lock-screen button is pressed.
+import { player } from './engine';
+
 type Source = { uri: string; name?: string };
 type Listener = (status: AudioPlaylistStatus & { error?: unknown }) => void;
 type LockScreenOptions = { showNextTrack?: boolean; showPreviousTrack?: boolean };
 
-const RESTART_THRESHOLD_S = 3;
 const SEEK_TIMEOUT_MS = 3_000;
 /** Shortest valid silent WAV, played once inside the first touch to unlock the element. */
 const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
@@ -60,6 +62,7 @@ class WebPlaylist {
   private listeners = new Set<Listener>();
   private el = audio;
   private lockScreen = false;
+  private seeksInFlight = 0;
   loop: 'none' | 'single' | 'all' = 'none';
 
   constructor() {
@@ -109,6 +112,8 @@ class WebPlaylist {
     if (!this.hasMedia()) return;
     // Browsers fire `pause` right before `ended`; reporting it would flash "paused" between tracks.
     if (this.el.ended && e.type !== 'ended') return;
+    // While paused, a status mid-seek would read as an external pause and cancel the engine's resume-after-seek.
+    if (this.seeksInFlight > 0 && e.type !== 'error') return;
     switch (e.type) {
       case 'ended':
         this.onEnded();
@@ -199,9 +204,13 @@ class WebPlaylist {
       const done = () => {
         clearTimeout(timer);
         this.el.removeEventListener('seeked', done);
+        this.seeksInFlight--;
         resolve();
+        // After the awaiting code has run, so it can call play() before anyone sees the paused state.
+        setTimeout(() => this.emit(), 0);
       };
       const timer = setTimeout(done, SEEK_TIMEOUT_MS);
+      this.seeksInFlight++;
       this.el.addEventListener('seeked', done);
       this.el.currentTime = seconds;
     });
@@ -240,22 +249,14 @@ class WebPlaylist {
     this.lockScreen = true;
     if (metadata) this.updateLockScreenMetadata(metadata);
     const session = navigator.mediaSession;
-    const hasNext = () => this.cur + 1 < this.sources.length;
     session.setActionHandler('play', () => this.play());
     session.setActionHandler('pause', () => this.pause());
     session.setActionHandler('seekto', (d) => {
       if (d.seekTime != null) this.el.currentTime = d.seekTime;
     });
-    session.setActionHandler('nexttrack', options?.showNextTrack ? () => hasNext() && this.moveTo(this.cur + 1, true) : null);
-    session.setActionHandler(
-      'previoustrack',
-      options?.showPreviousTrack
-        ? () => {
-            if (this.el.currentTime > RESTART_THRESHOLD_S || this.cur === 0) this.el.currentTime = 0;
-            else this.moveTo(this.cur - 1, true);
-          }
-        : null,
-    );
+    // Through the engine: this playlist only holds a window of the queue, and repeat-all lives there too.
+    session.setActionHandler('nexttrack', options?.showNextTrack ? () => player.next() : null);
+    session.setActionHandler('previoustrack', options?.showPreviousTrack ? () => player.previous() : null);
   }
 
   updateLockScreenMetadata(m: AudioMetadata) {

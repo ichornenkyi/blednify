@@ -5,12 +5,20 @@ import { libIndex, setLiked } from './lib-index';
 import { EMPTY_TRACKS, resolveTrack, useResolveCtx, useResolvedTracks, type ResolveCtx } from './tracks';
 import type { AlbumView, AppTrack, Origin, Playlist } from './types';
 import { randomId } from './util';
-import { readLibrary, writeLibrary, type WebLibrary, type WebPlaylist } from './web-library';
+import { LIBRARY_KEY, readLibrary, writeLibrary, type WebLibrary, type WebPlaylist } from './web-library';
 
 const RECENTS_CAP = 200;
 const EMPTY_ALBUMS: AlbumView[] = [];
 
 const store = create<WebLibrary>(readLibrary);
+
+/** Writes replace the whole library, so a second tab must pick up changes or it would overwrite them. */
+window.addEventListener('storage', (e) => {
+  if (e.key !== null && !e.key.endsWith(LIBRARY_KEY)) return;
+  const lib = readLibrary();
+  store.setState(lib);
+  libIndex.setState({ liked: new Set(lib.likes.map((l) => l.track.key)) });
+});
 
 /** Persist first: if storage is full the throw leaves the in-memory state untouched. */
 function commit(patch: Partial<WebLibrary>) {

@@ -15,10 +15,10 @@ export type WebLibrary = {
   playlists: WebPlaylist[];
 };
 
-const KEY = 'library.v1';
+export const LIBRARY_KEY = 'library.v1';
 
 export function readLibrary(): WebLibrary {
-  const raw = kv.getString(KEY);
+  const raw = kv.getString(LIBRARY_KEY);
   if (raw) {
     try {
       return JSON.parse(raw) as WebLibrary;
@@ -30,4 +30,4 @@ export function readLibrary(): WebLibrary {
 }
 
 /** Throws if browser storage is full, so callers keep their previous state and report the failure. */
-export const writeLibrary = (lib: WebLibrary): void => kv.set(KEY, JSON.stringify(lib));
+export const writeLibrary = (lib: WebLibrary): void => kv.set(LIBRARY_KEY, JSON.stringify(lib));
