@@ -4,7 +4,17 @@ import type { ReactElement, ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { player, useLikedTracks, useLocalAlbums, useLocalTracks, usePlaylists, useRemoteAlbums, type AlbumView, type AppTrack } from '@/core';
+import {
+  player,
+  useLikedTracks,
+  useLocalAlbums,
+  useLocalTracks,
+  usePlaylists,
+  useRecentlyPlayed,
+  useRemoteAlbums,
+  type AlbumView,
+  type AppTrack,
+} from '@/core';
 import { importMusic } from '@/ui/actions';
 import { AlbumCard } from '@/ui/components/AlbumCard';
 import { Chip } from '@/ui/components/Chip';
@@ -22,15 +32,18 @@ import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
 import { colors, radius, space } from '@/ui/theme';
 
-const FILTERS: { key: LibraryFilter; label: string }[] = [
+type TabFilter = LibraryFilter | 'recents';
+
+const FILTERS: { key: TabFilter; label: string }[] = [
   { key: 'playlists', label: 'Playlists' },
+  { key: 'recents', label: 'Recents' },
   { key: 'albums', label: 'Albums' },
   { key: 'liked', label: 'Liked' },
   { key: 'downloaded', label: 'Downloaded' },
   { key: 'device', label: 'On this device' },
 ];
 
-function isFilter(v: unknown): v is LibraryFilter {
+function isFilter(v: unknown): v is TabFilter {
   return FILTERS.some((f) => f.key === v);
 }
 
@@ -38,7 +51,7 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   // The route param is the single source of truth, so shortcuts (Home → Liked) always win over a stale chip.
   const params = useLocalSearchParams<{ filter?: string }>();
-  const filter: LibraryFilter = isFilter(params.filter) ? params.filter : 'playlists';
+  const filter: TabFilter = isFilter(params.filter) ? params.filter : 'playlists';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.md }]}>
@@ -55,6 +68,7 @@ export default function LibraryScreen() {
         ))}
       </ScrollView>
       {filter === 'playlists' ? <PlaylistsList /> : null}
+      {filter === 'recents' ? <RecentsList /> : null}
       {filter === 'albums' ? <AlbumsGrid /> : null}
       {filter === 'liked' ? <LikedList /> : null}
       {filter === 'downloaded' ? <DownloadedList /> : null}
@@ -132,6 +146,16 @@ function AlbumsGrid() {
           />
         </View>
       )}
+    />
+  );
+}
+
+function RecentsList() {
+  const tracks = useRecentlyPlayed(50);
+  return (
+    <TrackList
+      tracks={tracks}
+      empty={<EmptyState icon="time-outline" title="No recently played songs" message="Tracks you play will appear here." />}
     />
   );
 }

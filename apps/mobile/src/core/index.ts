@@ -25,6 +25,23 @@ export {
   useServerStatus,
 } from './catalog';
 
+// Search history
+export {
+  clearSearchHistory,
+  pushSearchAlbum,
+  pushSearchArtist,
+  pushSearchQuery,
+  pushSearchTrack,
+  removeSearchEntry,
+  searchHistoryStore,
+  useSearchHistory,
+  type SearchHistoryAlbum,
+  type SearchHistoryArtist,
+  type SearchHistoryEntry,
+  type SearchHistoryQuery,
+  type SearchHistoryTrack,
+} from './search-history';
+
 // Local library
 export {
   addToPlaylist,

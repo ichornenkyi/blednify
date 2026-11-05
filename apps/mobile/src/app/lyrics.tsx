@@ -49,6 +49,7 @@ export default function LyricsScreen() {
   const current = usePlayer((s) => s.current);
   const { lyrics, isLoading, isError } = useLyrics(current);
   const insets = useSafeAreaInsets();
+  const [tint] = gradientFor(current?.album || current?.title || '');
 
   if (!current) {
     return (
@@ -61,8 +62,8 @@ export default function LyricsScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <Backdrop track={current} />
+    <View style={[styles.root, { backgroundColor: tint }]}>
+      <Backdrop track={current} tint={tint} />
       <View style={[styles.header, { paddingTop: insets.top + space.xs }]}>
         <IconButton icon="chevron-down" label="Close lyrics" size={28} onPress={close} />
         <View style={styles.headerText}>
@@ -98,20 +99,19 @@ export default function LyricsScreen() {
   );
 }
 
-/** Blurred cover tinted with the album's colour, like a lyrics card. */
-function Backdrop({ track }: { track: AppTrack }) {
+/** Blurred cover tinted with the album's colour, expanding the lyrics card. */
+function Backdrop({ track, tint }: { track: AppTrack; tint: string }) {
   const source = useImageSource(track.artworkUri);
-  const [tint] = gradientFor(track.album || track.title);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
       {source ? (
         <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={90} cachePolicy="memory-disk" transition={300} />
       ) : null}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: tint, opacity: 0.45 }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: tint, opacity: 0.5 }]} />
       <LinearGradient
-        colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.7)']}
-        locations={[0, 0.5, 1]}
+        colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.65)']}
+        locations={[0, 0.45, 1]}
         style={StyleSheet.absoluteFill}
       />
     </View>
@@ -236,7 +236,7 @@ function NoLyrics({ instrumental, failed }: { instrumental: boolean; failed: boo
   return (
     <View style={[styles.flex, styles.center]}>
       <EmptyState
-        icon={instrumental ? 'musical-notes-outline' : failed ? 'cloud-offline-outline' : 'mic-off-outline'}
+        icon={instrumental ? 'musical-notes-outline' : failed ? 'cloud-offline-outline' : 'musical-notes-outline'}
         title={instrumental ? 'Instrumental' : failed ? 'Couldn’t load lyrics' : 'No lyrics for this song'}
         message={
           instrumental

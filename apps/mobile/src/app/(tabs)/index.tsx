@@ -43,7 +43,7 @@ const trackKey = (t: AppTrack) => t.key;
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const server = useServerStatus();
-  const recent = useRecentlyPlayed(5);
+  const recent = useRecentlyPlayed(20);
   const liked = useLikedTracks();
   const localTracks = useLocalTracks();
   const localAlbums = useLocalAlbums();
@@ -120,6 +120,30 @@ export default function HomeScreen() {
               </View>
               <IconButton icon="chevron-forward" label="Open settings" onPress={nav.settings} />
             </View>
+          ) : null}
+
+          {recent.length > 0 ? (
+            <Rail
+              title="Recently played"
+              data={recent.slice(0, 20)}
+              keyExtractor={trackKey}
+              renderItem={({ item, index }) => (
+                <AlbumCard
+                  width={RAIL_CARD_WIDTH}
+                  title={item.title}
+                  subtitle={item.artist}
+                  artworkUri={item.artworkUri}
+                  recyclingKey={item.key}
+                  onPress={() => {
+                    haptics.tap();
+                    player.playTracks(recent, index);
+                  }}
+                  onLongPress={() => openTrackActions(item)}
+                />
+              )}
+              actionLabel="See all"
+              onAction={() => nav.library('recents' as any)}
+            />
           ) : null}
 
           <Rail
@@ -204,18 +228,22 @@ function ServerPill({
   );
 }
 
-/** Two-column quick-access tiles: Liked songs + recently played. */
+/** Two-column quick-access tiles: Liked songs + recently played (up to 4 rows = 8 tiles). */
 function QuickGrid({ recent, likedCount }: { recent: AppTrack[]; likedCount: number }) {
-  if (recent.length === 0 && likedCount === 0) return null;
+  const hasLiked = likedCount > 0;
+  const gridRecents = recent.slice(0, hasLiked ? 7 : 8);
+  if (gridRecents.length === 0 && !hasLiked) return null;
   return (
     <View style={styles.grid}>
-      <QuickTile
-        title="Liked songs"
-        subtitle={`${likedCount} ${likedCount === 1 ? 'track' : 'tracks'}`}
-        art={<Artwork uri={null} label="Liked" size={56} radius={0} fallbackIcon="heart" />}
-        onPress={() => nav.library('liked')}
-      />
-      {recent.map((t, i) => (
+      {hasLiked ? (
+        <QuickTile
+          title="Liked songs"
+          subtitle={`${likedCount} ${likedCount === 1 ? 'track' : 'tracks'}`}
+          art={<Artwork uri={null} label="Liked" size={56} radius={0} fallbackIcon="heart" />}
+          onPress={() => nav.library('liked')}
+        />
+      ) : null}
+      {gridRecents.map((t, i) => (
         <QuickTile
           key={t.key}
           title={t.title}

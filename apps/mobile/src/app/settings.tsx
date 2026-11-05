@@ -180,7 +180,7 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="Lyrics" icon="mic-outline">
+        <Section title="Lyrics" icon="text-outline">
           <ToggleRow
             title="Find lyrics online"
             caption="Look up lyrics for songs imported to this phone on LRCLIB. Server songs use the server’s lookup."

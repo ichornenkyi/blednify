@@ -82,6 +82,7 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
       <SheetAction icon="add-circle-outline" label="Add to playlist" keepOpen onPress={() => showSheet(<PlaylistPicker tracks={[track]} />)} />
       <SheetAction
         icon={liked ? 'heart' : 'heart-outline'}
+        iconColor={liked ? colors.accent : undefined}
         label={liked ? 'Remove from Liked' : 'Like'}
         onPress={() => void attempt(toggleLike(track), liked ? 'Removed from Liked' : 'Added to Liked')}
       />

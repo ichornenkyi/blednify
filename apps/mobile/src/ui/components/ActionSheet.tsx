@@ -185,12 +185,13 @@ export type SheetActionProps = {
   label: string;
   onPress: () => void;
   destructive?: boolean;
+  iconColor?: string;
   /** Keep the sheet open after pressing (e.g. to switch to a sub-view). */
   keepOpen?: boolean;
   trailing?: ReactNode;
 };
 
-export function SheetAction({ icon, label, onPress, destructive, keepOpen, trailing }: SheetActionProps) {
+export function SheetAction({ icon, label, onPress, destructive, iconColor, keepOpen, trailing }: SheetActionProps) {
   const color = destructive ? colors.danger : colors.text;
   return (
     <Pressable
@@ -202,7 +203,7 @@ export function SheetAction({ icon, label, onPress, destructive, keepOpen, trail
         if (!keepOpen) closeSheet();
         onPress();
       }}>
-      <Icon name={icon} size={22} color={destructive ? colors.danger : colors.textSecondary} />
+      <Icon name={icon} size={22} color={destructive ? colors.danger : (iconColor ?? colors.textSecondary)} />
       <Text variant="body" color={color} style={styles.actionLabel} numberOfLines={1}>
         {label}
       </Text>

@@ -1,23 +1,33 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import {
+  GestureDetector,
+  useNativeGesture,
+  usePanGesture,
+  useSimultaneousGestures,
+} from 'react-native-gesture-handler';
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import {
-  activeLyricIndex,
   hasLyrics,
   player,
   useImageSource,
   useLyrics,
   usePlayer,
-  useProgress,
   type AppTrack,
-  type Lyrics,
   type RepeatMode,
 } from '@/core';
 import { Artwork } from '@/ui/components/Artwork';
@@ -27,6 +37,9 @@ import { Icon } from '@/ui/components/Icon';
 import { IconButton } from '@/ui/components/IconButton';
 import { LikeButton } from '@/ui/components/LikeButton';
 import { PlaylistPicker } from '@/ui/components/PlaylistPicker';
+import { ArtistCard } from '@/ui/components/player/ArtistCard';
+import { LyricsCard } from '@/ui/components/player/LyricsCard';
+import { UpNextCard } from '@/ui/components/player/UpNextCard';
 import { PressableScale } from '@/ui/components/PressableScale';
 import { SeekBar } from '@/ui/components/SeekBar';
 import { Text } from '@/ui/components/Text';
@@ -46,16 +59,28 @@ export default function PlayerScreen() {
   const current = usePlayer((s) => s.current);
   const { height: screenH } = useWindowDimensions();
   const y = useSharedValue(0);
+  const scrollY = useSharedValue(0);
+  const listDrag = useSharedValue(false);
+  const scrollRef = useRef<Animated.ScrollView>(null);
+
+  const native = useNativeGesture();
 
   const pan = usePanGesture({
     activeOffsetY: 14,
     failOffsetX: [-24, 24],
+    onActivate: () => {
+      'worklet';
+      listDrag.set(scrollY.get() > 1);
+    },
     onUpdate: (e) => {
       'worklet';
-      y.set(Math.max(0, e.translationY));
+      if (!listDrag.get()) {
+        y.set(Math.max(0, e.translationY));
+      }
     },
     onDeactivate: (e) => {
       'worklet';
+      if (listDrag.get()) return;
       if (e.translationY > DISMISS_DISTANCE || e.velocityY > 1100) {
         y.set(
           withTiming(screenH, { duration: 200, easing: Easing.out(Easing.quad) }, (done) => {
@@ -68,35 +93,75 @@ export default function PlayerScreen() {
     },
   });
 
+  const gesture = useSimultaneousGestures(pan, native);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.set(e.contentOffset.y);
+    },
+  });
+
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: y.get() }],
     borderRadius: interpolate(y.get(), [0, 80], [0, radius.xl], 'clamp'),
   }));
 
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View style={[styles.sheet, sheetStyle]}>
-        {current ? (
-          <NowPlaying track={current} />
-        ) : (
+    <Animated.View style={[styles.sheet, sheetStyle]}>
+      <Backdrop uri={current?.artworkUri ?? null} />
+      {current ? (
+        <GestureDetector gesture={gesture}>
+          <Animated.ScrollView
+            ref={scrollRef}
+            bounces={false}
+            overScrollMode="never"
+            scrollEventThrottle={16}
+            onScroll={scrollHandler}
+            showsVerticalScrollIndicator={false}
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}>
+            <NowPlaying
+              track={current}
+              onScrollToLyrics={() => {
+                scrollRef.current?.scrollTo({ y: screenH, animated: true });
+              }}
+            />
+          </Animated.ScrollView>
+        </GestureDetector>
+      ) : (
+        <GestureDetector gesture={pan}>
           <View style={styles.empty}>
-            <EmptyState icon="musical-notes-outline" title="Nothing playing" message="Pick something from your library to start listening.">
+            <EmptyState
+              icon="musical-notes-outline"
+              title="Nothing playing"
+              message="Pick something from your library to start listening.">
               <IconButton icon="chevron-down" label="Close" variant="filled" onPress={dismiss} />
             </EmptyState>
           </View>
-        )}
-      </Animated.View>
-    </GestureDetector>
+        </GestureDetector>
+      )}
+    </Animated.View>
   );
 }
 
-function NowPlaying({ track }: { track: AppTrack }) {
+function NowPlaying({
+  track,
+  onScrollToLyrics,
+}: {
+  track: AppTrack;
+  onScrollToLyrics: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isPlaying = usePlayer((s) => s.isPlaying);
   const { lyrics } = useLyrics(track);
   const withLyrics = hasLyrics(lyrics);
-  const art = Math.min(width - space.xl * 2, height * (withLyrics ? 0.34 : 0.42));
+
+  const isSmallScreen = height <= 740;
+  const art = Math.min(
+    width - space.xl * 2,
+    height * (withLyrics ? (isSmallScreen ? 0.3 : 0.33) : isSmallScreen ? 0.36 : 0.4),
+  );
 
   const goArtist = () => {
     router.back();
@@ -108,106 +173,105 @@ function NowPlaying({ track }: { track: AppTrack }) {
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + space.xs, paddingBottom: insets.bottom + space.md }]}>
-      <Backdrop uri={track.artworkUri} />
-
-      <View style={styles.topBar}>
-        <IconButton icon="chevron-down" label="Close player" size={28} onPress={dismiss} />
-        <Pressable
-          style={styles.topCenter}
-          disabled={!track.album}
-          onPress={goAlbum}
-          accessibilityRole="button"
-          accessibilityLabel={`Album ${track.album}`}>
-          <Text variant="micro">NOW PLAYING</Text>
-          <Text variant="caption" color={colors.text} numberOfLines={1} style={styles.bold}>
-            {track.album || 'Single'}
-          </Text>
-        </Pressable>
-        <IconButton
-          icon="ellipsis-horizontal"
-          label="More options"
-          onPress={() => openTrackActions(track, { beforeNavigate: () => router.back() })}
-        />
-      </View>
-
-      <View style={styles.artArea}>
-        <PulsingArtwork track={track} size={art} playing={isPlaying} />
-      </View>
-
-      <View style={styles.titleRow}>
-        <View style={styles.titleText}>
-          <Text variant="title" numberOfLines={1}>
-            {track.title}
-          </Text>
-          <Pressable onPress={goArtist} hitSlop={6} accessibilityRole="link" accessibilityLabel={`Artist ${track.artist}`}>
-            <Text variant="body" color={colors.textSecondary} numberOfLines={1} style={styles.artist}>
-              {track.artist}
+    <>
+      <View
+        style={[
+          styles.firstPage,
+          {
+            height,
+            paddingTop: insets.top + (isSmallScreen ? space.xxs : space.xs),
+            paddingBottom: insets.bottom + (isSmallScreen ? space.sm : space.md),
+            gap: isSmallScreen ? space.sm : space.md,
+          },
+        ]}>
+        <View style={styles.topBar}>
+          <IconButton icon="chevron-down" label="Close player" size={28} onPress={dismiss} />
+          <Pressable
+            style={styles.topCenter}
+            disabled={!track.album}
+            onPress={goAlbum}
+            accessibilityRole="button"
+            accessibilityLabel={`Album ${track.album}`}>
+            <Text variant="micro">NOW PLAYING</Text>
+            <Text variant="caption" color={colors.text} numberOfLines={1} style={styles.bold}>
+              {track.album || 'Single'}
             </Text>
           </Pressable>
+          <IconButton
+            icon="ellipsis-horizontal"
+            label="More options"
+            onPress={() => openTrackActions(track, { beforeNavigate: () => router.back() })}
+          />
         </View>
-        <LikeButton track={track} size={28} />
+
+        <View style={styles.artArea}>
+          <PulsingArtwork track={track} size={art} playing={isPlaying} />
+        </View>
+
+        <View style={styles.titleRow}>
+          <View style={styles.titleText}>
+            <Text variant="title" numberOfLines={1}>
+              {track.title}
+            </Text>
+            <Pressable
+              onPress={goArtist}
+              hitSlop={6}
+              accessibilityRole="link"
+              accessibilityLabel={`Artist ${track.artist}`}>
+              <Text
+                variant="body"
+                color={colors.textSecondary}
+                numberOfLines={1}
+                style={styles.artist}>
+                {track.artist}
+              </Text>
+            </Pressable>
+          </View>
+          <LikeButton track={track} size={28} />
+        </View>
+
+        <SeekBar key={track.key} fallbackDurationMs={track.durationMs} />
+
+        <Transport />
+
+        {withLyrics ? (
+          <Pressable
+            onPress={onScrollToLyrics}
+            hitSlop={8}
+            style={styles.lyricsHint}
+            accessibilityRole="button"
+            accessibilityLabel="Scroll to lyrics">
+            <Text variant="micro" color={colors.textSecondary} style={styles.lyricsHintText}>
+              LYRICS
+            </Text>
+            <Icon name="chevron-down" size={14} color={colors.textSecondary} />
+          </Pressable>
+        ) : null}
+
+        <View style={styles.bottomRow}>
+          <DownloadButton track={track} />
+          <IconButton
+            icon="add-circle-outline"
+            label="Add to playlist"
+            size={26}
+            onPress={() => showSheet(<PlaylistPicker tracks={[track]} />)}
+          />
+          <IconButton icon="list" label="Queue" size={26} onPress={nav.queue} />
+        </View>
       </View>
 
-      <SeekBar key={track.key} fallbackDurationMs={track.durationMs} />
-
-      <Transport />
-
-      <View style={styles.bottomRow}>
-        <DownloadButton track={track} />
-        <IconButton icon="add-circle-outline" label="Add to playlist" size={26} onPress={() => showSheet(<PlaylistPicker tracks={[track]} />)} />
-        <IconButton
-          icon={withLyrics ? 'mic' : 'mic-outline'}
-          label="Lyrics"
-          size={26}
-          color={withLyrics ? colors.text : colors.textTertiary}
-          onPress={nav.lyrics}
-        />
-        <IconButton icon="list" label="Queue" size={26} onPress={nav.queue} />
+      <View
+        style={[
+          styles.cardsSection,
+          {
+            paddingBottom: insets.bottom + space.xxl,
+          },
+        ]}>
+        {withLyrics && lyrics ? <LyricsCard track={track} lyrics={lyrics} /> : null}
+        <UpNextCard />
+        <ArtistCard track={track} />
       </View>
-
-      {withLyrics && lyrics ? <LyricsPeek key={track.key} lyrics={lyrics} /> : null}
-    </View>
-  );
-}
-
-/** Spotify-style lyrics card: the line being sung right now; tap for the full lyrics view. */
-function LyricsPeek({ lyrics }: { lyrics: Lyrics }) {
-  return (
-    <Pressable onPress={nav.lyrics} style={styles.peek} accessibilityRole="button" accessibilityLabel="Show lyrics">
-      <View style={styles.peekHead}>
-        <Text variant="micro" color={colors.text}>
-          LYRICS
-        </Text>
-        <Icon name="expand-outline" size={14} color={colors.textSecondary} />
-      </View>
-      {lyrics.synced?.length ? (
-        <PeekLine lines={lyrics.synced} />
-      ) : (
-        <Text variant="bodyStrong" numberOfLines={2}>
-          {lyrics.plain?.split('\n').find((l) => l.trim()) ?? ''}
-        </Text>
-      )}
-    </Pressable>
-  );
-}
-
-function PeekLine({ lines }: { lines: NonNullable<Lyrics['synced']> }) {
-  const { positionMs } = useProgress();
-  const i = activeLyricIndex(lines, positionMs + 250);
-  const now = i >= 0 ? lines[i].text || '♪' : '♪';
-  const next = lines[i + 1]?.text;
-  return (
-    <View>
-      <Text variant="bodyStrong" numberOfLines={1}>
-        {now}
-      </Text>
-      {next ? (
-        <Text variant="body" color={colors.textSecondary} numberOfLines={1}>
-          {next}
-        </Text>
-      ) : null}
-    </View>
+    </>
   );
 }
 
@@ -216,10 +280,21 @@ function Backdrop({ uri }: { uri: string | null }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {uri ? (
-        <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={70} cachePolicy="memory-disk" transition={300} />
+        <Image
+          source={source}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          blurRadius={70}
+          cachePolicy="memory-disk"
+          transition={300}
+        />
       ) : null}
       <LinearGradient
-        colors={uri ? ['rgba(10,10,12,0.45)', 'rgba(10,10,12,0.78)', 'rgba(10,10,12,0.96)'] : [colors.accentDeep, '#2A0A0B', colors.bg]}
+        colors={
+          uri
+            ? ['rgba(10,10,12,0.45)', 'rgba(10,10,12,0.78)', 'rgba(10,10,12,0.96)']
+            : [colors.accentDeep, '#2A0A0B', colors.bg]
+        }
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
       />
@@ -227,7 +302,15 @@ function Backdrop({ uri }: { uri: string | null }) {
   );
 }
 
-function PulsingArtwork({ track, size, playing }: { track: AppTrack; size: number; playing: boolean }) {
+function PulsingArtwork({
+  track,
+  size,
+  playing,
+}: {
+  track: AppTrack;
+  size: number;
+  playing: boolean;
+}) {
   const scale = useSharedValue(playing ? 1 : 0.86);
   useEffect(() => {
     scale.set(withSpring(playing ? 1 : 0.86, { damping: 15, stiffness: 140 }));
@@ -238,7 +321,14 @@ function PulsingArtwork({ track, size, playing }: { track: AppTrack; size: numbe
   }));
   return (
     <Animated.View style={[styles.artShadow, { width: size, height: size }, style]}>
-      <Artwork uri={track.artworkUri} label={track.album || track.title} size={size} radius={radius.lg} recyclingKey={track.key} priority="high" />
+      <Artwork
+        uri={track.artworkUri}
+        label={track.album || track.title}
+        size={size}
+        radius={radius.lg}
+        recyclingKey={track.key}
+        priority="high"
+      />
     </Animated.View>
   );
 }
@@ -265,7 +355,14 @@ function Transport() {
         haptic
         onPress={player.toggleShuffle}
       />
-      <IconButton icon="play-skip-back" label="Previous" size={32} diameter={56} haptic onPress={player.previous} />
+      <IconButton
+        icon="play-skip-back"
+        label="Previous"
+        size={32}
+        diameter={56}
+        haptic
+        onPress={player.previous}
+      />
       <PressableScale
         accessibilityRole="button"
         accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
@@ -281,7 +378,14 @@ function Transport() {
           <Icon name={isPlaying ? 'pause' : 'play'} size={34} color={colors.white} />
         )}
       </PressableScale>
-      <IconButton icon="play-skip-forward" label="Next" size={32} diameter={56} haptic onPress={player.next} />
+      <IconButton
+        icon="play-skip-forward"
+        label="Next"
+        size={32}
+        diameter={56}
+        haptic
+        onPress={player.next}
+      />
       <View>
         <IconButton
           icon="repeat"
@@ -303,8 +407,13 @@ function Transport() {
 
 const styles = StyleSheet.create({
   sheet: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
+  scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
   empty: { flex: 1, justifyContent: 'center' },
-  root: { flex: 1, paddingHorizontal: space.xl, gap: space.lg },
+  firstPage: {
+    paddingHorizontal: space.xl,
+    justifyContent: 'space-between',
+  },
   topBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: -space.md },
   topCenter: { flex: 1, alignItems: 'center', gap: 2 },
   bold: { fontWeight: '700' },
@@ -321,6 +430,18 @@ const styles = StyleSheet.create({
   titleText: { flex: 1, minWidth: 0, gap: 2 },
   artist: { fontSize: 17, lineHeight: 22 },
   transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  lyricsHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    paddingVertical: space.xxs,
+    alignSelf: 'center',
+  },
+  lyricsHintText: {
+    letterSpacing: 1,
+    fontWeight: '700',
+  },
   playButton: {
     width: 76,
     height: 76,
@@ -346,15 +467,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   repeatBadgeText: { color: colors.white, fontSize: 9, lineHeight: 11, fontWeight: '800' },
-  peek: {
-    borderRadius: radius.lg,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-    gap: space.xs,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: -space.md,
   },
-  peekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: -space.md },
+  cardsSection: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+    gap: space.lg,
+  },
 });

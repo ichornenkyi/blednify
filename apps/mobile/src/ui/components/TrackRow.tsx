@@ -63,8 +63,8 @@ function TrackRowImpl({ track, index, onPress, onMore, leading = 'artwork', subt
           {track.title}
         </Text>
         <View style={styles.subRow}>
-          {downloaded ? <Icon name="arrow-down-circle" size={13} color={colors.accent} /> : null}
-          {track.origin === 'local' ? <Icon name="phone-portrait-outline" size={12} color={colors.textTertiary} /> : null}
+          {downloaded ? <Icon name="arrow-down-circle" size={14} color={colors.accent} /> : null}
+          {track.origin === 'local' ? <Icon name="phone-portrait-outline" size={14} color={colors.textTertiary} /> : null}
           <Text variant="caption" numberOfLines={1} style={styles.subText}>
             {sub}
           </Text>

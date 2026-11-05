@@ -36,7 +36,7 @@ type NativeStatus = AudioPlaylistStatus & { error?: unknown };
 
 const UPDATE_INTERVAL_MS = 250;
 const RESTART_THRESHOLD_MS = 3_000;
-const RECENT_AFTER_MS = 10_000;
+const RECENT_AFTER_MS = 3_000;
 const LOAD_TIMEOUT_MS = 20_000;
 const MAX_ERROR_STREAK = 3;
 const POSITION_SAVE_MS = 5_000;
@@ -451,6 +451,11 @@ function onStatus(s: NativeStatus) {
     return;
   }
   if (s.didJustFinish) {
+    const finishTrack = entries[index]?.track;
+    if (!recorded && finishTrack) {
+      recorded = true;
+      void recordRecent(finishTrack).catch((e) => console.warn('[player] recordRecent failed', e));
+    }
     onNativeFinished();
     return;
   }
@@ -483,7 +488,7 @@ function onStatus(s: NativeStatus) {
 
   if (s.playing) {
     const d = s.currentTime - lastTimeS;
-    if (d > 0 && d < 2) listenedMs += d * 1000;
+    if (!seekGuard && d > 0) listenedMs += Math.min(d, 5) * 1000;
     if (!recorded && listenedMs >= RECENT_AFTER_MS && cur) {
       recorded = true;
       void recordRecent(cur).catch((e) => console.warn('[player] recordRecent failed', e));

@@ -7,7 +7,7 @@ import { haptics } from '../haptics';
 import { colors } from '../theme';
 import { IconButton } from './IconButton';
 
-export function LikeButton({ track, size = 26 }: { track: AppTrack; size?: number }) {
+export function LikeButton({ track, size = 24 }: { track: AppTrack; size?: number }) {
   const liked = useIsLiked(track.key);
   const pop = useSharedValue(1);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.get() }] }));

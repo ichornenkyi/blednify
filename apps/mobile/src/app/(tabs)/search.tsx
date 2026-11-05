@@ -1,16 +1,32 @@
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useDeferredValue, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useDeferredValue, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { player, useSearch, type AlbumView, type AppTrack, type ArtistView } from '@/core';
+import {
+  clearSearchHistory,
+  player,
+  pushSearchAlbum,
+  pushSearchArtist,
+  pushSearchQuery,
+  pushSearchTrack,
+  removeSearchEntry,
+  useSearch,
+  useSearchHistory,
+  type AlbumView,
+  type AppTrack,
+  type ArtistView,
+  type SearchHistoryEntry,
+} from '@/core';
 import { importMusic } from '@/ui/actions';
 import { Artwork } from '@/ui/components/Artwork';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Icon, type IconName } from '@/ui/components/Icon';
+import { IconButton } from '@/ui/components/IconButton';
 import { ListRow } from '@/ui/components/ListRow';
 import { PressableScale } from '@/ui/components/PressableScale';
+import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { Text } from '@/ui/components/Text';
 import { onTrackMore } from '@/ui/components/TrackActions';
 import { TrackRow } from '@/ui/components/TrackRow';
@@ -29,7 +45,9 @@ const TRACK_LIMIT = 30;
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
   const deferred = useDeferredValue(query.trim());
+  const history = useSearchHistory();
   const { tracks, albums, artists, isLoading } = useSearch(deferred);
 
   const shownTracks = tracks.slice(0, TRACK_LIMIT);
@@ -52,7 +70,26 @@ export default function SearchScreen() {
   const playAt = (index: number) => {
     haptics.tap();
     Keyboard.dismiss();
+    const track = shownTracks[index];
+    if (track) pushSearchTrack(track);
     player.playTracks(shownTracks, index);
+  };
+
+  const handleRecentPress = (entry: SearchHistoryEntry) => {
+    if (entry.kind === 'query') {
+      setQuery(entry.query);
+    } else if (entry.kind === 'track') {
+      haptics.tap();
+      Keyboard.dismiss();
+      pushSearchTrack(entry.track);
+      player.playTracks([entry.track], 0);
+    } else if (entry.kind === 'artist') {
+      pushSearchArtist(entry.artist);
+      nav.artist(entry.artist.id, entry.artist.origin);
+    } else if (entry.kind === 'album') {
+      pushSearchAlbum(entry.album);
+      nav.album(entry.album.id, entry.album.origin);
+    }
   };
 
   return (
@@ -65,6 +102,12 @@ export default function SearchScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          onSubmitEditing={() => {
+            const q = query.trim();
+            if (q) pushSearchQuery(q);
+          }}
           placeholder="Songs, artists, albums"
           placeholderTextColor={colors.textTertiary}
           selectionColor={colors.accent}
@@ -84,7 +127,33 @@ export default function SearchScreen() {
       </View>
 
       {!deferred ? (
-        <BrowseGrid />
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled">
+          {history.length > 0 ? (
+            <View style={styles.recentSection}>
+              <View style={styles.recentHeader}>
+                <Text variant="subheading">Recent searches</Text>
+              </View>
+              {history.map((entry) => (
+                <RecentHistoryRow
+                  key={entry.id}
+                  entry={entry}
+                  onPress={() => handleRecentPress(entry)}
+                  onRemove={() => removeSearchEntry(entry.id)}
+                />
+              ))}
+              {isFocused ? (
+                <View style={styles.clearBtnWrap}>
+                  <PrimaryButton label="Clear recent searches" variant="surface" onPress={clearSearchHistory} />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {!isFocused || history.length === 0 ? <BrowseGrid /> : null}
+        </ScrollView>
       ) : items.length === 0 && !isLoading ? (
         <EmptyState icon="search" title={`No results for “${deferred}”`} message="Try a different spelling, or search by artist or album." />
       ) : (
@@ -112,7 +181,10 @@ export default function SearchScreen() {
                     title={item.artist.name}
                     subtitle={`Artist · ${item.artist.trackCount} ${item.artist.trackCount === 1 ? 'track' : 'tracks'}`}
                     chevron
-                    onPress={() => nav.artist(item.artist.id, item.artist.origin)}
+                    onPress={() => {
+                      pushSearchArtist(item.artist);
+                      nav.artist(item.artist.id, item.artist.origin);
+                    }}
                   />
                 );
               case 'album':
@@ -122,7 +194,10 @@ export default function SearchScreen() {
                     title={item.album.title}
                     subtitle={`Album · ${item.album.artist}${item.album.year ? ` · ${item.album.year}` : ''}`}
                     chevron
-                    onPress={() => nav.album(item.album.id, item.album.origin)}
+                    onPress={() => {
+                      pushSearchAlbum(item.album);
+                      nav.album(item.album.id, item.album.origin);
+                    }}
                   />
                 );
             }
@@ -130,6 +205,66 @@ export default function SearchScreen() {
         />
       )}
     </View>
+  );
+}
+
+function RecentHistoryRow({
+  entry,
+  onPress,
+  onRemove,
+}: {
+  entry: SearchHistoryEntry;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
+  let leading: ReactNode;
+  let title: string;
+  let subtitle: string | undefined;
+
+  switch (entry.kind) {
+    case 'track':
+      leading = <Artwork uri={entry.track.artworkUri} label={entry.track.title} size={48} recyclingKey={entry.id} />;
+      title = entry.track.title;
+      subtitle = `Song · ${entry.track.artist}`;
+      break;
+    case 'artist':
+      leading = <Artwork uri={entry.artist.artworkUri} label={entry.artist.name} size={48} round recyclingKey={entry.id} />;
+      title = entry.artist.name;
+      subtitle = 'Artist';
+      break;
+    case 'album':
+      leading = <Artwork uri={entry.album.artworkUri} label={entry.album.title} size={48} recyclingKey={entry.id} />;
+      title = entry.album.title;
+      subtitle = `Album · ${entry.album.artist}`;
+      break;
+    case 'query':
+      leading = (
+        <View style={styles.queryIconContainer}>
+          <Icon name="search" size={20} color={colors.textSecondary} />
+        </View>
+      );
+      title = entry.query;
+      subtitle = undefined;
+      break;
+  }
+
+  return (
+    <ListRow
+      leading={leading}
+      title={title}
+      subtitle={subtitle}
+      onPress={onPress}
+      trailing={
+        <IconButton
+          icon="close"
+          label="Remove"
+          size={18}
+          diameter={32}
+          color={colors.textTertiary}
+          onPress={onRemove}
+        />
+      }
+    />
   );
 }
 
@@ -173,6 +308,7 @@ function BrowseGrid() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
   title: { paddingHorizontal: space.lg, marginBottom: space.md },
   field: {
     flexDirection: 'row',
@@ -187,7 +323,22 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, height: '100%', color: colors.text, fontSize: 16, fontWeight: '500' },
   listContent: { paddingBottom: space.xl },
+  scrollContent: { paddingBottom: space.xxl },
   section: { paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.sm },
+  recentSection: { paddingBottom: space.md },
+  recentHeader: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
+  queryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearBtnWrap: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+  },
   browse: { paddingHorizontal: space.lg, paddingTop: space.md },
   browseTitle: { marginBottom: space.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },

@@ -29,7 +29,7 @@ export function DownloadButton({ track, size = 24 }: { track: AppTrack; size?: n
         <View style={styles.ring}>
           <ProgressRing progress={status === 'queued' ? 0 : progress} size={size} />
         </View>
-        <Icon name="stop" size={size * 0.36} color={colors.accent} />
+        <Icon name="stop" size={Math.round(size * 0.4)} color={colors.accent} />
       </Pressable>
     );
   }
@@ -38,7 +38,7 @@ export function DownloadButton({ track, size = 24 }: { track: AppTrack; size?: n
       <IconButton
         icon="arrow-down-circle"
         label="Downloaded. Remove download"
-        size={size + 2}
+        size={size}
         color={colors.accent}
         onPress={() =>
           Alert.alert('Remove download?', `“${track.title}” will still be available to stream.`, [
@@ -53,7 +53,7 @@ export function DownloadButton({ track, size = 24 }: { track: AppTrack; size?: n
     <IconButton
       icon={status === 'error' ? 'alert-circle-outline' : 'arrow-down-circle-outline'}
       label={status === 'error' ? 'Download failed. Retry' : 'Download'}
-      size={size + 2}
+      size={size}
       color={status === 'error' ? colors.danger : colors.text}
       haptic
       onPress={() => downloadTracks([track])}

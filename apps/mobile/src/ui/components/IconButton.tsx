@@ -19,6 +19,7 @@ export type IconButtonProps = {
   variant?: Variant;
   haptic?: boolean;
   disabled?: boolean;
+  strokeWidth?: number;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -40,6 +41,7 @@ export function IconButton({
   variant = 'plain',
   haptic = false,
   disabled,
+  strokeWidth,
   style,
 }: IconButtonProps) {
   return (
@@ -61,7 +63,12 @@ export function IconButton({
         disabled && styles.disabled,
         style,
       ]}>
-      <Icon name={icon} size={size} color={color ?? (variant === 'accent' ? colors.white : colors.text)} />
+      <Icon
+        name={icon}
+        size={size}
+        color={color ?? (variant === 'accent' ? colors.white : colors.text)}
+        strokeWidth={strokeWidth}
+      />
     </PressableScale>
   );
 }
