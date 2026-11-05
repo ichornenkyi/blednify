@@ -451,11 +451,6 @@ function onStatus(s: NativeStatus) {
     return;
   }
   if (s.didJustFinish) {
-    const finishTrack = entries[index]?.track;
-    if (!recorded && finishTrack) {
-      recorded = true;
-      void recordRecent(finishTrack).catch((e) => console.warn('[player] recordRecent failed', e));
-    }
     onNativeFinished();
     return;
   }

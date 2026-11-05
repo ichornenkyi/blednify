@@ -20,7 +20,7 @@ export const nav = {
   },
 };
 
-export type LibraryFilter = 'playlists' | 'albums' | 'liked' | 'downloaded' | 'device';
+export type LibraryFilter = 'playlists' | 'recents' | 'albums' | 'liked' | 'downloaded' | 'device';
 
 export function parseOrigin(v: string | string[] | undefined): Origin {
   return v === 'local' ? 'local' : 'remote';

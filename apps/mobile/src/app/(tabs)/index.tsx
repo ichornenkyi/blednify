@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -40,10 +40,26 @@ function greeting(date = new Date()) {
 const albumKey = (a: AlbumView) => `${a.origin}:${a.id}`;
 const trackKey = (t: AppTrack) => t.key;
 
+/** Distinct albums of recently played tracks, most recent first; the track supplies art and ids. */
+function recentAlbumsOf(tracks: readonly AppTrack[]): { key: string; track: AppTrack }[] {
+  const seen = new Set<string>();
+  const out: { key: string; track: AppTrack }[] = [];
+  for (const t of tracks) {
+    if (!t.album || !t.albumId) continue;
+    const key = `${t.origin}:${t.albumId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ key, track: t });
+  }
+  return out;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const server = useServerStatus();
   const recent = useRecentlyPlayed(20);
+  // The grid already lists recent tracks; the rail shows the albums they came from.
+  const recentAlbums = useMemo(() => recentAlbumsOf(recent), [recent]);
   const liked = useLikedTracks();
   const localTracks = useLocalTracks();
   const localAlbums = useLocalAlbums();
@@ -122,27 +138,23 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {recent.length > 0 ? (
+          {recentAlbums.length > 0 ? (
             <Rail
-              title="Recently played"
-              data={recent.slice(0, 20)}
-              keyExtractor={trackKey}
-              renderItem={({ item, index }) => (
+              title="Jump back in"
+              data={recentAlbums}
+              keyExtractor={(a) => a.key}
+              renderItem={({ item }) => (
                 <AlbumCard
                   width={RAIL_CARD_WIDTH}
-                  title={item.title}
-                  subtitle={item.artist}
-                  artworkUri={item.artworkUri}
+                  title={item.track.album}
+                  subtitle={item.track.artist}
+                  artworkUri={item.track.artworkUri}
                   recyclingKey={item.key}
-                  onPress={() => {
-                    haptics.tap();
-                    player.playTracks(recent, index);
-                  }}
-                  onLongPress={() => openTrackActions(item)}
+                  onPress={() => nav.album(item.track.albumId, item.track.origin)}
                 />
               )}
               actionLabel="See all"
-              onAction={() => nav.library('recents' as any)}
+              onAction={() => nav.library('recents')}
             />
           ) : null}
 

@@ -32,9 +32,7 @@ import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
 import { colors, radius, space } from '@/ui/theme';
 
-type TabFilter = LibraryFilter | 'recents';
-
-const FILTERS: { key: TabFilter; label: string }[] = [
+const FILTERS: { key: LibraryFilter; label: string }[] = [
   { key: 'playlists', label: 'Playlists' },
   { key: 'recents', label: 'Recents' },
   { key: 'albums', label: 'Albums' },
@@ -43,7 +41,7 @@ const FILTERS: { key: TabFilter; label: string }[] = [
   { key: 'device', label: 'On this device' },
 ];
 
-function isFilter(v: unknown): v is TabFilter {
+function isFilter(v: unknown): v is LibraryFilter {
   return FILTERS.some((f) => f.key === v);
 }
 
@@ -51,7 +49,7 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   // The route param is the single source of truth, so shortcuts (Home → Liked) always win over a stale chip.
   const params = useLocalSearchParams<{ filter?: string }>();
-  const filter: TabFilter = isFilter(params.filter) ? params.filter : 'playlists';
+  const filter: LibraryFilter = isFilter(params.filter) ? params.filter : 'playlists';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.md }]}>

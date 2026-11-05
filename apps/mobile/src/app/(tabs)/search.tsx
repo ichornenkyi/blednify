@@ -137,7 +137,7 @@ export default function SearchScreen() {
               <View style={styles.recentHeader}>
                 <Text variant="subheading">Recent searches</Text>
               </View>
-              {history.map((entry) => (
+              {(isFocused ? history : history.slice(0, 5)).map((entry) => (
                 <RecentHistoryRow
                   key={entry.id}
                   entry={entry}

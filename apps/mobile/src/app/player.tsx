@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
   GestureDetector,
@@ -62,6 +62,8 @@ export default function PlayerScreen() {
   const scrollY = useSharedValue(0);
   const listDrag = useSharedValue(false);
   const scrollRef = useRef<Animated.ScrollView>(null);
+  // The first page fills the scroll viewport exactly; window height can disagree with it on Android.
+  const [pageH, setPageH] = useState(screenH);
 
   const native = useNativeGesture();
 
@@ -118,12 +120,14 @@ export default function PlayerScreen() {
             scrollEventThrottle={16}
             onScroll={scrollHandler}
             showsVerticalScrollIndicator={false}
+            onLayout={(e) => setPageH(Math.round(e.nativeEvent.layout.height))}
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}>
             <NowPlaying
               track={current}
+              pageHeight={pageH}
               onScrollToLyrics={() => {
-                scrollRef.current?.scrollTo({ y: screenH, animated: true });
+                scrollRef.current?.scrollTo({ y: pageH, animated: true });
               }}
             />
           </Animated.ScrollView>
@@ -146,13 +150,15 @@ export default function PlayerScreen() {
 
 function NowPlaying({
   track,
+  pageHeight: height,
   onScrollToLyrics,
 }: {
   track: AppTrack;
+  pageHeight: number;
   onScrollToLyrics: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const isPlaying = usePlayer((s) => s.isPlaying);
   const { lyrics } = useLyrics(track);
   const withLyrics = hasLyrics(lyrics);

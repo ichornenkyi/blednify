@@ -63,6 +63,8 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 
+import Svg, { Path } from 'react-native-svg';
+
 import { colors } from '../theme';
 
 type IconEntry = {
@@ -108,11 +110,11 @@ const ICON_MAP = {
   'arrow-forward-outline': { icon: ArrowRight },
 
   // Tab bar (active vs outline)
-  home: { icon: House, fill: true },
+  home: { icon: House }, // rendered by HomeFilled below
   'home-outline': { icon: House },
-  search: { icon: Search, strokeWidth: 2.6 },
+  search: { icon: Search },
   'search-outline': { icon: Search },
-  albums: { icon: Library, strokeWidth: 2.6 },
+  albums: { icon: Library },
   'albums-outline': { icon: Library },
 
   // Media playback controls
@@ -193,10 +195,26 @@ export function Icon({
   color?: string;
   strokeWidth?: number;
 }) {
+  if (name === 'home') return <HomeFilled size={size} color={color} />;
   const entry = ICON_MAP[name];
   if (!entry) return null;
   const Component = entry.icon;
-  const sw = strokeWidth ?? ('strokeWidth' in entry ? entry.strokeWidth : 2);
+  const sw = strokeWidth ?? 2;
   const fill = 'fill' in entry && entry.fill ? color : 'none';
   return <Component size={size} color={color} fill={fill} strokeWidth={sw} />;
+}
+
+/** Solid house with the door cut out (a filled lucide House would fill the door too). */
+function HomeFilled({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M4 10.4 12 4l8 6.4V20h-5.2v-6h-5.6v6H4z"
+        fill={color}
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
 }

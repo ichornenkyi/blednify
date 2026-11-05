@@ -39,7 +39,7 @@ export function TabBar({ state, emitter, navigateToTab, insets }: BottomTabBarPr
                 }
               }}
               onLongPress={() => emitter.emit({ type: 'tabLongPress', target: route.key })}>
-              <Icon name={focused ? tab.iconActive : tab.icon} size={24} color={color} />
+              <Icon name={focused ? tab.iconActive : tab.icon} size={24} color={color} strokeWidth={focused ? 2.6 : 2} />
               <Text variant="micro" color={color} style={styles.label}>
                 {tab.label}
               </Text>

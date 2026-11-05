@@ -18,6 +18,7 @@ import {
   type ResolveCtx,
   useResolvedTracks,
 } from './tracks';
+import { removeSearchTracks } from './search-history';
 import type { AlbumView, AppTrack, Origin, Playlist } from './types';
 import { randomId } from './util';
 
@@ -449,4 +450,5 @@ export async function removeTrackReferences(db: SQLiteDatabase, keys: readonly s
     }
   }
   for (const key of keys) setLiked(key, false);
+  removeSearchTracks(keys);
 }
