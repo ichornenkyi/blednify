@@ -31,6 +31,9 @@ export function createContext(config: Config): AppContext {
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 const ART_CACHE = "public, max-age=2592000";
+// With a listen token, responses are per-user content: keep them out of shared caches (e.g. Cloudflare's).
+const IMMUTABLE_PRIVATE = "private, max-age=31536000, immutable";
+const ART_CACHE_PRIVATE = "private, max-age=2592000";
 const ID_RE = /^[0-9a-f]{16}$/;
 
 const fail = (status: 400 | 401 | 403 | 404 | 413 | 415 | 422, error: string): never => {
@@ -86,6 +89,12 @@ function adminOnly(token: string | null, allowOpen: boolean): MiddlewareHandler 
     }
     await next();
   };
+}
+
+/** True when the request carries the bearer token (constant-time compare). */
+function bearerMatches(c: Context, expected: Buffer): boolean {
+  const m = /^Bearer\s+(.+)$/i.exec(c.req.header("authorization") ?? "");
+  return !!m && timingSafeEqual(digest(m[1]!.trim()), expected);
 }
 
 /** Keeps the connection open for long-running admin requests (Bun's default idle timeout is 10s). */
@@ -185,7 +194,35 @@ export function createApp(ctx: AppContext): Hono {
   });
   app.notFound((c) => c.json({ error: "not found" }, 404));
 
-  app.get("/api/health", (c) => c.json({ ok: true, name: "blednify", version: VERSION, trackCount: lib.trackCount() }));
+  // Health is the only endpoint that answers without the listen token: it tells the app whether a token is
+  // needed, and only reveals the track count to a caller that presents a valid token.
+  const listenDigest = config.listenToken ? digest(config.listenToken) : null;
+  const immutableCache = listenDigest ? IMMUTABLE_PRIVATE : IMMUTABLE;
+  const artCache = listenDigest ? ART_CACHE_PRIVATE : ART_CACHE;
+
+  app.get("/api/health", (c) => {
+    const base = { ok: true, name: "blednify", version: VERSION };
+    if (!listenDigest) return c.json({ ...base, authRequired: false, trackCount: lib.trackCount() });
+    const hasBearer = /^Bearer\s+/i.test(c.req.header("authorization") ?? "");
+    if (hasBearer && !bearerMatches(c, listenDigest)) {
+      c.header("WWW-Authenticate", 'Bearer realm="blednify"');
+      fail(401, "wrong access token");
+    }
+    if (!bearerMatches(c, listenDigest)) return c.json({ ...base, authRequired: true });
+    return c.json({ ...base, authRequired: true, trackCount: lib.trackCount() });
+  });
+
+  // Library reads require the listen token when one is configured. Writes are guarded by ADMIN_TOKEN
+  // instead (one Authorization header can carry only one token), and they fail closed without it.
+  if (listenDigest) {
+    app.use("/api/*", async (c, next) => {
+      if ((c.req.method === "GET" || c.req.method === "HEAD") && !bearerMatches(c, listenDigest)) {
+        c.header("WWW-Authenticate", 'Bearer realm="blednify"');
+        fail(401, "unauthorized");
+      }
+      await next();
+    });
+  }
 
   // ---------- tracks ----------
 
@@ -201,7 +238,7 @@ export function createApp(ctx: AppContext): Hono {
     const res = await serveFile(c.req.raw, {
       path: join(config.musicDir, row.path),
       contentType: row.mime,
-      cacheControl: IMMUTABLE,
+      cacheControl: immutableCache,
       etagKey: row.id,
     });
     return res ?? fail(404, "audio file missing");
@@ -222,7 +259,7 @@ export function createApp(ctx: AppContext): Hono {
     const res = await serveFile(c.req.raw, {
       path: file.path,
       contentType: file.mime,
-      cacheControl: ART_CACHE,
+      cacheControl: artCache,
       etagKey: `${row.id}-${size ?? 0}`,
     });
     return res ?? fail(404, "no artwork");

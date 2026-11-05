@@ -54,7 +54,10 @@ export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDo
 export { deleteLocalTrack, importFromDevice } from './import/importer';
 
 // Settings
-export { useSettings } from './settings';
+export { saveConnection, useSettings } from './settings';
+
+// Images (adds the access token for server URLs)
+export { imageSourceFor, useImageSource, type ImageSource } from './auth';
 
 // Utilities
 export { formatBytes, formatDuration } from './format';

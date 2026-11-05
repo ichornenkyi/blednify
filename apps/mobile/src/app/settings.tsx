@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatBytes, testServer, useDownloads, useServerStatus, useSettings } from '@/core';
+import { formatBytes, testServer, useDownloads, useServerStatus, useSettings, saveConnection } from '@/core';
 import { errorMessage, importMusic } from '@/ui/actions';
 import { BrandMark } from '@/ui/components/BrandMark';
 import { Icon, type IconName } from '@/ui/components/Icon';
@@ -33,18 +33,19 @@ export default function SettingsScreen() {
   const status = useServerStatus();
   const { bytesUsed, completedCount } = useDownloads();
   const [url, setUrl] = useState(settings.serverUrl);
+  const [token, setToken] = useState(settings.accessToken);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<TestResult>(null);
 
   const normalized = normalizeUrl(url);
-  const dirty = normalized !== settings.serverUrl;
+  const dirty = normalized !== settings.serverUrl || token.trim() !== settings.accessToken;
 
   const runTest = async () => {
     if (!normalized) return;
     setTesting(true);
     setResult(null);
     try {
-      const r = await testServer(normalized);
+      const r = await testServer(normalized, token);
       setResult(
         r.ok
           ? { ok: true, message: `Connected · ${plural(r.trackCount ?? 0, 'track')}` }
@@ -61,8 +62,9 @@ export default function SettingsScreen() {
   };
 
   const save = () => {
-    settings.setServerUrl(normalized);
+    saveConnection(normalized, token);
     setUrl(normalized);
+    setToken(token.trim());
     showToast(normalized ? 'Server saved' : 'Server removed — offline mode', 'success');
   };
 
@@ -92,6 +94,26 @@ export default function SettingsScreen() {
             onSubmitEditing={runTest}
             style={styles.input}
           />
+          <Text variant="caption">
+            Access token, only if the server requires one (for example behind a Cloudflare tunnel). Stored on this phone.
+          </Text>
+          <TextInput
+            value={token}
+            onChangeText={(v) => {
+              setToken(v);
+              setResult(null);
+            }}
+            placeholder="Access token (optional)"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            returnKeyType="done"
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+            onSubmitEditing={runTest}
+            style={styles.input}
+          />
           {result ? (
             <View style={styles.result}>
               <Icon name={result.ok ? 'checkmark-circle' : 'alert-circle'} size={16} color={result.ok ? colors.success : colors.danger} />
@@ -105,7 +127,13 @@ export default function SettingsScreen() {
                 style={[styles.dot, { backgroundColor: status.online ? colors.success : status.isLoading ? colors.textTertiary : colors.danger }]}
               />
               <Text variant="caption" style={styles.flex}>
-                {status.isLoading ? 'Checking…' : status.online ? `Online · ${plural(status.trackCount, 'track')}` : 'Offline'}
+                {status.isLoading
+                  ? 'Checking…'
+                  : status.online
+                    ? `Online · ${plural(status.trackCount, 'track')}`
+                    : status.needsToken
+                      ? 'Server needs the access token below'
+                      : 'Offline'}
               </Text>
             </View>
           ) : null}

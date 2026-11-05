@@ -22,6 +22,7 @@ import {
 } from 'expo-audio';
 import { AppState, Platform } from 'react-native';
 
+import { authHeadersFor } from '../auth';
 import { recordRecent } from '../library';
 import { kv } from '../settings';
 import { fromStorable, resolveTrack, toStorable } from '../tracks';
@@ -124,14 +125,22 @@ function startNative() {
 
 const S = () => playerStore.getState();
 
-function sourceOf(t: AppTrack): { uri: string; name: string } | null {
+type Source = { uri: string; name: string; headers?: Record<string, string> };
+
+function sourceOf(t: AppTrack): Source | null {
   const r = resolveTrack(t);
-  return r.streamUri ? { uri: r.streamUri, name: r.title } : null;
+  if (!r.streamUri) return null;
+  return { uri: r.streamUri, name: r.title, headers: authHeadersFor(r.streamUri) };
 }
+
+/** Identity of a loaded native source: its URI plus the credential it was loaded with. */
+const srcKey = (s: Source) => `${s.uri}\n${s.headers?.Authorization ?? ''}`;
 
 function metadataOf(t: AppTrack): AudioMetadata {
   const r = resolveTrack(t);
-  return { title: r.title, artist: r.artist, albumTitle: r.album, artworkUrl: r.artworkUri ?? undefined };
+  // Lock-screen artwork is fetched by the OS without our headers, so artwork that needs the token is left out.
+  const artworkUrl = r.artworkUri && !authHeadersFor(r.artworkUri) ? r.artworkUri : undefined;
+  return { title: r.title, artist: r.artist, albumTitle: r.album, artworkUrl };
 }
 
 /** Index that follows `index` during playback; repeat-all wraps. */
@@ -280,9 +289,13 @@ function syncWindow() {
   // Native may have advanced before its event reached JS; catch up first.
   const live = nat.currentIndex;
   if (live !== natCur && live >= 0 && live < natUids.length && nat.trackCount === natUids.length) onNativeIndex(live);
-  const want = desiredTail();
-  const have = natUids.slice(natCur + 1);
-  if (want.length === have.length && want.every((e, k) => e.uid === have[k])) {
+  const want = desiredTail().flatMap((e) => {
+    const src = sourceOf(e.track);
+    return src ? [{ uid: e.uid, src }] : [];
+  });
+  const haveUids = natUids.slice(natCur + 1);
+  const haveKeys = natUris.slice(natCur + 1);
+  if (want.length === haveUids.length && want.every((w, k) => w.uid === haveUids[k] && srcKey(w.src) === haveKeys[k])) {
     windowDirty = false;
     return;
   }
@@ -297,12 +310,10 @@ function syncWindow() {
       natUids.pop();
       natUris.pop();
     }
-    for (const e of want) {
-      const src = sourceOf(e.track);
-      if (!src) break;
-      n.add(src);
-      natUids.push(e.uid);
-      natUris.push(src.uri);
+    for (const w of want) {
+      n.add(w.src);
+      natUids.push(w.uid);
+      natUris.push(srcKey(w.src));
     }
   });
 }
@@ -347,18 +358,18 @@ function load(idx: number, play: boolean, positionMs = 0) {
   if (prev && prevSrc) {
     n.add(prevSrc);
     natUids.push(prev.uid);
-    natUris.push(prevSrc.uri);
+    natUris.push(srcKey(prevSrc));
   }
   n.add(src);
   natUids.push(cur.uid);
-  natUris.push(src.uri);
+  natUris.push(srcKey(src));
   natCur = natUids.length - 1;
   for (const e of desiredTail()) {
     const s2 = sourceOf(e.track);
     if (!s2) break;
     n.add(s2);
     natUids.push(e.uid);
-    natUris.push(s2.uri);
+    natUris.push(srcKey(s2));
   }
   n.skipTo(natCur);
   natReady = true;
@@ -603,11 +614,9 @@ export function refreshQueueTracks() {
       changed = true;
     }
   }
-  if (!changed) return;
-  // Pre-buffered native slots keep their old URIs (a stream URL keeps working after a download lands;
-  // a stale one fails and goes through the normal error path). Editing here would mean a lock-screen
-  // session rebuild, possibly in the background.
-  publishQueue();
+  if (changed) publishQueue();
+  // Re-checks the pre-buffered slot against the current URL and token (no-op when nothing differs).
+  syncWindow();
 }
 
 /** Drop every queue entry whose track key is in `keys` (e.g. deleted local files). */

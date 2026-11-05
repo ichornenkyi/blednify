@@ -6,6 +6,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, gradientFor, radius as radii } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
+import { useImageSource } from '@/core';
 
 export type ArtworkProps = {
   uri: string | null | undefined;
@@ -34,6 +35,7 @@ function initials(label: string) {
 /** Cover art via expo-image (memory+disk cache) with a branded gradient fallback. */
 export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIcon, recyclingKey, priority, style }: ArtworkProps) {
   const [failedUri, setFailedUri] = useState<string | null>(null);
+  const source = useImageSource(uri);
   const showImage = !!uri && uri !== failedUri;
   const borderRadius = round ? 9999 : radius;
   const box = size !== undefined ? { width: size, height: size } : styles.fill;
@@ -42,7 +44,7 @@ export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIc
     <View style={[styles.base, box, { borderRadius }, style]}>
       {showImage ? (
         <Image
-          source={uri}
+          source={source}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           cachePolicy="memory-disk"

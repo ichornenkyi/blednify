@@ -21,7 +21,7 @@ function startCore() {
     })
     .catch((e) => console.warn('[core] library init failed', e));
   settingsStore.subscribe((s, prev) => {
-    if (s.serverUrl !== prev.serverUrl) refreshQueueTracks();
+    if (s.serverUrl !== prev.serverUrl || s.accessToken !== prev.accessToken) refreshQueueTracks();
   });
 }
 

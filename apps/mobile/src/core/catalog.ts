@@ -1,7 +1,9 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
+import { useStore } from 'zustand';
 
 import {
+  ApiError,
   apiGet,
   queryString,
   type ApiAlbum,
@@ -13,7 +15,7 @@ import {
 } from './api';
 import { fetchLocalAlbumTracks, fetchLocalArtistTracks, searchLocal } from './library';
 import { libKeys } from './query-client';
-import { normalizeServerUrl, useServerBase } from './settings';
+import { normalizeServerUrl, settingsStore, useServerBase } from './settings';
 import {
   albumsFromTracks,
   artistsFromTracks,
@@ -35,32 +37,50 @@ const CATALOG_STALE_MS = 5 * 60_000;
 // ---------------------------------------------------------------------------------------------
 // Server status
 
-export function useServerStatus(): { online: boolean; trackCount: number; isLoading: boolean; serverUrl: string } {
+export function useServerStatus(): {
+  online: boolean;
+  needsToken: boolean;
+  trackCount: number;
+  isLoading: boolean;
+  serverUrl: string;
+} {
   const base = useServerBase();
+  const token = useStore(settingsStore, (s) => s.accessToken);
   const q = useQuery({
-    queryKey: ['health', base],
-    queryFn: ({ signal }) => apiGet<ApiHealth>(base, '/api/health', signal, 5_000),
+    queryKey: ['health', base, token],
+    queryFn: ({ signal }) => apiGet<ApiHealth>(base, '/api/health', signal, 5_000, token),
     enabled: !!base,
     staleTime: 30_000,
     refetchInterval: 60_000,
     retry: 0,
   });
+  // A server that requires a token answers health without the track count until it is given one.
+  const needsToken = !!q.data?.authRequired && !token;
   return {
-    online: !!base && q.status === 'success' && q.data.ok === true,
+    online: !!base && q.status === 'success' && q.data.ok === true && !needsToken,
+    needsToken,
     trackCount: q.data?.trackCount ?? 0,
     isLoading: !!base && q.isLoading,
     serverUrl: base,
   };
 }
 
-export async function testServer(url: string): Promise<{ ok: boolean; trackCount?: number; error?: string }> {
+/** Probes a server address with an optional access token (before it is saved). */
+export async function testServer(
+  url: string,
+  token = '',
+): Promise<{ ok: boolean; trackCount?: number; authRequired?: boolean; error?: string }> {
   const base = normalizeServerUrl(url);
   if (!base) return { ok: false, error: 'Enter a server URL' };
   try {
-    const h = await apiGet<ApiHealth>(base, '/api/health', undefined, 6_000);
+    const h = await apiGet<ApiHealth>(base, '/api/health', undefined, 6_000, token.trim());
     if (!h?.ok || h.name !== 'blednify') return { ok: false, error: 'Not a Blednify server' };
-    return { ok: true, trackCount: h.trackCount };
+    if (h.authRequired && !token.trim()) {
+      return { ok: false, authRequired: true, error: 'This server needs an access token' };
+    }
+    return { ok: true, trackCount: h.trackCount ?? 0, authRequired: h.authRequired };
   } catch (e) {
+    if (e instanceof ApiError && e.status === 401) return { ok: false, error: 'Access token was rejected' };
     return { ok: false, error: errorMessage(e) };
   }
 }

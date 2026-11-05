@@ -9,7 +9,12 @@ export type Config = {
   /** Without an admin token, writes are refused (403) unless this is set (`ALLOW_OPEN_WRITES=1`). */
   allowOpenWrites: boolean;
   maxUploadBytes: number;
-  /** Reserved; currently has no effect (reads are always public). */
+  /**
+   * When set, every read endpoint requires `Authorization: Bearer <listenToken>` (health reports only
+   * `authRequired` without it). Use it whenever the server is reachable from outside your LAN.
+   */
+  listenToken: string | null;
+  /** Reserved; currently has no effect. */
   public: boolean;
   logRequests: boolean;
 };
@@ -27,8 +32,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     musicDir: resolve(env.MUSIC_DIR || "./music"),
     dataDir: resolve(env.DATA_DIR || "./data"),
     adminToken: env.ADMIN_TOKEN?.trim() || null,
+    listenToken: env.LISTEN_TOKEN?.trim() || null,
     allowOpenWrites: /^(1|true|yes)$/i.test(env.ALLOW_OPEN_WRITES ?? ""),
-    maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 200) * 1024 * 1024,
+    maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 95) * 1024 * 1024,
     public: /^(1|true|yes)$/i.test(env.PUBLIC ?? ""),
     logRequests: env.NODE_ENV !== "test" && env.LOG_REQUESTS !== "0",
   };

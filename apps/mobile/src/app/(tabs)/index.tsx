@@ -87,7 +87,13 @@ export default function HomeScreen() {
           <Text variant="display" numberOfLines={1} adjustsFontSizeToFit>
             {greeting()}
           </Text>
-          <ServerPill online={server.online} loading={server.isLoading} hasServer={hasServer} trackCount={server.trackCount} />
+          <ServerPill
+            online={server.online}
+            needsToken={server.needsToken}
+            loading={server.isLoading}
+            hasServer={hasServer}
+            trackCount={server.trackCount}
+          />
         </View>
         <IconButton icon="arrow-down-circle-outline" label="Downloads" onPress={nav.downloads} />
         <IconButton icon="settings-outline" label="Settings" onPress={nav.settings} />
@@ -175,9 +181,21 @@ export default function HomeScreen() {
   );
 }
 
-function ServerPill({ online, loading, hasServer, trackCount }: { online: boolean; loading: boolean; hasServer: boolean; trackCount: number }) {
+function ServerPill({
+  online,
+  needsToken,
+  loading,
+  hasServer,
+  trackCount,
+}: {
+  online: boolean;
+  needsToken: boolean;
+  loading: boolean;
+  hasServer: boolean;
+  trackCount: number;
+}) {
   if (!hasServer) return <Text variant="caption">Local library</Text>;
-  const label = loading ? 'Connecting…' : online ? `Server · ${trackCount.toLocaleString()} tracks` : 'Server offline';
+  const label = loading ? 'Connecting…' : online ? `Server · ${trackCount.toLocaleString()} tracks` : needsToken ? 'Server needs a token' : 'Server offline';
   return (
     <View style={styles.pill}>
       <View style={[styles.pillDot, { backgroundColor: online ? colors.success : loading ? colors.textTertiary : colors.danger }]} />

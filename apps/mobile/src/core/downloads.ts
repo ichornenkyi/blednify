@@ -7,6 +7,7 @@ import { trackArtworkUrl, trackStreamUrl } from './api';
 import { getDb, writeTx } from './db';
 import { libIndex, setDownload } from './lib-index';
 import { DIRS, deleteQuietly, ensureDir, fileAt } from './paths';
+import { authHeadersFor } from './auth';
 import { refreshQueueTracks } from './player/engine';
 import { invalidate, libKeys } from './query-client';
 import { getServerBase, kv, settingsStore } from './settings';
@@ -141,7 +142,9 @@ async function run(key: string): Promise<void> {
   };
 
   try {
-    await File.downloadFileAsync(trackStreamUrl(base, track.id), part, {
+    const streamUrl = trackStreamUrl(base, track.id);
+    await File.downloadFileAsync(streamUrl, part, {
+      headers: authHeadersFor(streamUrl),
       idempotent: true,
       signal: ctrl.signal,
       onProgress: ({ bytesWritten, totalBytes }) => {
@@ -160,7 +163,9 @@ async function run(key: string): Promise<void> {
     let art: string | null = null;
     if (track.artworkUri) {
       try {
-        await File.downloadFileAsync(`${trackArtworkUrl(base, track.id)}?size=512`, fileAt(artRel), {
+        const artUrl = `${trackArtworkUrl(base, track.id)}?size=512`;
+        await File.downloadFileAsync(artUrl, fileAt(artRel), {
+          headers: authHeadersFor(artUrl),
           idempotent: true,
           signal: ctrl.signal,
         });

@@ -1,5 +1,10 @@
-# Example deployment. `docker compose up -d` from apps/server (builds locally),
-# or drop `build:` to pull the CI-published image.
+# Blednify server + Cloudflare Tunnel.
+#
+#   cp .env.example .env      # then fill in LISTEN_TOKEN, ADMIN_TOKEN and CLOUDFLARE_TUNNEL_TOKEN
+#   mkdir -p music && sudo chown 1000:1000 music
+#   docker compose up -d      # builds the server locally; the tunnel starts only when COMPOSE_PROFILES=tunnel
+#
+# Without the tunnel (LAN only), remove COMPOSE_PROFILES from .env and the app talks to http://<LAN-ip>:8787.
 services:
   blednify:
     image: ghcr.io/vetos5/blednify-server:latest
@@ -9,15 +14,32 @@ services:
     ports:
       - "8787:8787"
     environment:
+      # Every library read needs this token (the app sends it as a Bearer header). Set it whenever the
+      # server is reachable beyond your LAN.
+      LISTEN_TOKEN: ${LISTEN_TOKEN:-}
       # Uploads, deletes and rescans need this token. Without it they are refused (403); reads still work.
       # ALLOW_OPEN_WRITES: "1" lifts that on a trusted LAN only.
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
-      MAX_UPLOAD_MB: "200"
+      # Cloudflare's free plan rejects request bodies over 100 MB, so stay under that behind the tunnel.
+      MAX_UPLOAD_MB: "95"
     # The image runs as uid/gid 1000 ("bun") and must be able to write the music folder for uploads/deletes.
     # Create it first so Docker does not create it as root: `mkdir -p music && sudo chown 1000:1000 music`.
     volumes:
       - ./music:/music
       - blednify-data:/data
+
+  # Outbound-only tunnel: no open ports or port forwarding on your router. The public hostname for this
+  # tunnel (set in the Cloudflare dashboard) must point at http://blednify:8787.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: blednify-tunnel
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN in apps/server/.env}
+    depends_on:
+      - blednify
 
 volumes:
   blednify-data:

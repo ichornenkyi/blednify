@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, space } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 import { Text } from './Text';
+import { useImageSource } from '@/core';
 
 export type DetailHeaderProps = {
   /** Rendered artwork (Artwork / PlaylistArtwork) sized by the header. */
@@ -40,6 +41,7 @@ export function DetailHeader({
   children,
 }: DetailHeaderProps) {
   const insets = useSafeAreaInsets();
+  const backdropSource = useImageSource(backdropUri);
   const { width } = useWindowDimensions();
   const art = Math.min(240, Math.round(width * 0.6));
   const disabled = !onPlay;
@@ -48,7 +50,7 @@ export function DetailHeader({
     <View style={[styles.root, { paddingTop: insets.top + space.xxxl }]}>
       <View style={styles.backdrop} pointerEvents="none">
         {backdropUri ? (
-          <Image source={backdropUri} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
+          <Image source={backdropSource} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
         ) : null}
         <LinearGradient
           colors={backdropUri ? ['rgba(10,10,12,0.35)', 'rgba(10,10,12,0.75)', colors.bg] : [colors.accentDeep, 'rgba(10,10,12,0.6)', colors.bg]}

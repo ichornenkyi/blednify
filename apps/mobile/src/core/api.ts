@@ -1,4 +1,6 @@
 /** Server contract types — mirror of docs/API.md (v1). */
+import { settingsStore } from './settings';
+
 export type ApiTrack = {
   id: string;
   title: string;
@@ -35,7 +37,7 @@ export type ApiArtist = {
   artworkTrackId: string | null;
 };
 export type ApiPage<T> = { items: T[]; total: number; limit: number; offset: number };
-export type ApiHealth = { ok: boolean; name: string; version: string; trackCount: number };
+export type ApiHealth = { ok: boolean; name: string; version: string; trackCount?: number; authRequired?: boolean };
 export type ApiSearch = { tracks: ApiTrack[]; albums: ApiAlbum[]; artists: ApiArtist[] };
 
 const DEFAULT_TIMEOUT_MS = 12_000;
@@ -65,6 +67,7 @@ export async function apiGet<T>(
   path: string,
   signal?: AbortSignal,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  token: string = settingsStore.getState().accessToken,
 ): Promise<T> {
   if (!base) throw new ApiError('No server configured');
   const ctrl = new AbortController();
@@ -77,7 +80,9 @@ export async function apiGet<T>(
   if (signal?.aborted) ctrl.abort();
   signal?.addEventListener('abort', onAbort);
   try {
-    const res = await fetch(base + path, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(base + path, { signal: ctrl.signal, headers });
     if (!res.ok) {
       let message = `HTTP ${res.status}`;
       try {

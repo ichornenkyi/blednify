@@ -19,6 +19,7 @@ if (import.meta.main) {
   console.log(
     `blednify-server ${VERSION} on http://${server.hostname}:${server.port}` +
       ` · music ${config.musicDir} · data ${config.dataDir}` +
+      ` · reads ${config.listenToken ? "require LISTEN_TOKEN" : "open (no LISTEN_TOKEN)"}` +
       ` · writes ${config.adminToken ? "require ADMIN_TOKEN" : config.allowOpenWrites ? "OPEN (ALLOW_OPEN_WRITES)" : "disabled (no ADMIN_TOKEN)"}` +
       ` · search ${ctx.db.fts ? "fts5" : "like"}`,
   );

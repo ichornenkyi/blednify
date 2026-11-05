@@ -8,7 +8,7 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { player, usePlayer, type AppTrack, type RepeatMode } from '@/core';
+import { player, usePlayer, type AppTrack, type RepeatMode, useImageSource } from '@/core';
 import { Artwork } from '@/ui/components/Artwork';
 import { DownloadButton } from '@/ui/components/DownloadButton';
 import { EmptyState } from '@/ui/components/EmptyState';
@@ -150,10 +150,11 @@ function NowPlaying({ track }: { track: AppTrack }) {
 }
 
 function Backdrop({ uri }: { uri: string | null }) {
+  const source = useImageSource(uri);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {uri ? (
-        <Image source={uri} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={70} cachePolicy="memory-disk" transition={300} />
+        <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={70} cachePolicy="memory-disk" transition={300} />
       ) : null}
       <LinearGradient
         colors={uri ? ['rgba(10,10,12,0.45)', 'rgba(10,10,12,0.78)', 'rgba(10,10,12,0.96)'] : [colors.accentDeep, '#2A0A0B', colors.bg]}
