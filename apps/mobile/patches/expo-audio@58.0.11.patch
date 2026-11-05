@@ -1,3 +1,45 @@
+diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
+index 6c81fce3dd518d3b82e3280940a001c7be84dd0a..9ad12208debedf31bd8d70feb1a61c41100d7322 100644
+--- a/android/src/main/java/expo/modules/audio/AudioModule.kt
++++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
+@@ -22,6 +22,7 @@ import androidx.media3.common.Player
+ import androidx.media3.common.util.Util
+ import androidx.media3.datasource.DataSource
+ import androidx.media3.datasource.DefaultDataSource
++import androidx.media3.datasource.ResolvingDataSource
+ import androidx.media3.datasource.okhttp.OkHttpDataSource
+ import androidx.media3.exoplayer.dash.DashMediaSource
+ import androidx.media3.exoplayer.hls.HlsMediaSource
+@@ -899,16 +900,28 @@ class AudioModule : Module() {
+     Class(AudioPlaylist::class) {
+       Constructor { sources: List<AudioSource>, updateInterval: Double, loop: LoopMode ->
+         runOnMain {
++          // Blednify patch: the stock playlist ignored AudioSource.headers (e.g. Authorization), so streams from a
++          // server that needs a token failed with 401. Remember each source's headers by URI and add them to every
++          // HTTP request (initial load, Range requests after a seek) through a resolving data source.
++          val sourceHeaders = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
++          val playlistDataSource = ResolvingDataSource.Factory(
++            DefaultDataSource.Factory(context, OkHttpDataSource.Factory(httpClient))
++          ) { dataSpec ->
++            val extra = sourceHeaders[dataSpec.uri.toString()]
++            if (extra.isNullOrEmpty()) dataSpec else dataSpec.withAdditionalHeaders(extra)
++          }
+           val playlist = AudioPlaylist(
+             context,
+             appContext,
+             sources,
+             updateInterval,
+-            DefaultDataSource.Factory(context)
++            playlistDataSource
+           )
+           playlist.loopMode = loop
+           playlist.setMediaItemCreator { source ->
+             source.uri?.let { uriString ->
++              val h = source.headers
++              if (h.isNullOrEmpty()) sourceHeaders.remove(uriString) else sourceHeaders[uriString] = h
+               val uri = uriString.toUri()
+               when {
+                 isRawResource(uri) -> {
 diff --git a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 index 53c36f7e3c0a0bcb8b4de1f5e6d2d3e214d3fbf2..e1e49651a9c4297f1db657eef3668530e15af667 100644
 --- a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
