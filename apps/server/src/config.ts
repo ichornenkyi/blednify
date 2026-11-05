@@ -17,6 +17,20 @@ export type Config = {
   /** Look up missing lyrics on lrclib.net (`LYRICS_ONLINE=0` turns it off). */
   lyricsOnline: boolean;
   lrclibUrl: string;
+  /** Playlist imports (Spotify / SoundCloud / YouTube links) via yt-dlp + ffmpeg. */
+  imports: {
+    enabled: boolean;
+    ytdlp: string;
+    ffmpeg: string;
+    ffprobe: string;
+    /** Tracks downloaded in parallel within one import. */
+    concurrency: number;
+    /** Optional Spotify Web API app credentials: lift the 100-track limit and give album names / covers. */
+    spotifyClientId: string | null;
+    spotifyClientSecret: string | null;
+    /** pip that owns yt-dlp; when set, yt-dlp is upgraded at start and daily (YouTube changes often). */
+    ytdlpPip: string | null;
+  };
   /** Reserved; currently has no effect. */
   public: boolean;
   logRequests: boolean;
@@ -40,6 +54,16 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 95) * 1024 * 1024,
     lyricsOnline: !/^(0|false|no|off)$/i.test(env.LYRICS_ONLINE ?? ""),
     lrclibUrl: (env.LRCLIB_URL || "https://lrclib.net").replace(/\/+$/, ""),
+    imports: {
+      enabled: !/^(0|false|no|off)$/i.test(env.IMPORTS ?? ""),
+      ytdlp: env.YTDLP_PATH || "yt-dlp",
+      ffmpeg: env.FFMPEG_PATH || "ffmpeg",
+      ffprobe: env.FFPROBE_PATH || "ffprobe",
+      concurrency: Math.min(int("IMPORT_CONCURRENCY", env.IMPORT_CONCURRENCY, 2), 6),
+      spotifyClientId: env.SPOTIFY_CLIENT_ID?.trim() || null,
+      spotifyClientSecret: env.SPOTIFY_CLIENT_SECRET?.trim() || null,
+      ytdlpPip: env.YTDLP_PIP?.trim() || null,
+    },
     public: /^(1|true|yes)$/i.test(env.PUBLIC ?? ""),
     logRequests: env.NODE_ENV !== "test" && env.LOG_REQUESTS !== "0",
   };

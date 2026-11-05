@@ -37,9 +37,23 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
 | `MAX_UPLOAD_MB` | `95` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
 | `LYRICS_ONLINE` | `1` | `0` stops looking up missing lyrics on [lrclib.net](https://lrclib.net). Lookups send only artist, title, album and duration, and are cached (hits 180 days, misses 7 days). |
+| `IMPORTS` | `1` | `0` turns playlist imports off. They need `yt-dlp`, `ffmpeg` and `ffprobe` on `PATH` (the Docker image ships them, plus `deno` for YouTube). |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | unset | Optional Spotify developer app (client credentials). Without it, Spotify imports read the public playlist page: at most 100 songs, album names come from YouTube Music. |
+| `IMPORT_CONCURRENCY` | `2` | Songs downloaded in parallel per import (max 6). |
+| `YTDLP_PATH` / `FFMPEG_PATH` / `FFPROBE_PATH` | on `PATH` | Tool locations. |
+| `YTDLP_PIP` | unset (image: `/opt/ytdlp/bin/pip`) | When set, yt-dlp is upgraded at start and daily, since YouTube breaks old releases. |
 | `LRCLIB_URL` | `https://lrclib.net` | Base URL of an LRCLIB-compatible API (for a self-hosted mirror). |
 | `PUBLIC` | unset | Reserved. Has no effect yet. |
 | `LOG_REQUESTS` | `1` | `0` turns off the one-line-per-request log. Successful `/api/health` calls are never logged. |
+
+## Playlist imports
+
+Paste a Spotify, SoundCloud or YouTube playlist link in the app (Library → Import playlist, Admin mode). The server
+resolves the list, downloads each song into `MUSIC_DIR/imports/` with the original's title, artists, album, year,
+track number and cover, and the app builds a playlist with the same name and cover. Spotify has no downloadable
+audio, so each song is matched on YouTube Music by title, artists and duration; a song that cannot be matched is
+listed as failed and can be retried. SoundCloud Go+ songs (30-second previews for everyone else) are matched the same
+way. Imports are for music you are entitled to keep; downloading from these services may break their terms.
 
 ## Behaviour notes
 

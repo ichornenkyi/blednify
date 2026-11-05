@@ -73,6 +73,11 @@ const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX recents_played ON recents(played_at DESC);
   `,
+  // Imported playlists: cover = server path of the original's cover; import_id = server import job it mirrors.
+  `
+  ALTER TABLE playlists ADD COLUMN cover TEXT;
+  ALTER TABLE playlists ADD COLUMN import_id TEXT;
+  `,
 ];
 
 let dbPromise: Promise<SQLiteDatabase> | null = null;

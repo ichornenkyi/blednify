@@ -1,5 +1,4 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
@@ -10,13 +9,17 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import pkg from "../package.json";
 import { ArtworkCache } from "./artwork";
+import { PathClaimer, sanitizeFileName } from "./claim";
 import type { Config } from "./config";
 import { openDb, type Db } from "./db";
-import { audioMime, trackId } from "./ids";
+import { audioMime } from "./ids";
+import { Importer, LinkError } from "./imports/importer";
 import { Library, toTrack } from "./library";
 import { LyricsService } from "./lyrics";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
+
+export { sanitizeFileName } from "./claim";
 
 export const VERSION: string = pkg.version;
 
@@ -27,6 +30,8 @@ export type AppContext = {
   scanner: Scanner;
   art: ArtworkCache;
   lyrics: LyricsService;
+  claims: PathClaimer;
+  importer: Importer;
 };
 
 export function createContext(config: Config): AppContext {
@@ -35,7 +40,9 @@ export function createContext(config: Config): AppContext {
   const art = new ArtworkCache(join(config.dataDir, "art"));
   const scanner = new Scanner(config.musicDir, lib, art);
   const lyrics = new LyricsService(db, { online: config.lyricsOnline, lrclibUrl: config.lrclibUrl });
-  return { config, db, lib, scanner, art, lyrics };
+  const claims = new PathClaimer(config.musicDir, lib);
+  const importer = new Importer({ config, db, lib, scanner, claims });
+  return { config, db, lib, scanner, art, lyrics, claims, importer };
 }
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -112,36 +119,6 @@ function noIdleTimeout(c: Context): void {
   server?.timeout?.(c.req.raw, 0);
 }
 
-/** Max UTF-8 bytes of a sanitized stem: leaves room for ` (999)` + extension under the 255-byte name limit. */
-const MAX_STEM_BYTES = 200;
-
-/** Truncates to at most `max` UTF-8 bytes without splitting a code point. */
-function truncateUtf8(s: string, max: number): string {
-  if (Buffer.byteLength(s) <= max) return s;
-  let out = "";
-  let bytes = 0;
-  for (const ch of s) {
-    bytes += Buffer.byteLength(ch);
-    if (bytes > max) break;
-    out += ch;
-  }
-  return out;
-}
-
-/** Safe single path segment: no separators/control chars, no leading dots, bounded byte length, lowercase ext. */
-export function sanitizeFileName(name: string): string {
-  const base = name.split(/[\\/]/).pop() ?? "";
-  const ext = extname(base).toLowerCase();
-  const cleaned = base
-    .slice(0, base.length - ext.length)
-    .normalize("NFC")
-    .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/^[.\s]+/, "");
-  const stem = truncateUtf8(cleaned, MAX_STEM_BYTES).replace(/[.\s]+$/, "");
-  return `${stem || `upload-${Date.now()}`}${ext}`;
-}
-
 /** Maps filesystem failures during an upload to an honest status (never "bad audio file"). */
 function storageError(err: unknown): { status: 500 | 507; error: string } | null {
   const code = (err as NodeJS.ErrnoException | null)?.code;
@@ -153,29 +130,10 @@ function storageError(err: unknown): { status: 500 | 507; error: string } | null
 }
 
 export function createApp(ctx: AppContext): Hono {
-  const { config, lib, scanner, art, lyrics } = ctx;
+  const { config, lib, scanner, art, lyrics, claims, importer } = ctx;
   const app = new Hono();
   const admin = adminOnly(config.adminToken, config.allowOpenWrites);
   const uploadsDir = join(config.musicDir, "uploads");
-  /** Upload paths chosen by in-flight requests (not yet on disk). */
-  const claimed = new Set<string>();
-
-  /**
-   * Picks `uploads/name`, `uploads/name (1)`, ... that is free on disk, not claimed by a concurrent upload and
-   * whose track id was never used before (ids must never point at different audio).
-   */
-  const claimUploadPath = (name: string): string => {
-    const ext = extname(name);
-    const stem = name.slice(0, name.length - ext.length);
-    for (let i = 0; i <= 999; i++) {
-      const file = i === 0 ? name : `${stem} (${i})${ext}`;
-      const path = join(uploadsDir, file);
-      if (claimed.has(path) || existsSync(path) || lib.isIdTaken(trackId(`uploads/${file}`))) continue;
-      claimed.add(path);
-      return path;
-    }
-    throw new HTTPException(409, { message: `too many files named ${name}` });
-  };
 
   if (config.logRequests) {
     app.use(async (c, next) => {
@@ -282,8 +240,13 @@ export function createApp(ctx: AppContext): Hono {
 
   // Lets the app verify an admin token and learn the upload limit. POST, like every other admin route, so a
   // listen token (which travels in the same Authorization header) is never needed alongside it.
-  app.post("/api/admin/check", admin, (c) =>
-    c.json({ ok: true, maxUploadBytes: config.maxUploadBytes, formats: ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav"] }),
+  app.post("/api/admin/check", admin, async (c) =>
+    c.json({
+      ok: true,
+      maxUploadBytes: config.maxUploadBytes,
+      formats: ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav"],
+      imports: await importer.isAvailable(),
+    }),
   );
 
   app.post(
@@ -309,7 +272,7 @@ export function createApp(ctx: AppContext): Hono {
       try {
         await mkdir(uploadsDir, { recursive: true });
         for (const f of files) {
-          const final = claimUploadPath(sanitizeFileName(f.name));
+          const final = claims.claim("uploads", sanitizeFileName(f.name));
           const tmp = join(uploadsDir, `.upload-${randomUUID()}${extname(final)}`);
           items.push({ tmp, final });
           await Bun.write(tmp, f);
@@ -324,7 +287,7 @@ export function createApp(ctx: AppContext): Hono {
         return c.json({ error: storage.error }, storage.status);
       } finally {
         await Promise.all(items.map(({ tmp }) => rm(tmp, { force: true })));
-        for (const { final } of items) claimed.delete(final);
+        for (const { final } of items) claims.release(final);
       }
     },
   );
@@ -343,6 +306,34 @@ export function createApp(ctx: AppContext): Hono {
     noIdleTimeout(c);
     return c.json(await scanner.scan(true));
   });
+
+  // ---------- playlist imports ----------
+  // Starting/cancelling needs the admin token; reading a job's progress is a normal (listen-token) read, so the
+  // app can poll it and load its cover like any other image.
+
+  const importBody = z.object({ url: z.string().trim().min(1).max(2000) });
+
+  app.post("/api/imports", admin, async (c) => {
+    const body = importBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) fail(400, "expected JSON { url }");
+    if (!(await importer.isAvailable())) fail(422, "imports are unavailable: the server needs yt-dlp and ffmpeg");
+    try {
+      return c.json(await importer.start(body.data!.url), 202);
+    } catch (err) {
+      if (err instanceof LinkError) fail(422, err.message);
+      throw err;
+    }
+  });
+  app.get("/api/imports", (c) => c.json({ items: importer.list() }));
+  app.get("/api/imports/:id", (c) => c.json(importer.get(param(c)) ?? fail(404, "import not found")));
+  app.get("/api/imports/:id/cover", async (c) => {
+    const path = importer.coverPath(param(c)) ?? fail(404, "no cover");
+    const res = await serveFile(c.req.raw, { path, contentType: "image/jpeg", cacheControl: artCache, etagKey: `import-${c.req.param("id")}` });
+    return res ?? fail(404, "no cover");
+  });
+  app.post("/api/imports/:id/cancel", admin, (c) => c.json(importer.cancel(param(c)) ?? fail(404, "import not found")));
+  app.post("/api/imports/:id/retry", admin, (c) => c.json(importer.retry(param(c)) ?? fail(404, "import not found")));
+  app.delete("/api/imports/:id", admin, async (c) => ((await importer.remove(param(c))) ? c.body(null, 204) : fail(404, "import not found")));
 
   // ---------- albums / artists / search ----------
 

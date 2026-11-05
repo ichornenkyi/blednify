@@ -88,8 +88,24 @@ export {
   type UploadStatus,
 } from './admin';
 
+// Playlist imports (Spotify / SoundCloud / YouTube links, downloaded by the server)
+export {
+  cancelImport,
+  dismissImport,
+  isActive as isImportActive,
+  retryImport,
+  startImport,
+  useImport,
+  useImports,
+  type ImportEntry,
+  type ImportItem,
+  type ImportJob,
+  type ImportState,
+} from './imports';
+export { useAdminInfo } from './admin';
+
 // Settings
-export { saveConnection, useSettings } from './settings';
+export { saveConnection, useServerBase, useSettings } from './settings';
 
 // Images (adds the access token for server URLs)
 export { imageSourceFor, useImageSource, type ImageSource } from './auth';

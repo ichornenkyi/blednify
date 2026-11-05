@@ -343,6 +343,13 @@ function AdminSection() {
               onPress={nav.upload}
             />
             <ListRow
+              leading={<RowIcon name="playlist-import" />}
+              title="Import playlist"
+              subtitle="Copy a Spotify, SoundCloud or YouTube playlist to the server"
+              chevron
+              onPress={nav.importPlaylist}
+            />
+            <ListRow
               leading={<RowIcon name="refresh" />}
               title={rescanning ? 'Rescanning…' : 'Rescan server library'}
               subtitle="Pick up files added to the music folder directly"

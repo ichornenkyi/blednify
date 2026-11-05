@@ -49,7 +49,9 @@ export type Playlist = {
   trackCount: number;
   createdAt: string;
   updatedAt: string;
-  artworkUris: string[]; // up to 4 for mosaic
+  artworkUris: string[]; // up to 4 for mosaic; an imported playlist's own cover alone
+  /** Server import job this playlist mirrors (Spotify / SoundCloud / YouTube link), else null. */
+  importId: string | null;
 };
 
 export type RepeatMode = 'off' | 'all' | 'one';

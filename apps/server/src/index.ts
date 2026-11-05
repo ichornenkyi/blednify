@@ -24,6 +24,8 @@ if (import.meta.main) {
       ` · search ${ctx.db.fts ? "fts5" : "like"}`,
   );
 
+  ctx.importer.boot();
+
   // Answer requests immediately; index in the background.
   setTimeout(() => ctx.scanner.scan().catch((err) => console.error("[scan] failed:", err)), 0);
 

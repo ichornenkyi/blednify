@@ -10,6 +10,7 @@ import { invalidate, libKeys } from './query-client';
 import {
   albumsFromTracks,
   compareAlbumOrder,
+  currentCtx,
   EMPTY_TRACKS,
   parseTrack,
   resolveTrack,
@@ -244,10 +245,18 @@ export async function recordRecent(track: AppTrack): Promise<void> {
 // ---------------------------------------------------------------------------------------------
 // Playlists
 
-type PlaylistRow = { id: string; name: string; created_at: string; updated_at: string; track_count: number };
+type PlaylistRow = {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  track_count: number;
+  cover: string | null;
+  import_id: string | null;
+};
 type PlaylistsData = { rows: PlaylistRow[]; art: Map<string, AppTrack[]> };
 
-const PLAYLIST_SELECT = `SELECT p.id, p.name, p.created_at, p.updated_at,
+const PLAYLIST_SELECT = `SELECT p.id, p.name, p.created_at, p.updated_at, p.cover, p.import_id,
   (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id) AS track_count
   FROM playlists p`;
 
@@ -271,9 +280,11 @@ async function fetchPlaylists(): Promise<PlaylistsData> {
   return { rows, art };
 }
 
-function toPlaylist(r: PlaylistRow, tracks: readonly AppTrack[] | undefined, ctx?: ResolveCtx): Playlist {
+function toPlaylist(r: PlaylistRow, tracks: readonly AppTrack[] | undefined, ctx: ResolveCtx = currentCtx()): Playlist {
   const artworkUris: string[] = [];
-  for (const t of tracks ?? []) {
+  // An imported playlist keeps the original's cover (served by the server) instead of a mosaic.
+  if (r.cover && ctx.base) artworkUris.push(`${ctx.base}${r.cover}`);
+  for (const t of artworkUris.length ? [] : (tracks ?? [])) {
     const uri = resolveTrack(t, ctx).artworkUri;
     if (uri && !artworkUris.includes(uri)) artworkUris.push(uri);
     if (artworkUris.length === 4) break;
@@ -285,6 +296,7 @@ function toPlaylist(r: PlaylistRow, tracks: readonly AppTrack[] | undefined, ctx
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     artworkUris,
+    importId: r.import_id,
   };
 }
 
@@ -343,6 +355,56 @@ export async function createPlaylist(name: string): Promise<string> {
   );
   invalidate(libKeys.playlists);
   return id;
+}
+
+/** Creates the local mirror of a server import (same name and cover). */
+export async function createImportedPlaylist(name: string, importId: string, cover: string | null): Promise<string> {
+  const id = randomId();
+  const now = nowIso();
+  await writeTx((db) =>
+    db.runAsync(
+      'INSERT INTO playlists (id, name, created_at, updated_at, cover, import_id) VALUES (?, ?, ?, ?, ?, ?)',
+      id,
+      name.trim() || 'Imported playlist',
+      now,
+      now,
+      cover,
+      importId,
+    ),
+  );
+  invalidate(libKeys.playlists);
+  return id;
+}
+
+/** The local playlist that mirrors an import job, if it still exists. */
+export async function playlistForImport(importId: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ id: string }>('SELECT id FROM playlists WHERE import_id = ?', importId);
+  return row?.id ?? null;
+}
+
+/** Replaces a playlist's tracks (in order) unless they are already exactly these. */
+export async function setPlaylistTracks(id: string, tracks: AppTrack[]): Promise<void> {
+  const changed = await writeTx(async (db) => {
+    const current = await db.getAllAsync<{ key: string }>(
+      'SELECT key FROM playlist_tracks WHERE playlist_id = ? ORDER BY position',
+      id,
+    );
+    if (current.length === tracks.length && current.every((r, i) => r.key === tracks[i]!.key)) return false;
+    await db.runAsync('DELETE FROM playlist_tracks WHERE playlist_id = ?', id);
+    const stmt = await db.prepareAsync(
+      'INSERT INTO playlist_tracks (playlist_id, position, key, track) VALUES (?, ?, ?, ?)',
+    );
+    try {
+      let pos = 0;
+      for (const t of tracks) await stmt.executeAsync(id, pos++, t.key, serializeTrack(t));
+    } finally {
+      await stmt.finalizeAsync();
+    }
+    await touch(db, id);
+    return true;
+  });
+  if (changed) invalidatePlaylist(id);
 }
 
 export async function renamePlaylist(id: string, name: string): Promise<void> {

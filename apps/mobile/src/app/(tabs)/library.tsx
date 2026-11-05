@@ -12,6 +12,7 @@ import {
   usePlaylists,
   useRecentlyPlayed,
   useRemoteAlbums,
+  useSettings,
   type AlbumView,
   type AppTrack,
 } from '@/core';
@@ -77,21 +78,37 @@ export default function LibraryScreen() {
 
 function PlaylistsList() {
   const playlists = usePlaylists();
+  const { adminMode, adminToken } = useSettings();
+  const admin = adminMode && !!adminToken;
   return (
     <FlashList
       data={playlists}
       keyExtractor={(p) => p.id}
       contentContainerStyle={styles.listContent}
       ListHeaderComponent={
-        <ListRow
-          leading={
-            <View style={styles.newTile}>
-              <Icon name="add" size={28} color={colors.accent} />
-            </View>
-          }
-          title="New playlist"
-          onPress={promptNewPlaylist}
-        />
+        <>
+          <ListRow
+            leading={
+              <View style={styles.newTile}>
+                <Icon name="add" size={28} color={colors.accent} />
+              </View>
+            }
+            title="New playlist"
+            onPress={promptNewPlaylist}
+          />
+          {admin ? (
+            <ListRow
+              leading={
+                <View style={styles.newTile}>
+                  <Icon name="playlist-import" size={26} color={colors.accent} />
+                </View>
+              }
+              title="Import playlist"
+              subtitle="From a Spotify, SoundCloud or YouTube link"
+              onPress={nav.importPlaylist}
+            />
+          ) : null}
+        </>
       }
       ListEmptyComponent={<EmptyState icon="list" title="No playlists yet" message="Create one, then long-press any song to add it." />}
       renderItem={({ item }) => (

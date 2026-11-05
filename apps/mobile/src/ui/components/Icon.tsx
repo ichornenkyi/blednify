@@ -28,6 +28,7 @@ import {
   House,
   Info,
   Key,
+  Link,
   Library,
   List,
   ListMusic,
@@ -178,6 +179,8 @@ const ICON_MAP = {
   'reorder-three': { icon: Menu },
   'time-outline': { icon: Clock },
   'share-outline': { icon: Share2 },
+  'link-outline': { icon: Link },
+  'playlist-import': { icon: ListMusic },
   'text-outline': { icon: Type },
   'trending-up': { icon: TrendingUp },
 } as const satisfies Record<string, IconEntry>;

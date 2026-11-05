@@ -9,10 +9,10 @@ import type { AppTrack } from './types';
 import { errorMessage, extForMime, extOf, randomId } from './util';
 
 /** Admin requests carry only the admin token: the server accepts writes without the listen token. */
-async function adminRequest<T>(
+export async function adminRequest<T>(
   method: 'POST' | 'DELETE',
   path: string,
-  opts: { base?: string; token?: string; timeoutMs?: number } = {},
+  opts: { base?: string; token?: string; timeoutMs?: number; body?: unknown } = {},
 ): Promise<T> {
   const base = opts.base ?? getServerBase();
   const token = (opts.token ?? settingsStore.getState().adminToken).trim();
@@ -24,7 +24,12 @@ async function adminRequest<T>(
     const res = await fetch(base + path, {
       method,
       signal: ctrl.signal,
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
     if (!res.ok) throw new ApiError(await errorFrom(res), res.status);
     return (res.status === 204 ? undefined : await res.json()) as T;
@@ -48,21 +53,21 @@ async function errorFrom(res: Response): Promise<string> {
 }
 
 /** Refetch everything that comes from the server after the library changed. */
-function refreshCatalog() {
+export function refreshCatalog() {
   void queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'lib' });
 }
 
 // --- Check / rescan / delete -----------------------------------------------------------------
 
-type AdminInfo = { maxUploadBytes: number };
-const adminInfo = create<{ info: AdminInfo | null }>(() => ({ info: null }));
+type AdminInfo = { maxUploadBytes: number; imports: boolean };
+export const adminInfo = create<{ info: AdminInfo | null }>(() => ({ info: null }));
 
 /** Verifies an admin token against a server (before or after saving it). */
 export async function checkAdmin(url?: string, token?: string): Promise<{ ok: boolean; maxUploadBytes?: number; error?: string }> {
   try {
     const base = url !== undefined ? normalizeServerUrl(url) : undefined;
-    const r = await adminRequest<{ ok: boolean; maxUploadBytes: number }>('POST', '/api/admin/check', { base, token });
-    adminInfo.setState({ info: { maxUploadBytes: r.maxUploadBytes } });
+    const r = await adminRequest<{ ok: boolean; maxUploadBytes: number; imports?: boolean }>('POST', '/api/admin/check', { base, token });
+    adminInfo.setState({ info: { maxUploadBytes: r.maxUploadBytes, imports: !!r.imports } });
     return { ok: true, maxUploadBytes: r.maxUploadBytes };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return { ok: false, error: 'Server is too old for uploads; update it' };
@@ -267,6 +272,11 @@ export function clearUploads() {
     jobs.delete(it.id);
   }
   uploadStore.setState({ items: keep });
+}
+
+/** What the server reported on the last admin check (null until checked). */
+export function useAdminInfo(): AdminInfo | null {
+  return useStore(adminInfo, (s) => s.info);
 }
 
 export function useUploads(): { items: UploadItem[]; active: number; maxUploadBytes: number | null } {

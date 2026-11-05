@@ -59,5 +59,41 @@ type Lyrics = {
 | DELETE | `/api/tracks/:id` | `204` (admin) |
 | POST | `/api/admin/check` | `{ ok: true, maxUploadBytes: number, formats: string[] }` (admin; verifies the token) |
 | POST | `/api/rescan` | `{ added: number; removed: number; total: number }` (admin) |
+| POST | `/api/imports` | JSON `{ url }` (Spotify playlist/album/track, SoundCloud set/track, YouTube playlist/video) → `202 ImportJob` (admin); `422 { error }` for an unsupported link or a server without yt-dlp/ffmpeg |
+| GET | `/api/imports` | `{ items: Omit<ImportJob, "items">[] }` newest first (50) |
+| GET | `/api/imports/:id` | `ImportJob` |
+| GET | `/api/imports/:id/cover` | `image/jpeg` square cover of the original playlist (404 when `hasCover` is false) |
+| POST | `/api/imports/:id/cancel` | `ImportJob` (admin) |
+| POST | `/api/imports/:id/retry` | `ImportJob` (admin): re-runs failed songs |
+| DELETE | `/api/imports/:id` | `204` (admin): forgets the job; imported songs stay |
+
+`/api/admin/check` also returns `imports: boolean` (yt-dlp + ffmpeg found).
+
+### Playlist imports
+
+```ts
+type ImportJob = {
+  id: string;                      // 16 hex
+  url: string;
+  source: "spotify" | "soundcloud" | "youtube" | null;   // null until resolved
+  state: "queued" | "resolving" | "running" | "done" | "failed" | "cancelled";
+  name: string | null;             // the original playlist's name
+  description: string | null;
+  owner: string | null;
+  hasCover: boolean;
+  warning: string | null;          // e.g. Spotify's 100-song limit without API credentials
+  error: string | null;
+  total: number; done: number; failed: number;
+  createdAt: string; updatedAt: string;
+  items: { title: string; artist: string; state: "pending" | "downloading" | "done" | "failed";
+           track: Track | null; reused: boolean; error: string | null }[];   // original order
+};
+```
+
+Jobs run one at a time on the server and survive restarts. Songs land in `MUSIC_DIR/imports/` tagged with the
+original's title, artists, album, year, track number and cover. Spotify songs are matched on YouTube Music (title,
+artists, duration); SoundCloud/YouTube audio is downloaded directly, except SoundCloud Go+ previews, which are matched
+on YouTube Music too. A song imported before (same original) is reused, not downloaded again. Playlists stay on the
+phone: the app mirrors a job as a local playlist with the same name, cover and order.
 
 Errors: `{ error }` with 4xx/5xx. CORS enabled for all origins (GET).

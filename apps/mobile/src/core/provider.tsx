@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, type ReactNode } from 'react';
 
 import { resumeDownloads } from './downloads';
+import { resumeImports } from './imports';
 import { loadLibIndex } from './lib-index';
 import { configureAudio, refreshQueueTracks } from './player/engine';
 import { queryClient } from './query-client';
@@ -17,6 +18,7 @@ function startCore() {
   loadLibIndex()
     .then(() => {
       refreshQueueTracks();
+      void resumeImports().catch((e) => console.warn('[core] imports resume failed', e));
       return resumeDownloads();
     })
     .catch((e) => console.warn('[core] library init failed', e));

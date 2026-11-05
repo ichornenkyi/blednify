@@ -5,8 +5,16 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 FROM oven/bun:1-alpine
+# Playlist imports: yt-dlp (with curl_cffi for SoundCloud/YouTube impersonation), ffmpeg for tagging, deno as
+# yt-dlp's JavaScript runtime for YouTube. The venv belongs to the app user so it can upgrade yt-dlp itself.
+RUN apk add --no-cache python3 ffmpeg deno ca-certificates \
+ && python3 -m venv /opt/ytdlp \
+ && /opt/ytdlp/bin/pip install --no-cache-dir "yt-dlp[default,curl-cffi]" \
+ && ln -s /opt/ytdlp/bin/yt-dlp /usr/local/bin/yt-dlp \
+ && chown -R bun:bun /opt/ytdlp
 WORKDIR /app
 ENV NODE_ENV=production \
+    YTDLP_PIP=/opt/ytdlp/bin/pip \
     PORT=8787 \
     MUSIC_DIR=/music \
     DATA_DIR=/data

@@ -10,6 +10,7 @@ export const nav = {
   queue: () => router.push('/queue'),
   lyrics: () => router.push('/lyrics'),
   upload: () => router.push('/upload'),
+  importPlaylist: () => router.push('/import'),
   settings: () => router.push('/settings'),
   downloads: () => router.push('/downloads'),
   /** From a root-stack screen, pop back to the existing tabs instead of stacking a second tab navigator. */

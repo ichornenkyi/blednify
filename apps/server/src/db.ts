@@ -62,6 +62,19 @@ CREATE INDEX IF NOT EXISTS artists_name ON artists(name COLLATE NOCASE, id);
 -- downloads by id, so an id must never point at different audio.
 CREATE TABLE IF NOT EXISTS retired_ids (id TEXT PRIMARY KEY) WITHOUT ROWID;
 
+-- playlist imports: the job document is JSON (items included), so the shape can grow without migrations
+CREATE TABLE IF NOT EXISTS imports (
+  id         TEXT PRIMARY KEY,
+  doc        TEXT NOT NULL,
+  created_at TEXT NOT NULL
+) WITHOUT ROWID;
+
+-- where imported audio came from (spotify:track:…, youtube:…, soundcloud:…), so re-imports reuse the file
+CREATE TABLE IF NOT EXISTS import_sources (
+  source   TEXT PRIMARY KEY,
+  track_id TEXT NOT NULL
+) WITHOUT ROWID;
+
 -- every album an artist appears on, as track artist or album artist
 CREATE TABLE IF NOT EXISTS artist_albums (
   artist_id TEXT NOT NULL,
