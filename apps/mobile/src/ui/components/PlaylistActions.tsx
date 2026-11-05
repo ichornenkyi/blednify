@@ -1,10 +1,11 @@
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 
 import { createPlaylist, deletePlaylist, renamePlaylist, type Playlist } from '@/core';
 
 import { attempt } from '../actions';
 import { nav } from '../nav';
 import { showSheet } from '../overlay';
+import { confirm } from './ConfirmSheet';
 import { SheetAction, SheetHeader } from './ActionSheet';
 import { PromptSheet } from './PromptSheet';
 
@@ -46,20 +47,19 @@ export function openPlaylistActions(p: Playlist, opts: { onDeleted?: () => void 
         label="Delete playlist"
         destructive
         onPress={() =>
-          Alert.alert('Delete playlist?', `“${p.name}” will be deleted. Tracks stay in your library.`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: async () => {
-                const ok = await attempt(
-                  deletePlaylist(p.id).then(() => true),
-                  'Playlist deleted',
-                );
-                if (ok) opts.onDeleted?.();
-              },
+          confirm({
+            title: 'Delete playlist?',
+            message: `“${p.name}” will be deleted. Tracks stay in your library.`,
+            confirmLabel: 'Delete',
+            destructive: true,
+            onConfirm: async () => {
+              const ok = await attempt(
+                deletePlaylist(p.id).then(() => true),
+                'Playlist deleted',
+              );
+              if (ok) opts.onDeleted?.();
             },
-          ])
+          })
         }
       />
     </View>,

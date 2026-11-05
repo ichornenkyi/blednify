@@ -1,4 +1,4 @@
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 
 import {
   cancelDownload,
@@ -19,6 +19,7 @@ import {
 import { attempt, confirmDeleteLocal } from '../actions';
 import { nav } from '../nav';
 import { showSheet, showToast } from '../overlay';
+import { confirm } from './ConfirmSheet';
 import { colors } from '../theme';
 import { SheetAction, SheetHeader } from './ActionSheet';
 import { PlaylistPicker } from './PlaylistPicker';
@@ -121,10 +122,13 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
 }
 
 function confirmDeleteFromServer(track: AppTrack) {
-  Alert.alert('Delete from server?', `“${track.title}” will be deleted from the server’s music folder for everyone.`, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => void attempt(deleteFromServer(track), 'Deleted from server') },
-  ]);
+  confirm({
+    title: 'Delete from server?',
+    message: `“${track.title}” will be deleted from the server’s music folder for everyone.`,
+    confirmLabel: 'Delete',
+    destructive: true,
+    onConfirm: () => void attempt(deleteFromServer(track), 'Deleted from server'),
+  });
 }
 
 function DownloadAction({ track, status, progress }: { track: AppTrack; status: DownloadStatus; progress: number }) {

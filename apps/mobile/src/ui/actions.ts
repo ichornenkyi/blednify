@@ -1,8 +1,8 @@
-import { Alert } from 'react-native';
 
 import { deleteLocalTrack, importFromDevice, type AppTrack } from '@/core';
 
 import { haptics } from './haptics';
+import { confirm } from './components/ConfirmSheet';
 import { dismissToast, showToast } from './overlay';
 
 export function errorMessage(e: unknown): string {
@@ -48,8 +48,11 @@ export async function importMusic() {
 }
 
 export function confirmDeleteLocal(track: AppTrack) {
-  Alert.alert('Delete from device?', `“${track.title}” will be removed from this phone.`, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: () => void attempt(deleteLocalTrack(track.key), 'Deleted from device') },
-  ]);
+  confirm({
+    title: 'Delete from device?',
+    message: `“${track.title}” will be removed from this phone.`,
+    confirmLabel: 'Delete',
+    destructive: true,
+    onConfirm: () => void attempt(deleteLocalTrack(track.key), 'Deleted from device'),
+  });
 }

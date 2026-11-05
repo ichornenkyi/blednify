@@ -6,7 +6,7 @@ import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 import { Text } from './Text';
 
-type Variant = 'accent' | 'surface' | 'outline';
+type Variant = 'accent' | 'danger' | 'surface' | 'outline';
 
 export type PrimaryButtonProps = {
   label: string;
@@ -20,7 +20,7 @@ export type PrimaryButtonProps = {
 };
 
 export function PrimaryButton({ label, onPress, icon, variant = 'accent', size = 'md', loading, disabled, style }: PrimaryButtonProps) {
-  const fg = variant === 'accent' ? colors.white : colors.text;
+  const fg = variant === 'accent' || variant === 'danger' ? colors.white : colors.text;
   const inactive = disabled || loading;
   return (
     <PressableScale
@@ -46,6 +46,7 @@ const styles = StyleSheet.create({
   md: { height: 44, paddingHorizontal: space.lg + 4 },
   lg: { height: 52, paddingHorizontal: space.xl },
   accent: { backgroundColor: colors.accent },
+  danger: { backgroundColor: colors.danger },
   surface: { backgroundColor: colors.surface2 },
   outline: { borderWidth: 1, borderColor: colors.borderStrong },
   disabled: { opacity: 0.4 },

@@ -1,4 +1,4 @@
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { cancelDownload, downloadTracks, removeDownload, useDownloadState, type AppTrack } from '@/core';
 
@@ -6,6 +6,7 @@ import { attempt } from '../actions';
 import { haptics } from '../haptics';
 import { colors } from '../theme';
 import { Icon } from './Icon';
+import { confirm } from './ConfirmSheet';
 import { IconButton } from './IconButton';
 import { ProgressRing } from './ProgressRing';
 
@@ -41,10 +42,13 @@ export function DownloadButton({ track, size = 24 }: { track: AppTrack; size?: n
         size={size}
         color={colors.accent}
         onPress={() =>
-          Alert.alert('Remove download?', `“${track.title}” will still be available to stream.`, [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: () => void attempt(removeDownload(track.key), 'Download removed') },
-          ])
+          confirm({
+            title: 'Remove download?',
+            message: `“${track.title}” will still be available to stream.`,
+            confirmLabel: 'Remove',
+            destructive: true,
+            onConfirm: () => void attempt(removeDownload(track.key), 'Download removed'),
+          })
         }
       />
     );
