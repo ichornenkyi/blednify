@@ -9,17 +9,23 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Blednify" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Opaque bar: iOS lays the app out below it. "black-translucent" would draw the app underneath. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="theme-color" content="#0A0A0C" />
     <style id="expo-reset">
-      html,
-      body {
+      html {
         height: 100%;
         background-color: #0a0a0c;
+        -webkit-text-size-adjust: 100%;
       }
+      /* Pinned to the visible screen: iOS can't scroll or push the page, e.g. when the keyboard opens. */
       body {
+        position: fixed;
+        inset: 0;
+        margin: 0;
         overflow: hidden;
         overscroll-behavior: none;
+        background-color: #0a0a0c;
         -webkit-tap-highlight-color: transparent;
       }
       #root {
