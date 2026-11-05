@@ -59,6 +59,17 @@ export function queryString(params: Record<string, string | number | undefined>)
   return parts.length ? `?${parts.join('&')}` : '';
 }
 
+async function errorFrom(res: Response): Promise<ApiError> {
+  let message = `HTTP ${res.status}`;
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    if (typeof body?.error === 'string') message = body.error;
+  } catch {
+    // Non-JSON error body; keep the status text.
+  }
+  return new ApiError(message, res.status);
+}
+
 /** GET JSON from `${base}${path}` with a hard timeout; honours an outer AbortSignal (react-query). */
 export async function apiGet<T>(
   base: string,
@@ -78,16 +89,7 @@ export async function apiGet<T>(
   signal?.addEventListener('abort', onAbort);
   try {
     const res = await fetch(base + path, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
-    if (!res.ok) {
-      let message = `HTTP ${res.status}`;
-      try {
-        const body = (await res.json()) as { error?: unknown };
-        if (typeof body?.error === 'string') message = body.error;
-      } catch {
-        // Non-JSON error body; keep the status text.
-      }
-      throw new ApiError(message, res.status);
-    }
+    if (!res.ok) throw await errorFrom(res);
     return (await res.json()) as T;
   } catch (e) {
     if (timedOut) throw new ApiError('Server did not respond in time');
@@ -95,6 +97,36 @@ export async function apiGet<T>(
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+/** Admin request (`POST`/`DELETE`). Resolves with the parsed JSON body, or null when the response has none. */
+export async function apiWrite<T>(
+  base: string,
+  method: 'POST' | 'DELETE',
+  path: string,
+  options: { token: string; body?: unknown; timeoutMs: number },
+): Promise<T | null> {
+  if (!base) throw new ApiError('No server configured');
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), options.timeoutMs);
+  try {
+    const res = await fetch(base + path, {
+      method,
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw await errorFrom(res);
+    return res.status === 204 ? null : ((await res.json()) as T);
+  } catch (e) {
+    if (ctrl.signal.aborted) throw new ApiError('Server did not respond in time');
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

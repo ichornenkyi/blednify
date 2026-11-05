@@ -25,6 +25,10 @@ export {
   useServerStatus,
 } from './catalog';
 
+// Playlist import
+export { discardImport, startImport, useImports } from './imports';
+export type { ImportJob, ImportTrack } from './imports';
+
 // Local library
 export {
   addToPlaylist,

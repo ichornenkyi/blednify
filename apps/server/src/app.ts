@@ -13,10 +13,14 @@ import { ArtworkCache } from "./artwork";
 import type { Config } from "./config";
 import { openDb, type Db } from "./db";
 import { audioMime, trackId } from "./ids";
+import { Importer, NothingFoundError } from "./importer";
+import { Jackett } from "./jackett";
 import { Library, toTrack } from "./library";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
+import { TorrServer } from "./torrserver";
 import { mountWebApp } from "./web";
+import { fetchPlaylist, looksLikeLink, parsePlaylistId, searchSong, type Playlist, type PlaylistTrack } from "./ytmusic";
 
 export const VERSION: string = pkg.version;
 
@@ -34,7 +38,7 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 const ART_CACHE = "public, max-age=2592000";
 const ID_RE = /^[0-9a-f]{16}$/;
 
-const fail = (status: 400 | 401 | 403 | 404 | 413 | 415 | 422, error: string): never => {
+const fail = (status: 400 | 401 | 403 | 404 | 413 | 415 | 422 | 502 | 503, error: string): never => {
   throw new HTTPException(status, { message: error });
 };
 
@@ -52,6 +56,7 @@ const tracksQuery = z.object({
 const pageQuery = z.object({ q: qString, limit: limitParam(50, 500), offset: offsetParam });
 const searchQuery = z.object({ q: z.string().max(200).default(""), limit: limitParam(20, 100) });
 const artQuery = z.object({ size: z.coerce.number().int().min(16).max(4096).optional() });
+const importBody = z.object({ input: z.string().trim().min(1).max(2000) });
 
 /** Validates query params (empty values count as absent); 400 with the first issue on failure. */
 function query<S extends z.ZodType>(c: Context, schema: S): z.output<S> {
@@ -135,7 +140,11 @@ function storageError(err: unknown): { status: 500 | 507; error: string } | null
   return { status: 500, error: `server could not store the upload (${code})` };
 }
 
-export function createApp(ctx: AppContext): Hono {
+export function createApp(
+  ctx: AppContext,
+  playlists: (id: string) => Promise<Playlist> = fetchPlaylist,
+  songs: (query: string) => Promise<PlaylistTrack | null> = searchSong,
+): Hono {
   const { config, lib, scanner, art } = ctx;
   const app = new Hono();
   const admin = adminOnly(config.adminToken, config.allowOpenWrites);
@@ -159,6 +168,23 @@ export function createApp(ctx: AppContext): Hono {
     }
     throw new HTTPException(409, { message: `too many files named ${name}` });
   };
+
+  const importer =
+    config.jackettUrl && config.jackettApiKey && config.torrServerUrl
+      ? new Importer({
+          lib,
+          scanner,
+          jackett: new Jackett(config.jackettUrl, config.jackettApiKey),
+          torrServer: new TorrServer(config.torrServerUrl),
+          fetchPlaylist: playlists,
+          searchSong: songs,
+          uploadsDir,
+          maxFileBytes: config.maxUploadBytes,
+          claim: claimUploadPath,
+          release: (path) => claimed.delete(path),
+          sanitize: sanitizeFileName,
+        })
+      : null;
 
   if (config.logRequests) {
     app.use(async (c, next) => {
@@ -295,6 +321,32 @@ export function createApp(ctx: AppContext): Hono {
   app.get("/api/search", (c) => {
     const { q, limit } = query(c, searchQuery);
     return c.json(lib.search(q, limit));
+  });
+
+  // ---------- music import ----------
+
+  app.get("/api/imports", (c) => c.json({ enabled: importer !== null, items: importer?.list() ?? [] }));
+
+  app.post("/api/imports", admin, async (c) => {
+    noIdleTimeout(c);
+    if (!importer) return fail(503, "music import is off: set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
+    const body = importBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return fail(400, "enter a song name or a YouTube Music playlist link");
+    const { input } = body.data;
+    const id = parsePlaylistId(input);
+    if (!id && looksLikeLink(input)) return fail(400, "not a YouTube Music playlist link");
+    try {
+      return c.json(await (id ? importer.startPlaylist(id) : importer.startSong(input)), 202);
+    } catch (err) {
+      if (err instanceof NothingFoundError) return fail(422, err.message);
+      console.error(`[import] YouTube Music request failed: ${(err as Error).message}`);
+      return fail(502, "could not reach YouTube Music");
+    }
+  });
+
+  app.delete("/api/imports/:id", admin, (c) => {
+    if (!importer?.discard(param(c))) return fail(404, "import not found");
+    return c.body(null, 204);
   });
 
   if (config.webDir) mountWebApp(app, config.webDir);
