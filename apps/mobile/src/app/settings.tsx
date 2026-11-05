@@ -3,8 +3,19 @@ import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatBytes, supportsOffline, testServer, useDownloads, useServerStatus, useSettings } from '@/core';
-import { errorMessage, importMusic } from '@/ui/actions';
+import {
+  discardImport,
+  formatBytes,
+  startImport,
+  supportsOffline,
+  testServer,
+  useDownloads,
+  useImports,
+  useServerStatus,
+  useSettings,
+  type ImportJob,
+} from '@/core';
+import { attempt, errorMessage, importMusic } from '@/ui/actions';
 import { BrandMark } from '@/ui/components/BrandMark';
 import { Icon, type IconName } from '@/ui/components/Icon';
 import { ListRow } from '@/ui/components/ListRow';
@@ -125,6 +136,8 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
+        <AddMusicSection />
+
         {supportsOffline ? (
           <>
             <Section title="Downloads" icon="arrow-down-circle-outline">
@@ -178,6 +191,103 @@ export default function SettingsScreen() {
   );
 }
 
+function AddMusicSection() {
+  const { enabled, jobs } = useImports();
+  const { adminToken, setAdminToken } = useSettings();
+  const [input, setInput] = useState('');
+  const [starting, setStarting] = useState(false);
+
+  if (!enabled) return null;
+
+  const start = async () => {
+    setStarting(true);
+    const job = await attempt(startImport(input.trim()));
+    setStarting(false);
+    if (job) setInput('');
+  };
+
+  return (
+    <Section title="Add music" icon="cloud-download-outline">
+      <Text variant="caption">
+        Type a song name, ideally with the artist, or paste a public or unlisted YouTube Music playlist link. The server finds each song through
+        Jackett, downloads it with TorrServer and adds it to your library. Songs without a good match are listed as failed.
+      </Text>
+      <TextInput
+        value={input}
+        onChangeText={setInput}
+        placeholder="Song name or playlist link"
+        placeholderTextColor={colors.textTertiary}
+        autoCapitalize="none"
+        autoCorrect={false}
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
+        style={styles.input}
+      />
+      <TextInput
+        value={adminToken}
+        onChangeText={setAdminToken}
+        placeholder="Server admin token"
+        placeholderTextColor={colors.textTertiary}
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
+        style={styles.input}
+      />
+      <PrimaryButton label="Add" icon="arrow-down" onPress={start} loading={starting} disabled={!input.trim()} />
+      {jobs.map((job) => (
+        <ImportJobRow key={job.id} job={job} />
+      ))}
+    </Section>
+  );
+}
+
+const MAX_FAILURES_SHOWN = 5;
+
+function ImportJobRow({ job }: { job: ImportJob }) {
+  const added = job.tracks.filter((t) => t.status === 'done').length;
+  const existing = job.tracks.filter((t) => t.status === 'exists').length;
+  const failed = job.tracks.filter((t) => t.status === 'failed');
+  const current = job.tracks.find((t) => t.status === 'searching' || t.status === 'downloading');
+  const active = job.status === 'queued' || job.status === 'running';
+  const songResult = added ? 'Added' : existing ? 'Already in library' : failed.length ? 'Failed' : 'Cancelled';
+  const playlistSummary = [
+    active ? `${added + existing + failed.length} of ${job.tracks.length}` : `${job.tracks.length} in playlist`,
+    `${added} added`,
+    existing ? `${existing} already in library` : null,
+    failed.length ? `${failed.length} failed` : null,
+    job.status === 'cancelled' ? 'cancelled' : null,
+  ].filter(Boolean);
+  const summary = job.kind === 'song' ? (active ? 'In progress' : songResult) : playlistSummary.join(' · ');
+
+  return (
+    <View style={styles.job}>
+      <Text variant="bodyStrong" numberOfLines={1}>
+        {job.title}
+      </Text>
+      <Text variant="caption">{summary}</Text>
+      {current ? (
+        <Text variant="caption" numberOfLines={1}>
+          {current.status === 'downloading' ? 'Downloading' : 'Searching for'} {current.title}
+        </Text>
+      ) : null}
+      {failed.slice(0, MAX_FAILURES_SHOWN).map((t) => (
+        <Text key={t.videoId} variant="caption" color={colors.danger} numberOfLines={2}>
+          {t.artists.join(', ')} – {t.title}: {t.error}
+        </Text>
+      ))}
+      {failed.length > MAX_FAILURES_SHOWN ? <Text variant="caption">and {failed.length - MAX_FAILURES_SHOWN} more failed</Text> : null}
+      <PrimaryButton
+        label={active ? 'Cancel' : 'Dismiss'}
+        icon="close"
+        variant="surface"
+        onPress={() => void attempt(discardImport(job.id))}
+      />
+    </View>
+  );
+}
+
 function Section({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
   return (
     <View style={styles.card}>
@@ -223,6 +333,7 @@ const styles = StyleSheet.create({
   result: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dot: { width: 8, height: 8, borderRadius: 4 },
   buttons: { flexDirection: 'row', gap: space.md },
+  job: { gap: space.xs, paddingTop: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowIcon: { width: 40, height: 40, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },
   about: { alignItems: 'center', gap: space.xs, paddingVertical: space.xl },

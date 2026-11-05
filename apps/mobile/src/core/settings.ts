@@ -8,8 +8,9 @@ export const kv = createMMKV({ id: 'blednify' });
 
 const K_SERVER = 'settings.serverUrl';
 const K_WIFI = 'settings.downloadOnWifiOnly';
+const K_ADMIN_TOKEN = 'settings.adminToken';
 
-type SettingsValues = { serverUrl: string; downloadOnWifiOnly: boolean };
+type SettingsValues = { serverUrl: string; downloadOnWifiOnly: boolean; adminToken: string };
 
 /** The web app is normally served by the music server itself, so its own origin is the default. */
 const defaultServerUrl = (): string =>
@@ -18,6 +19,7 @@ const defaultServerUrl = (): string =>
 export const settingsStore = create<SettingsValues>(() => ({
   serverUrl: kv.getString(K_SERVER) ?? defaultServerUrl(),
   downloadOnWifiOnly: kv.getBoolean(K_WIFI) ?? true,
+  adminToken: kv.getString(K_ADMIN_TOKEN) ?? '',
 }));
 
 /** Canonical base URL: trimmed, scheme added if missing, no trailing slash. Empty ⇒ offline mode. */
@@ -44,12 +46,20 @@ function setDownloadOnWifiOnly(v: boolean) {
   settingsStore.setState({ downloadOnWifiOnly: v });
 }
 
+function setAdminToken(token: string) {
+  const v = token.trim();
+  kv.set(K_ADMIN_TOKEN, v);
+  settingsStore.setState({ adminToken: v });
+}
+
 export function useSettings(): {
   serverUrl: string;
   setServerUrl(url: string): void;
   downloadOnWifiOnly: boolean;
   setDownloadOnWifiOnly(v: boolean): void;
+  adminToken: string;
+  setAdminToken(token: string): void;
 } {
-  const { serverUrl, downloadOnWifiOnly } = useStore(settingsStore, useShallow((s) => s));
-  return { serverUrl, setServerUrl, downloadOnWifiOnly, setDownloadOnWifiOnly };
+  const { serverUrl, downloadOnWifiOnly, adminToken } = useStore(settingsStore, useShallow((s) => s));
+  return { serverUrl, setServerUrl, downloadOnWifiOnly, setDownloadOnWifiOnly, adminToken, setAdminToken };
 }

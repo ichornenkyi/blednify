@@ -11,6 +11,10 @@ export type Config = {
   maxUploadBytes: number;
   /** Folder with the exported web app, served at `/` next to the API. Null: API only. */
   webDir: string | null;
+  /** Playlist import needs all three; without them it is off. */
+  jackettUrl: string | null;
+  jackettApiKey: string | null;
+  torrServerUrl: string | null;
   /** Reserved; currently has no effect (reads are always public). */
   public: boolean;
   logRequests: boolean;
@@ -32,6 +36,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     allowOpenWrites: /^(1|true|yes)$/i.test(env.ALLOW_OPEN_WRITES ?? ""),
     maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 200) * 1024 * 1024,
     webDir: env.WEB_DIR?.trim() ? resolve(env.WEB_DIR.trim()) : null,
+    jackettUrl: env.JACKETT_URL?.trim().replace(/\/+$/, "") || null,
+    jackettApiKey: env.JACKETT_API_KEY?.trim() || null,
+    torrServerUrl: env.TORRSERVER_URL?.trim().replace(/\/+$/, "") || null,
     public: /^(1|true|yes)$/i.test(env.PUBLIC ?? ""),
     logRequests: env.NODE_ENV !== "test" && env.LOG_REQUESTS !== "0",
   };

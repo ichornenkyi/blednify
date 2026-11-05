@@ -36,6 +36,9 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
 | `MAX_UPLOAD_MB` | `200` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
 | `WEB_DIR` | unset (`/app/web` in Docker) | Folder with the exported web app, served at `/` next to the API. Unset: API only. |
+| `JACKETT_URL` | unset | Jackett address, for music import. |
+| `JACKETT_API_KEY` | unset | Jackett API key (top right of its dashboard). |
+| `TORRSERVER_URL` | unset | TorrServer address, for music import. Import is off until all three are set. |
 | `PUBLIC` | unset | Reserved. Has no effect yet. |
 | `LOG_REQUESTS` | `1` | `0` turns off the one-line-per-request log. Successful `/api/health` calls are never logged. |
 
@@ -69,6 +72,16 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
   corrupt file returns `422`, and nothing from that request is kept. Unsupported extensions return `415`.
   Storage failures return `507` (disk full) or `500` with the errno (for example a read-only or wrongly owned
   `MUSIC_DIR`). Success returns `201 {"items": Track[]}`, already indexed.
+- **Music import** (`POST /api/imports`): takes a public or unlisted YouTube Music playlist link, or a song name,
+  which uses YouTube Music's top song result so the search has an exact title and artist. Tracks are handled one at a
+  time. A song already in the library is skipped. Otherwise Jackett is searched for the song, then
+  its album, then the artist, in the audio category. Releases must be seeded and name the artist. Up to 5 are opened
+  in TorrServer until one has an audio file named after the song, and only that file's pieces are fetched. TorrServer
+  only streams and caches, so Blednify saves the stream to `MUSIC_DIR/uploads/`, where it is validated like an upload.
+  A file more than 15 seconds off the playlist's length, or larger than `MAX_UPLOAD_MB`, is rejected. Torrents the
+  import added are removed from TorrServer afterwards; ones already there are left alone. Songs with no match are
+  reported as failed, with the reason. Jobs are held in memory, so a restart forgets them; run the playlist again
+  and finished songs are skipped. Private playlists and auto-generated mixes cannot be read.
 - **Errors** are always JSON: `{ "error": "..." }`. JSON responses are gzip/deflate-compressed when the client
   accepts it. CORS allows all origins.
 

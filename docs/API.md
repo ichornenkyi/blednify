@@ -3,7 +3,7 @@
 Single source of truth between `apps/server` and `apps/mobile`. Change both sides together.
 
 Base URL: configurable in the app (Settings → Server). Default from `EXPO_PUBLIC_API_URL`.
-All JSON. No auth for reads. Writes (upload/delete/rescan) require `Authorization: Bearer <ADMIN_TOKEN>`; a server without `ADMIN_TOKEN` refuses them with `403` unless it runs with `ALLOW_OPEN_WRITES=1`.
+All JSON. No auth for reads. Writes (upload/delete/rescan/import) require `Authorization: Bearer <ADMIN_TOKEN>`; a server without `ADMIN_TOKEN` refuses them with `403` unless it runs with `ALLOW_OPEN_WRITES=1`.
 
 ## Types
 
@@ -33,6 +33,27 @@ type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 type ApiError = { error: string };
 ```
 
+```ts
+type ImportJob = {
+  id: string;
+  kind: "playlist" | "song";
+  source: string;        // the playlist id, or the song name as searched
+  title: string;
+  status: "queued" | "running" | "done" | "cancelled";
+  createdAt: string; // ISO 8601
+  tracks: {
+    videoId: string;
+    title: string;
+    artists: string[];
+    album: string | null;
+    durationMs: number | null;
+    status: "pending" | "searching" | "downloading" | "done" | "exists" | "failed";
+    error: string | null;
+    trackId: string | null; // set for "done" and "exists"
+  }[];
+};
+```
+
 ## Endpoints
 
 | Method | Path | Result |
@@ -50,5 +71,8 @@ type ApiError = { error: string };
 | POST | `/api/tracks` | multipart `file` (one or more) → `{ items: Track[] }` (admin) |
 | DELETE | `/api/tracks/:id` | `204` (admin) |
 | POST | `/api/rescan` | `{ added: number; removed: number; total: number }` (admin) |
+| GET | `/api/imports` | `{ enabled: boolean; items: ImportJob[] }`, newest first |
+| POST | `/api/imports` | JSON `{ input: string }`, a YouTube Music playlist link or a song name → `202 ImportJob`; the running job if the same request is already importing. `400` blank input or a link that is not a playlist, `422` empty or private playlist, or no song with that name, `502` YouTube Music failed, `503` import not configured (admin) |
+| DELETE | `/api/imports/:id` | Cancels a queued or running job, or forgets a finished one → `204` (admin) |
 
 Errors: `{ error }` with 4xx/5xx. CORS enabled for all origins (GET).
