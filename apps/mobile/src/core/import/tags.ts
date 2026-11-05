@@ -17,6 +17,8 @@ export type Tags = {
   genre?: string;
   durationMs?: number;
   picture?: Picture;
+  /** Unsynchronised lyrics (may itself be LRC text). */
+  lyrics?: string;
 };
 
 /** Random-access byte source. Reads past EOF are truncated. */
@@ -193,6 +195,21 @@ function id3Text(enc: number, b: Uint8Array, s: number, e: number): string | und
   return clean(text.split('\0')[0]);
 }
 
+/** Whole UTF-16 text with BOM handling (lyrics keep embedded newlines; only trailing nulls are dropped). */
+function id3Full(enc: number, b: Uint8Array, s: number): string {
+  let le = enc === 1;
+  if (enc === 1 && b[s] === 0xfe && b[s + 1] === 0xff) {
+    le = false;
+    s += 2;
+  } else if (enc === 1 && b[s] === 0xff && b[s + 1] === 0xfe) s += 2;
+  return utf16(b, s, b.length - ((b.length - s) % 2), le);
+}
+
+function cleanLyrics(raw: string | undefined): string | undefined {
+  const t = raw?.replace(/\0+$/g, '').replace(/\r\n?/g, '\n').trim();
+  return t ? t : undefined;
+}
+
 /** End index (exclusive of terminator) of a null-terminated string in the given encoding. */
 function termEnd(enc: number, b: Uint8Array, s: number): [end: number, next: number] {
   if (enc === 1 || enc === 2) {
@@ -220,6 +237,15 @@ function applyId3Frame(tags: Tags, id: string, d: Uint8Array, front: { isFront: 
   const key = ID3_TEXT[id];
   if (key) return setIfMissing(tags, key, text());
   switch (id) {
+    case 'USLT':
+    case 'ULT': {
+      // encoding, 3-byte language, null-terminated descriptor, then the full text (keep its newlines).
+      if (d.length < 5) return;
+      const enc = d[0];
+      const [, next] = termEnd(enc, d, 4);
+      const raw = enc === 1 || enc === 2 ? id3Full(enc, d, next) : enc === 3 ? utf8(d, next, d.length) : ascii(d, next, d.length);
+      return setIfMissing(tags, 'lyrics', cleanLyrics(raw));
+    }
     case 'TRCK':
     case 'TRK':
       return setIfMissing(tags, 'trackNumber', firstInt(text()));
@@ -458,6 +484,11 @@ function parseVorbisComment(d: Uint8Array, p: number, tags: Tags, front: { isFro
           case 'GENRE':
             setIfMissing(tags, 'genre', v);
             break;
+          case 'LYRICS':
+          case 'UNSYNCEDLYRICS':
+          case 'UNSYNCED LYRICS':
+            setIfMissing(tags, 'lyrics', cleanLyrics(utf8(d, eq + 1, end)));
+            break;
         }
       }
     }
@@ -606,6 +637,9 @@ function parseIlst(b: Uint8Array, s: number, e: number, tags: Tags) {
         break;
       case '©gen':
         setIfMissing(tags, 'genre', text());
+        break;
+      case '©lyr':
+        setIfMissing(tags, 'lyrics', cleanLyrics(utf8(b, ps, pe)));
         break;
       case 'gnre':
         if (pe - ps >= 2) setIfMissing(tags, 'genre', GENRES[u16be(b, ps) - 1]);

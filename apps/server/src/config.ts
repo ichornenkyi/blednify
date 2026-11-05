@@ -14,6 +14,9 @@ export type Config = {
    * `authRequired` without it). Use it whenever the server is reachable from outside your LAN.
    */
   listenToken: string | null;
+  /** Look up missing lyrics on lrclib.net (`LYRICS_ONLINE=0` turns it off). */
+  lyricsOnline: boolean;
+  lrclibUrl: string;
   /** Reserved; currently has no effect. */
   public: boolean;
   logRequests: boolean;
@@ -35,6 +38,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     listenToken: env.LISTEN_TOKEN?.trim() || null,
     allowOpenWrites: /^(1|true|yes)$/i.test(env.ALLOW_OPEN_WRITES ?? ""),
     maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 95) * 1024 * 1024,
+    lyricsOnline: !/^(0|false|no|off)$/i.test(env.LYRICS_ONLINE ?? ""),
+    lrclibUrl: (env.LRCLIB_URL || "https://lrclib.net").replace(/\/+$/, ""),
     public: /^(1|true|yes)$/i.test(env.PUBLIC ?? ""),
     logRequests: env.NODE_ENV !== "test" && env.LOG_REQUESTS !== "0",
   };

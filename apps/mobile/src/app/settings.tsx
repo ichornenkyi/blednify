@@ -3,8 +3,18 @@ import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatBytes, testServer, useDownloads, useServerStatus, useSettings, saveConnection } from '@/core';
-import { errorMessage, importMusic } from '@/ui/actions';
+import {
+  checkAdmin,
+  formatBytes,
+  rescanServer,
+  saveConnection,
+  testServer,
+  useDownloads,
+  useServerStatus,
+  useSettings,
+  useUploads,
+} from '@/core';
+import { attempt, errorMessage, importMusic } from '@/ui/actions';
 import { BrandMark } from '@/ui/components/BrandMark';
 import { Icon, type IconName } from '@/ui/components/Icon';
 import { ListRow } from '@/ui/components/ListRow';
@@ -170,6 +180,17 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
+        <Section title="Lyrics" icon="mic-outline">
+          <ToggleRow
+            title="Find lyrics online"
+            caption="Look up lyrics for songs imported to this phone on LRCLIB. Server songs use the server’s lookup."
+            value={settings.lyricsOnline}
+            onChange={settings.setLyricsOnline}
+          />
+        </Section>
+
+        <AdminSection />
+
         <View style={styles.card}>
           <ListRow
             leading={<RowIcon name="folder-outline" />}
@@ -197,6 +218,140 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+function ToggleRow({ title, caption, value, onChange }: { title: string; caption: string; value: boolean; onChange(v: boolean): void }) {
+  return (
+    <View style={styles.toggleRow}>
+      <View style={styles.flex}>
+        <Text variant="bodyStrong">{title}</Text>
+        <Text variant="caption">{caption}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={(v) => {
+          haptics.select();
+          onChange(v);
+        }}
+        trackColor={{ false: colors.surface3, true: colors.accent }}
+        thumbColor={colors.white}
+        ios_backgroundColor={colors.surface3}
+      />
+    </View>
+  );
+}
+
+/** Admin mode: upload / delete / rescan on the server with its ADMIN_TOKEN. */
+function AdminSection() {
+  const settings = useSettings();
+  const { active } = useUploads();
+  const [token, setToken] = useState(settings.adminToken);
+  const [checking, setChecking] = useState(false);
+  const [rescanning, setRescanning] = useState(false);
+  const [result, setResult] = useState<TestResult>(null);
+  const dirty = token.trim() !== settings.adminToken;
+
+  const check = async () => {
+    setChecking(true);
+    setResult(null);
+    const r = await checkAdmin(settings.serverUrl, token);
+    setChecking(false);
+    setResult(
+      r.ok
+        ? { ok: true, message: `Admin access OK · uploads up to ${formatBytes(r.maxUploadBytes ?? 0)}` }
+        : { ok: false, message: r.error ?? 'Admin check failed' },
+    );
+    if (r.ok) {
+      haptics.success();
+      if (dirty) settings.setAdminToken(token);
+    } else haptics.warn();
+  };
+
+  const rescan = async () => {
+    setRescanning(true);
+    const r = await attempt(rescanServer());
+    setRescanning(false);
+    if (r) showToast(`Rescanned · +${r.added} −${r.removed} · ${plural(r.total, 'track')}`, 'success');
+  };
+
+  return (
+    <Section title="Admin" icon="shield-checkmark-outline">
+      <ToggleRow
+        title="Admin mode"
+        caption="Upload music to your server and manage its library."
+        value={settings.adminMode}
+        onChange={settings.setAdminMode}
+      />
+      {settings.adminMode ? (
+        <>
+          <Text variant="caption">
+            The server’s ADMIN_TOKEN. Stored on this phone and sent only with uploads, deletes and rescans.
+          </Text>
+          <TextInput
+            value={token}
+            onChangeText={(v) => {
+              setToken(v);
+              setResult(null);
+            }}
+            placeholder="Admin token"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            returnKeyType="done"
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+            onSubmitEditing={check}
+            style={styles.input}
+          />
+          {result ? (
+            <View style={styles.result}>
+              <Icon name={result.ok ? 'checkmark-circle' : 'alert-circle'} size={16} color={result.ok ? colors.success : colors.danger} />
+              <Text variant="caption" color={result.ok ? colors.success : colors.danger} style={styles.flex}>
+                {result.message}
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.buttons}>
+            <PrimaryButton
+              label="Check"
+              icon="key-outline"
+              variant="surface"
+              onPress={check}
+              loading={checking}
+              disabled={!token.trim() || !settings.serverUrl}
+              style={styles.flex}
+            />
+            <PrimaryButton
+              label="Save"
+              icon="checkmark"
+              onPress={() => {
+                settings.setAdminToken(token);
+                showToast('Admin token saved', 'success');
+              }}
+              disabled={!dirty}
+              style={styles.flex}
+            />
+          </View>
+          <View style={styles.adminLinks}>
+            <ListRow
+              leading={<RowIcon name="cloud-upload-outline" />}
+              title="Upload music"
+              subtitle={active ? `${plural(active, 'file')} in progress` : 'Send audio files from this phone to the server'}
+              chevron
+              onPress={nav.upload}
+            />
+            <ListRow
+              leading={<RowIcon name="refresh" />}
+              title={rescanning ? 'Rescanning…' : 'Rescan server library'}
+              subtitle="Pick up files added to the music folder directly"
+              onPress={rescanning ? undefined : () => void rescan()}
+            />
+          </View>
+        </>
+      ) : null}
+    </Section>
   );
 }
 
@@ -245,6 +400,7 @@ const styles = StyleSheet.create({
   result: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dot: { width: 8, height: 8, borderRadius: 4 },
   buttons: { flexDirection: 'row', gap: space.md },
+  adminLinks: { marginHorizontal: -space.lg, marginBottom: -space.lg },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowIcon: { width: 40, height: 40, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },
   about: { alignItems: 'center', gap: space.xs, paddingVertical: space.xl },

@@ -173,7 +173,7 @@ function DeviceList() {
         <EmptyState
           icon="phone-portrait-outline"
           title="No music on this device"
-          message="Import audio files from your phone. They stay local and are never uploaded.">
+          message="Import audio files from your phone. They stay on this phone.">
           <PrimaryButton label="Import music" icon="add" onPress={importMusic} />
         </EmptyState>
       }

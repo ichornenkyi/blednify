@@ -14,19 +14,28 @@ import type { Config } from "./config";
 import { openDb, type Db } from "./db";
 import { audioMime, trackId } from "./ids";
 import { Library, toTrack } from "./library";
+import { LyricsService } from "./lyrics";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
 
 export const VERSION: string = pkg.version;
 
-export type AppContext = { config: Config; db: Db; lib: Library; scanner: Scanner; art: ArtworkCache };
+export type AppContext = {
+  config: Config;
+  db: Db;
+  lib: Library;
+  scanner: Scanner;
+  art: ArtworkCache;
+  lyrics: LyricsService;
+};
 
 export function createContext(config: Config): AppContext {
   const db = openDb(config.dataDir);
   const lib = new Library(db);
   const art = new ArtworkCache(join(config.dataDir, "art"));
   const scanner = new Scanner(config.musicDir, lib, art);
-  return { config, db, lib, scanner, art };
+  const lyrics = new LyricsService(db, { online: config.lyricsOnline, lrclibUrl: config.lrclibUrl });
+  return { config, db, lib, scanner, art, lyrics };
 }
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -144,7 +153,7 @@ function storageError(err: unknown): { status: 500 | 507; error: string } | null
 }
 
 export function createApp(ctx: AppContext): Hono {
-  const { config, lib, scanner, art } = ctx;
+  const { config, lib, scanner, art, lyrics } = ctx;
   const app = new Hono();
   const admin = adminOnly(config.adminToken, config.allowOpenWrites);
   const uploadsDir = join(config.musicDir, "uploads");
@@ -265,6 +274,18 @@ export function createApp(ctx: AppContext): Hono {
     return res ?? fail(404, "no artwork");
   });
 
+  app.get("/api/tracks/:id/lyrics", async (c) => {
+    const row = lib.trackRow(param(c)) ?? fail(404, "track not found");
+    c.header("Cache-Control", listenDigest ? "private, max-age=3600" : "public, max-age=3600");
+    return c.json(await lyrics.get(row, join(config.musicDir, row.path)));
+  });
+
+  // Lets the app verify an admin token and learn the upload limit. POST, like every other admin route, so a
+  // listen token (which travels in the same Authorization header) is never needed alongside it.
+  app.post("/api/admin/check", admin, (c) =>
+    c.json({ ok: true, maxUploadBytes: config.maxUploadBytes, formats: ["mp3", "flac", "m4a", "aac", "ogg", "opus", "wav"] }),
+  );
+
   app.post(
     "/api/tracks",
     admin,
@@ -314,6 +335,7 @@ export function createApp(ctx: AppContext): Hono {
     lib.deleteTracks([row.id]);
     lib.rebuildAggregates();
     await art.invalidate(row.id);
+    lyrics.forget(row.id);
     return c.body(null, 204);
   });
 

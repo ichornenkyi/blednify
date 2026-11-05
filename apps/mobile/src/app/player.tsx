@@ -8,7 +8,18 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { player, usePlayer, type AppTrack, type RepeatMode, useImageSource } from '@/core';
+import {
+  activeLyricIndex,
+  hasLyrics,
+  player,
+  useImageSource,
+  useLyrics,
+  usePlayer,
+  useProgress,
+  type AppTrack,
+  type Lyrics,
+  type RepeatMode,
+} from '@/core';
 import { Artwork } from '@/ui/components/Artwork';
 import { DownloadButton } from '@/ui/components/DownloadButton';
 import { EmptyState } from '@/ui/components/EmptyState';
@@ -83,7 +94,9 @@ function NowPlaying({ track }: { track: AppTrack }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isPlaying = usePlayer((s) => s.isPlaying);
-  const art = Math.min(width - space.xl * 2, height * 0.42);
+  const { lyrics } = useLyrics(track);
+  const withLyrics = hasLyrics(lyrics);
+  const art = Math.min(width - space.xl * 2, height * (withLyrics ? 0.34 : 0.42));
 
   const goArtist = () => {
     router.back();
@@ -143,8 +156,57 @@ function NowPlaying({ track }: { track: AppTrack }) {
       <View style={styles.bottomRow}>
         <DownloadButton track={track} />
         <IconButton icon="add-circle-outline" label="Add to playlist" size={26} onPress={() => showSheet(<PlaylistPicker tracks={[track]} />)} />
+        <IconButton
+          icon={withLyrics ? 'mic' : 'mic-outline'}
+          label="Lyrics"
+          size={26}
+          color={withLyrics ? colors.text : colors.textTertiary}
+          onPress={nav.lyrics}
+        />
         <IconButton icon="list" label="Queue" size={26} onPress={nav.queue} />
       </View>
+
+      {withLyrics && lyrics ? <LyricsPeek key={track.key} lyrics={lyrics} /> : null}
+    </View>
+  );
+}
+
+/** Spotify-style lyrics card: the line being sung right now; tap for the full lyrics view. */
+function LyricsPeek({ lyrics }: { lyrics: Lyrics }) {
+  return (
+    <Pressable onPress={nav.lyrics} style={styles.peek} accessibilityRole="button" accessibilityLabel="Show lyrics">
+      <View style={styles.peekHead}>
+        <Text variant="micro" color={colors.text}>
+          LYRICS
+        </Text>
+        <Icon name="expand-outline" size={14} color={colors.textSecondary} />
+      </View>
+      {lyrics.synced?.length ? (
+        <PeekLine lines={lyrics.synced} />
+      ) : (
+        <Text variant="bodyStrong" numberOfLines={2}>
+          {lyrics.plain?.split('\n').find((l) => l.trim()) ?? ''}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function PeekLine({ lines }: { lines: NonNullable<Lyrics['synced']> }) {
+  const { positionMs } = useProgress();
+  const i = activeLyricIndex(lines, positionMs + 250);
+  const now = i >= 0 ? lines[i].text || '♪' : '♪';
+  const next = lines[i + 1]?.text;
+  return (
+    <View>
+      <Text variant="bodyStrong" numberOfLines={1}>
+        {now}
+      </Text>
+      {next ? (
+        <Text variant="body" color={colors.textSecondary} numberOfLines={1}>
+          {next}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -284,5 +346,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   repeatBadgeText: { color: colors.white, fontSize: 9, lineHeight: 11, fontWeight: '800' },
+  peek: {
+    borderRadius: radius.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    gap: space.xs,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  peekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: -space.md },
 });

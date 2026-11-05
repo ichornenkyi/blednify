@@ -8,6 +8,8 @@ export const nav = {
   playlist: (id: string) => router.push({ pathname: '/playlist/[id]', params: { id } }),
   player: () => router.push('/player'),
   queue: () => router.push('/queue'),
+  lyrics: () => router.push('/lyrics'),
+  upload: () => router.push('/upload'),
   settings: () => router.push('/settings'),
   downloads: () => router.push('/downloads'),
   /** From a root-stack screen, pop back to the existing tabs instead of stacking a second tab navigator. */

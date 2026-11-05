@@ -85,12 +85,22 @@ export type DownloadStatus = 'none' | 'queued' | 'downloading' | 'done' | 'error
 - `useDownloads(): { active: { track: AppTrack; status: DownloadStatus; progress: number }[]; completedCount: number; bytesUsed: number }`
 - Downloaded files live in app document storage; once downloaded a remote track's `streamUri`/`localUri` point to the file everywhere.
 
-### Import (user's own files, local only, never uploaded)
+### Import (user's own files, local; uploaded only on request in admin mode)
 - `importFromDevice(): Promise<{ imported: number; skipped: number }>` — system picker, multi-select audio, copies into app storage, reads tags (title/artist/album/duration/embedded artwork) with filename fallback `Artist - Title.ext`.
 - `deleteLocalTrack(key: string): Promise<void>`
 
+### Lyrics
+- `useLyrics(track: AppTrack | null): { lyrics: Lyrics | null; isLoading: boolean; isError: boolean }` — server tracks via `GET /api/tracks/:id/lyrics`; imported tracks from their embedded tag, then LRCLIB when `lyricsOnline`. Answers are cached in MMKV so downloaded tracks keep lyrics offline.
+- `activeLyricIndex(lines, positionMs): number`, `hasLyrics(l): boolean`
+
+### Admin (only shown when `adminMode` is on)
+- `checkAdmin(url?, token?)`, `rescanServer()`, `deleteFromServer(track)`
+- `pickAndUpload(): Promise<number>` (system picker → upload queue), `uploadLocalTracks(tracks)` (imported tracks → server)
+- `useUploads(): { items: UploadItem[]; active: number; maxUploadBytes: number | null }`, `retryUpload(id)`, `cancelUpload(id)`, `clearUploads()`
+- Uploads run one at a time over `XMLHttpRequest` (progress), sending only the admin token.
+
 ### Settings (MMKV, synchronous)
-- `useSettings(): { serverUrl: string; setServerUrl(url: string): void; downloadOnWifiOnly: boolean; setDownloadOnWifiOnly(v: boolean): void }`
+- `useSettings()`: `serverUrl`, `accessToken`, `downloadOnWifiOnly`, `adminMode`, `adminToken`, `lyricsOnline` and their setters (`saveConnection(url, token)` saves server + access token together)
 - `testServer(url: string): Promise<{ ok: boolean; trackCount?: number; error?: string }>`
 - Default `serverUrl` = `process.env.EXPO_PUBLIC_API_URL ?? ''`. Empty url ⇒ app works fully offline with local library; remote hooks return empty, `online: false`.
 
@@ -107,11 +117,13 @@ src/app/(tabs)/search.tsx      Instant search (local + server), genre/browse til
 src/app/(tabs)/library.tsx     Filters: Playlists · Albums · Liked · Downloaded · On this device; import button
 src/app/player.tsx             Full-screen Now Playing (modal, swipe down to dismiss)
 src/app/queue.tsx              Queue with drag reorder / swipe remove
+src/app/lyrics.tsx             Full-screen synced lyrics (auto-scroll, tap a line to seek); peek card on the player
+src/app/upload.tsx             Admin: upload files to the server with per-file progress
 src/app/album/[id].tsx         ?origin=remote|local
 src/app/artist/[id].tsx        ?origin=remote|local
 src/app/playlist/[id].tsx
 src/app/downloads.tsx
-src/app/settings.tsx           Server URL + test, Wi-Fi only downloads, storage, about
+src/app/settings.tsx           Server URL + tokens, Wi-Fi only downloads, lyrics, admin mode (token, upload, rescan), storage, about
 ```
 
 ## Performance rules (both owners)

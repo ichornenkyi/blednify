@@ -22,6 +22,8 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       # Cloudflare's free plan rejects request bodies over 100 MB, so stay under that behind the tunnel.
       MAX_UPLOAD_MB: "95"
+      # Missing lyrics are looked up on lrclib.net (artist, title, album, duration only). "0" turns it off.
+      LYRICS_ONLINE: ${LYRICS_ONLINE:-1}
     # The image runs as uid/gid 1000 ("bun") and must be able to write the music folder for uploads/deletes.
     # Create it first so Docker does not create it as root: `mkdir -p music && sudo chown 1000:1000 music`.
     volumes:

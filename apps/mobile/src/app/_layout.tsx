@@ -28,6 +28,7 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="queue" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="lyrics" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
           </Stack>
           <ActionSheetHost />
           <ToastHost />

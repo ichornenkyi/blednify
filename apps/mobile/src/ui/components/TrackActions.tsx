@@ -1,14 +1,17 @@
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 
 import {
   cancelDownload,
+  deleteFromServer,
   downloadTracks,
   player,
   removeDownload,
   removeFromPlaylist,
   toggleLike,
+  uploadLocalTracks,
   useDownloadState,
   useIsLiked,
+  useSettings,
   type AppTrack,
   type DownloadStatus,
 } from '@/core';
@@ -43,6 +46,8 @@ export function onTrackMore(track: AppTrack) {
 
 function TrackActions({ track, context }: { track: AppTrack; context: TrackActionContext }) {
   const liked = useIsLiked(track.key);
+  const { adminMode, adminToken } = useSettings();
+  const admin = adminMode && !!adminToken;
   const download = useDownloadState(track.key);
   const { playlist } = context;
   const go = (fn: () => void) => {
@@ -94,11 +99,31 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
       {!context.hideArtist ? (
         <SheetAction icon="person-outline" label="Go to artist" onPress={() => go(() => nav.artist(track.artistId, track.origin))} />
       ) : null}
+      {admin && track.origin === 'local' ? (
+        <SheetAction
+          icon="cloud-upload-outline"
+          label="Upload to server"
+          onPress={() => {
+            uploadLocalTracks([track]);
+            showToast('Uploading to server');
+          }}
+        />
+      ) : null}
+      {admin && track.origin === 'remote' ? (
+        <SheetAction icon="trash-outline" label="Delete from server" destructive onPress={() => confirmDeleteFromServer(track)} />
+      ) : null}
       {track.origin === 'local' ? (
         <SheetAction icon="trash-outline" label="Delete from device" destructive onPress={() => confirmDeleteLocal(track)} />
       ) : null}
     </View>
   );
+}
+
+function confirmDeleteFromServer(track: AppTrack) {
+  Alert.alert('Delete from server?', `“${track.title}” will be deleted from the server’s music folder for everyone.`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: () => void attempt(deleteFromServer(track), 'Deleted from server') },
+  ]);
 }
 
 function DownloadAction({ track, status, progress }: { track: AppTrack; status: DownloadStatus; progress: number }) {

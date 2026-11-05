@@ -10,13 +10,29 @@ export const kv = createMMKV({ id: 'blednify' });
 const K_SERVER = 'settings.serverUrl';
 const K_WIFI = 'settings.downloadOnWifiOnly';
 const K_TOKEN = 'settings.accessToken';
+const K_ADMIN = 'settings.adminMode';
+const K_ADMIN_TOKEN = 'settings.adminToken';
+const K_LYRICS_ONLINE = 'settings.lyricsOnline';
 
-type SettingsValues = { serverUrl: string; accessToken: string; downloadOnWifiOnly: boolean };
+type SettingsValues = {
+  serverUrl: string;
+  accessToken: string;
+  downloadOnWifiOnly: boolean;
+  /** Shows upload / delete / rescan tools for the configured server. */
+  adminMode: boolean;
+  /** The server's ADMIN_TOKEN; only sent with admin requests. */
+  adminToken: string;
+  /** Look up lyrics of imported tracks on lrclib.net (server tracks use the server's lookup). */
+  lyricsOnline: boolean;
+};
 
 export const settingsStore = create<SettingsValues>(() => ({
   serverUrl: kv.getString(K_SERVER) ?? process.env.EXPO_PUBLIC_API_URL ?? '',
   accessToken: kv.getString(K_TOKEN) ?? '',
   downloadOnWifiOnly: kv.getBoolean(K_WIFI) ?? true,
+  adminMode: kv.getBoolean(K_ADMIN) ?? false,
+  adminToken: kv.getString(K_ADMIN_TOKEN) ?? '',
+  lyricsOnline: kv.getBoolean(K_LYRICS_ONLINE) ?? true,
 }));
 
 /** Canonical base URL: trimmed, scheme added if missing, no trailing slash. Empty ⇒ offline mode. */
@@ -51,13 +67,28 @@ function setDownloadOnWifiOnly(v: boolean) {
   settingsStore.setState({ downloadOnWifiOnly: v });
 }
 
-export function useSettings(): {
-  serverUrl: string;
-  accessToken: string;
+function setAdminMode(v: boolean) {
+  kv.set(K_ADMIN, v);
+  settingsStore.setState({ adminMode: v });
+}
+
+function setAdminToken(token: string) {
+  kv.set(K_ADMIN_TOKEN, token.trim());
+  settingsStore.setState({ adminToken: token.trim() });
+}
+
+function setLyricsOnline(v: boolean) {
+  kv.set(K_LYRICS_ONLINE, v);
+  settingsStore.setState({ lyricsOnline: v });
+}
+
+export function useSettings(): SettingsValues & {
   setServerUrl(url: string): void;
-  downloadOnWifiOnly: boolean;
   setDownloadOnWifiOnly(v: boolean): void;
+  setAdminMode(v: boolean): void;
+  setAdminToken(token: string): void;
+  setLyricsOnline(v: boolean): void;
 } {
-  const { serverUrl, accessToken, downloadOnWifiOnly } = useStore(settingsStore, useShallow((s) => s));
-  return { serverUrl, accessToken, setServerUrl, downloadOnWifiOnly, setDownloadOnWifiOnly };
+  const values = useStore(settingsStore, useShallow((s) => s));
+  return { ...values, setServerUrl, setDownloadOnWifiOnly, setAdminMode, setAdminToken, setLyricsOnline };
 }

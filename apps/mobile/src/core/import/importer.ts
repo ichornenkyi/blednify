@@ -17,7 +17,7 @@ const UNKNOWN_ARTIST = 'Unknown Artist';
 const UNKNOWN_ALBUM = 'Unknown Album';
 
 /** Random-access reader over a file; the first 1 MB is read once and served from memory. */
-function openReader(file: File): ByteReader & { close(): void } {
+export function openReader(file: File): ByteReader & { close(): void } {
   const handle = file.open(FileMode.ReadOnly);
   const size = handle.size ?? file.size;
   let head: Uint8Array | null = null;
@@ -182,7 +182,7 @@ async function importOne(asset: DocumentPickerAsset): Promise<boolean> {
   return true;
 }
 
-/** Pick audio files and copy them into app storage. Files never leave the device. */
+/** Pick audio files and copy them into app storage. Nothing is uploaded unless the user asks (admin mode). */
 export async function importFromDevice(): Promise<{ imported: number; skipped: number }> {
   const res = await getDocumentAsync({ type: 'audio/*', multiple: true, copyToCacheDirectory: true });
   if (res.canceled) return { imported: 0, skipped: 0 };

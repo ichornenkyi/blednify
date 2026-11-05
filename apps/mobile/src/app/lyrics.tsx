@@ -1,0 +1,318 @@
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { memo, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type LayoutChangeEvent,
+  type ScrollViewInstance,
+} from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import {
+  activeLyricIndex,
+  hasLyrics,
+  player,
+  useImageSource,
+  useLyrics,
+  usePlayer,
+  useProgress,
+  type AppTrack,
+  type LyricLine,
+  type Lyrics,
+} from '@/core';
+import { EmptyState } from '@/ui/components/EmptyState';
+import { Icon } from '@/ui/components/Icon';
+import { IconButton } from '@/ui/components/IconButton';
+import { PressableScale } from '@/ui/components/PressableScale';
+import { SeekBar } from '@/ui/components/SeekBar';
+import { Text } from '@/ui/components/Text';
+import { haptics } from '@/ui/haptics';
+import { colors, gradientFor, radius, space } from '@/ui/theme';
+
+/** Highlight slightly early: progress ticks at ~4 Hz, and a line should light up as it starts, not after. */
+const LEAD_MS = 250;
+/** After the user scrolls by hand, wait this long before following the song again. */
+const USER_SCROLL_HOLD_MS = 3500;
+
+function close() {
+  if (router.canGoBack()) router.back();
+}
+
+export default function LyricsScreen() {
+  const current = usePlayer((s) => s.current);
+  const { lyrics, isLoading, isError } = useLyrics(current);
+  const insets = useSafeAreaInsets();
+
+  if (!current) {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <EmptyState icon="musical-notes-outline" title="Nothing playing" message="Play a song to see its lyrics.">
+          <IconButton icon="chevron-down" label="Close" variant="filled" onPress={close} />
+        </EmptyState>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <Backdrop track={current} />
+      <View style={[styles.header, { paddingTop: insets.top + space.xs }]}>
+        <IconButton icon="chevron-down" label="Close lyrics" size={28} onPress={close} />
+        <View style={styles.headerText}>
+          <Text variant="bodyStrong" numberOfLines={1} style={styles.centerText}>
+            {current.title}
+          </Text>
+          <Text variant="caption" color="rgba(255,255,255,0.75)" numberOfLines={1} style={styles.centerText}>
+            {current.artist}
+          </Text>
+        </View>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <View style={styles.body}>
+        {isLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.white} />
+          </View>
+        ) : lyrics?.synced?.length ? (
+          <SyncedLyrics key={current.key} lines={lyrics.synced} source={lyrics.source} />
+        ) : hasLyrics(lyrics) ? (
+          <PlainLyrics key={current.key} lyrics={lyrics!} />
+        ) : (
+          <NoLyrics instrumental={!!lyrics?.instrumental} failed={isError} />
+        )}
+      </View>
+
+      <View style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}>
+        <SeekBar key={current.key} fallbackDurationMs={current.durationMs} />
+        <MiniTransport />
+      </View>
+    </View>
+  );
+}
+
+/** Blurred cover tinted with the album's colour, like a lyrics card. */
+function Backdrop({ track }: { track: AppTrack }) {
+  const source = useImageSource(track.artworkUri);
+  const [tint] = gradientFor(track.album || track.title);
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
+      {source ? (
+        <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={90} cachePolicy="memory-disk" transition={300} />
+      ) : null}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: tint, opacity: 0.45 }]} />
+      <LinearGradient
+        colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.7)']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
+}
+
+// --- Synced ----------------------------------------------------------------------------------
+
+function SyncedLyrics({ lines, source }: { lines: LyricLine[]; source: Lyrics['source'] }) {
+  const { positionMs } = useProgress();
+  const { height } = useWindowDimensions();
+  const scroll = useRef<ScrollViewInstance>(null);
+  const ys = useRef<number[]>([]);
+  const holdUntil = useRef(0);
+  const [viewportH, setViewportH] = useState(height * 0.6);
+  const active = activeLyricIndex(lines, positionMs + LEAD_MS);
+
+  const follow = (index: number, animated = true) => {
+    const y = ys.current[Math.max(0, index)];
+    if (y === undefined) return;
+    scroll.current?.scrollTo({ y: Math.max(0, y - viewportH * 0.3), animated });
+  };
+
+  useEffect(() => {
+    if (Date.now() < holdUntil.current) return;
+    follow(active);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follow reads refs; re-run only when the line changes
+  }, [active, viewportH]);
+
+  const measure = (i: number, y: number) => {
+    ys.current[i] = y;
+  };
+
+  const hold = () => {
+    holdUntil.current = Date.now() + USER_SCROLL_HOLD_MS;
+  };
+
+  const seek = (i: number) => {
+    haptics.select();
+    holdUntil.current = 0;
+    player.seekTo(lines[i].timeMs);
+    player.play();
+    follow(i);
+  };
+
+  return (
+    <ScrollView
+      ref={scroll}
+      style={styles.flex}
+      contentContainerStyle={[styles.lines, { paddingBottom: viewportH * 0.6 }]}
+      showsVerticalScrollIndicator={false}
+      onLayout={(e) => setViewportH(e.nativeEvent.layout.height)}
+      onScrollBeginDrag={hold}
+      onMomentumScrollEnd={hold}
+      onScrollEndDrag={hold}>
+      {lines.map((l, i) => (
+        <SyncedLine
+          key={i}
+          index={i}
+          text={l.text}
+          state={i === active ? 'active' : i < active ? 'past' : 'future'}
+          onPress={seek}
+          onMeasure={measure}
+        />
+      ))}
+      <Credit source={source} />
+    </ScrollView>
+  );
+}
+
+type LineState = 'past' | 'active' | 'future';
+const OPACITY: Record<LineState, number> = { past: 0.62, active: 1, future: 0.38 };
+
+const SyncedLine = memo(function SyncedLine({
+  index,
+  text,
+  state,
+  onPress,
+  onMeasure,
+}: {
+  index: number;
+  text: string;
+  state: LineState;
+  onPress: (i: number) => void;
+  onMeasure: (i: number, y: number) => void;
+}) {
+  const o = useSharedValue(OPACITY[state]);
+  const s = useSharedValue(state === 'active' ? 1 : 0.97);
+  useEffect(() => {
+    o.set(withTiming(OPACITY[state], { duration: 280 }));
+    s.set(withTiming(state === 'active' ? 1 : 0.97, { duration: 280 }));
+  }, [state, o, s]);
+  const style = useAnimatedStyle(() => ({ opacity: o.get(), transform: [{ scale: s.get() }] }));
+  const gap = !text;
+  return (
+    <Pressable onPress={() => onPress(index)} onLayout={(e: LayoutChangeEvent) => onMeasure(index, e.nativeEvent.layout.y)} accessibilityRole="button" accessibilityLabel={text || 'Instrumental break'}>
+      <Animated.View style={[styles.lineWrap, style]}>
+        <Text style={gap ? styles.gap : styles.line}>{gap ? '♪' : text}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+});
+
+// --- Plain / none ----------------------------------------------------------------------------
+
+function PlainLyrics({ lyrics }: { lyrics: Lyrics }) {
+  return (
+    <ScrollView style={styles.flex} contentContainerStyle={styles.lines} showsVerticalScrollIndicator={false}>
+      <View style={styles.notice}>
+        <Icon name="time-outline" size={14} color="rgba(255,255,255,0.75)" />
+        <Text variant="caption" color="rgba(255,255,255,0.75)">
+          These lyrics aren’t synced to the song yet.
+        </Text>
+      </View>
+      <Text style={styles.plain}>{lyrics.plain}</Text>
+      <Credit source={lyrics.source} />
+    </ScrollView>
+  );
+}
+
+function NoLyrics({ instrumental, failed }: { instrumental: boolean; failed: boolean }) {
+  return (
+    <View style={[styles.flex, styles.center]}>
+      <EmptyState
+        icon={instrumental ? 'musical-notes-outline' : failed ? 'cloud-offline-outline' : 'mic-off-outline'}
+        title={instrumental ? 'Instrumental' : failed ? 'Couldn’t load lyrics' : 'No lyrics for this song'}
+        message={
+          instrumental
+            ? 'Just enjoy the music.'
+            : failed
+              ? 'Check your connection and try again.'
+              : 'Put a .lrc file with the same name next to the song on your server to add them.'
+        }
+      />
+    </View>
+  );
+}
+
+function Credit({ source }: { source: Lyrics['source'] }) {
+  if (source !== 'lrclib') return null;
+  return (
+    <Text variant="caption" color="rgba(255,255,255,0.6)" style={styles.credit}>
+      Lyrics from LRCLIB
+    </Text>
+  );
+}
+
+function MiniTransport() {
+  const isPlaying = usePlayer((s) => s.isPlaying);
+  return (
+    <View style={styles.transport}>
+      <IconButton icon="play-skip-back" label="Previous" size={28} diameter={52} haptic onPress={player.previous} />
+      <PressableScale
+        accessibilityRole="button"
+        accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+        activeScale={0.9}
+        onPress={() => {
+          haptics.press();
+          player.togglePlay();
+        }}
+        style={styles.playButton}>
+        <Icon name={isPlaying ? 'pause' : 'play'} size={30} color={colors.black} />
+      </PressableScale>
+      <IconButton icon="play-skip-forward" label="Next" size={28} diameter={52} haptic onPress={player.next} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
+  flex: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, paddingBottom: space.sm },
+  headerText: { flex: 1, minWidth: 0, gap: 1 },
+  headerSpacer: { width: 44 },
+  centerText: { textAlign: 'center' },
+  body: { flex: 1 },
+  lines: { paddingHorizontal: space.xl, paddingTop: space.lg, gap: space.lg },
+  lineWrap: { transformOrigin: 'left center' },
+  line: { color: colors.white, fontSize: 26, lineHeight: 34, fontWeight: '800', letterSpacing: -0.4 },
+  gap: { color: colors.white, fontSize: 24, lineHeight: 34, fontWeight: '800' },
+  plain: { color: colors.white, fontSize: 22, lineHeight: 32, fontWeight: '700', letterSpacing: -0.3 },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: space.xs,
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  credit: { marginTop: space.lg },
+  footer: { paddingHorizontal: space.xl, gap: space.sm },
+  transport: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.xxl },
+  playButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+});

@@ -16,6 +16,7 @@ export type Tags = {
   year?: number;
   genre?: string;
   picture?: Uint8Array; // PNG
+  lyrics?: string; // USLT
 };
 
 const u32le = (n: number) => {
@@ -41,6 +42,8 @@ export function id3v24(tags: Tags): Buffer {
   if (tags.disc) frames.push(textFrame("TPOS", String(tags.disc)));
   if (tags.year) frames.push(textFrame("TDRC", String(tags.year)));
   if (tags.genre) frames.push(textFrame("TCON", tags.genre));
+  if (tags.lyrics)
+    frames.push(id3Frame("USLT", Buffer.concat([Buffer.from([3]), Buffer.from("eng\0", "latin1"), Buffer.from(tags.lyrics, "utf8")])));
   if (tags.picture) {
     const head = Buffer.concat([Buffer.from([0]), Buffer.from("image/png\0", "latin1"), Buffer.from([3, 0])]);
     frames.push(id3Frame("APIC", Buffer.concat([head, tags.picture])));

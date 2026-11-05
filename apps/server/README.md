@@ -32,9 +32,12 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `PORT` | `8787` | HTTP port |
 | `MUSIC_DIR` | `./music` | Library root (scanned recursively). Uploads go to `MUSIC_DIR/uploads/`. |
 | `DATA_DIR` | `./data` | `blednify.db` (SQLite index) and `art/` (artwork cache). Safe to delete; it is rebuilt by a scan. |
-| `ADMIN_TOKEN` | unset | When set, `POST /api/tracks`, `DELETE /api/tracks/:id` and `POST /api/rescan` need `Authorization: Bearer <token>`. When unset, those writes return `403`. Reads are always public. |
+| `ADMIN_TOKEN` | unset | When set, `POST /api/tracks`, `DELETE /api/tracks/:id`, `POST /api/rescan` and `POST /api/admin/check` need `Authorization: Bearer <token>`. When unset, those writes return `403`. The app's **Admin mode** (Settings) uses it to upload music. |
+| `LISTEN_TOKEN` | unset | When set, every read (except `/api/health`) needs `Authorization: Bearer <token>`. Writes use `ADMIN_TOKEN` instead. |
 | `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
-| `MAX_UPLOAD_MB` | `200` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
+| `MAX_UPLOAD_MB` | `95` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
+| `LYRICS_ONLINE` | `1` | `0` stops looking up missing lyrics on [lrclib.net](https://lrclib.net). Lookups send only artist, title, album and duration, and are cached (hits 180 days, misses 7 days). |
+| `LRCLIB_URL` | `https://lrclib.net` | Base URL of an LRCLIB-compatible API (for a self-hosted mirror). |
 | `PUBLIC` | unset | Reserved. Has no effect yet. |
 | `LOG_REQUESTS` | `1` | `0` turns off the one-line-per-request log. Successful `/api/health` calls are never logged. |
 
@@ -68,6 +71,10 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
   corrupt file returns `422`, and nothing from that request is kept. Unsupported extensions return `415`.
   Storage failures return `507` (disk full) or `500` with the errno (for example a read-only or wrongly owned
   `MUSIC_DIR`). Success returns `201 {"items": Track[]}`, already indexed.
+- **Lyrics** (`GET /api/tracks/:id/lyrics`) come from, in order: a sidecar file with the same name as the song
+  (`Song.lrc`, then `Song.txt`), the embedded lyrics tag (ID3 `USLT`/`SYLT`, Vorbis `LYRICS`, MP4 `©lyr`), then
+  LRCLIB. LRC time tags (`[mm:ss.xx]`, several per line, `[offset:]`) give synced lines; anything else is plain
+  text. A song without lyrics returns `200` with `synced` and `plain` both `null`.
 - **Errors** are always JSON: `{ "error": "..." }`. JSON responses are gzip/deflate-compressed when the client
   accepts it. CORS allows all origins.
 

@@ -53,6 +53,24 @@ export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDo
 // Import
 export { deleteLocalTrack, importFromDevice } from './import/importer';
 
+// Lyrics
+export { activeLyricIndex, hasLyrics, useLyrics, type LyricLine, type Lyrics } from './lyrics';
+
+// Admin (server uploads / delete / rescan)
+export {
+  cancelUpload,
+  checkAdmin,
+  clearUploads,
+  deleteFromServer,
+  pickAndUpload,
+  rescanServer,
+  retryUpload,
+  uploadLocalTracks,
+  useUploads,
+  type UploadItem,
+  type UploadStatus,
+} from './admin';
+
 // Settings
 export { saveConnection, useSettings } from './settings';
 

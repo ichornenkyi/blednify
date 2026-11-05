@@ -7,7 +7,10 @@ self-hosted music server. No ads, no tracking, no accounts.
 
 - **Stream or download** from a Blednify server that indexes a folder of your audio files
   (mp3, flac, m4a, aac, ogg, opus, wav).
-- **Import your own files** from the phone. They stay on the device and are never uploaded.
+- **Import your own files** from the phone. They stay on the device unless you upload them in Admin mode.
+- **Lyrics** like Spotify: synced lines that follow the song (tap a line to jump there), from `.lrc` files next
+  to your songs, embedded tags, or [LRCLIB](https://lrclib.net).
+- **Admin mode** (Settings): upload music from the phone to your server, delete server tracks, rescan.
 - Gapless playback, background audio with lock-screen and notification controls, queue with drag reorder,
   likes, playlists, recently played, instant search over local and server music, offline downloads
   (Wi-Fi only by default).
