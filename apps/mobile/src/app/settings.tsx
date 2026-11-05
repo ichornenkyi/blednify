@@ -6,17 +6,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   discardImport,
   formatBytes,
+  isImportLink,
+  searchImports,
   startImport,
   supportsOffline,
   testServer,
   useDownloads,
+  useImportIndexers,
   useImports,
   useServerStatus,
   useSettings,
   type ImportJob,
+  type ImportResults,
+  type ImportTarget,
 } from '@/core';
 import { attempt, errorMessage, importMusic } from '@/ui/actions';
 import { BrandMark } from '@/ui/components/BrandMark';
+import { Chip } from '@/ui/components/Chip';
 import { Icon, type IconName } from '@/ui/components/Icon';
 import { ListRow } from '@/ui/components/ListRow';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
@@ -194,28 +200,52 @@ export default function SettingsScreen() {
 function AddMusicSection() {
   const { enabled, jobs } = useImports();
   const { adminToken, setAdminToken } = useSettings();
+  const indexers = useImportIndexers(enabled);
   const [input, setInput] = useState('');
-  const [starting, setStarting] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const indexer = indexers.some((i) => i.id === picked) ? picked : null;
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<ImportResults | null>(null);
 
   if (!enabled) return null;
 
-  const start = async () => {
-    setStarting(true);
-    const job = await attempt(startImport(input.trim()));
-    setStarting(false);
-    if (job) setInput('');
+  const isLink = isImportLink(input);
+
+  const add = async (target: ImportTarget) => {
+    setBusy(true);
+    const job = await attempt(startImport(target, indexer));
+    setBusy(false);
+    if (!job) return;
+    setInput('');
+    setResults(null);
+  };
+
+  const submit = async () => {
+    const text = input.trim();
+    if (!text) return;
+    if (isLink) return add({ url: text });
+    setBusy(true);
+    const found = await attempt(searchImports(text));
+    setBusy(false);
+    if (found) setResults(found);
   };
 
   return (
     <Section title="Add music" icon="cloud-download-outline">
       <Text variant="caption">
-        Type a song name, ideally with the artist, or paste a public or unlisted YouTube Music playlist link. The server finds each song through
-        Jackett, downloads it with TorrServer and adds it to your library. Songs without a good match are listed as failed.
+        Search for a song or album and pick the right one, or paste a public or unlisted YouTube Music playlist link. The server finds each song
+        through Jackett, downloads it with TorrServer and adds it to your library. Songs without a good match are listed as failed. Auto picks
+        trackers by language.
       </Text>
       <TextInput
         value={input}
-        onChangeText={setInput}
-        placeholder="Song name or playlist link"
+        onChangeText={(text) => {
+          setInput(text);
+          setResults(null);
+        }}
+        onSubmitEditing={() => void submit()}
+        returnKeyType="search"
+        placeholder="Song, album or playlist link"
         placeholderTextColor={colors.textTertiary}
         autoCapitalize="none"
         autoCorrect={false}
@@ -223,6 +253,14 @@ function AddMusicSection() {
         cursorColor={colors.accent}
         style={styles.input}
       />
+      {indexers.length > 0 ? (
+        <View style={styles.chips}>
+          <Chip label="Auto" selected={indexer === null} onPress={() => setPicked(null)} />
+          {indexers.map((i) => (
+            <Chip key={i.id} label={i.name} selected={indexer === i.id} onPress={() => setPicked(i.id)} />
+          ))}
+        </View>
+      ) : null}
       <TextInput
         value={adminToken}
         onChangeText={setAdminToken}
@@ -235,13 +273,54 @@ function AddMusicSection() {
         cursorColor={colors.accent}
         style={styles.input}
       />
-      <PrimaryButton label="Add" icon="arrow-down" onPress={start} loading={starting} disabled={!input.trim()} />
+      <PrimaryButton
+        label={isLink ? 'Add' : 'Search'}
+        icon={isLink ? 'arrow-down' : 'search'}
+        onPress={() => void submit()}
+        loading={busy}
+        disabled={!input.trim()}
+      />
+      {results ? <ImportResultList results={results} onPick={(target) => void add(target)} /> : null}
       {jobs.map((job) => (
         <ImportJobRow key={job.id} job={job} />
       ))}
     </Section>
   );
 }
+
+function ImportResultList({ results, onPick }: { results: ImportResults; onPick: (target: ImportTarget) => void }) {
+  const addIcon = <Icon name="arrow-down" size={18} color={colors.textTertiary} />;
+  if (results.albums.length === 0 && results.songs.length === 0) return <Text variant="caption">Nothing found on YouTube Music.</Text>;
+  return (
+    <View>
+      {results.albums.length > 0 ? <Text variant="micro">ALBUMS</Text> : null}
+      {results.albums.map((a) => (
+        <ListRow
+          key={a.id}
+          title={a.title}
+          subtitle={[a.type, a.artists.join(', '), a.year].filter(Boolean).join(' · ')}
+          trailing={addIcon}
+          onPress={() => onPick({ albumId: a.id })}
+        />
+      ))}
+      {results.songs.length > 0 ? <Text variant="micro">SONGS</Text> : null}
+      {results.songs.map((s) => (
+        <ListRow
+          key={s.videoId}
+          title={s.title}
+          subtitle={[s.artists.join(', '), s.album, s.durationMs === null ? null : clock(s.durationMs)].filter(Boolean).join(' · ')}
+          trailing={addIcon}
+          onPress={() => onPick({ song: s })}
+        />
+      ))}
+    </View>
+  );
+}
+
+const clock = (ms: number) => {
+  const seconds = Math.round(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};
 
 const MAX_FAILURES_SHOWN = 5;
 
@@ -253,13 +332,14 @@ function ImportJobRow({ job }: { job: ImportJob }) {
   const active = job.status === 'queued' || job.status === 'running';
   const songResult = added ? 'Added' : existing ? 'Already in library' : failed.length ? 'Failed' : 'Cancelled';
   const playlistSummary = [
-    active ? `${added + existing + failed.length} of ${job.tracks.length}` : `${job.tracks.length} in playlist`,
+    active ? `${added + existing + failed.length} of ${job.tracks.length}` : `${job.tracks.length} in ${job.kind}`,
     `${added} added`,
     existing ? `${existing} already in library` : null,
     failed.length ? `${failed.length} failed` : null,
     job.status === 'cancelled' ? 'cancelled' : null,
   ].filter(Boolean);
-  const summary = job.kind === 'song' ? (active ? 'In progress' : songResult) : playlistSummary.join(' · ');
+  const status = job.kind === 'song' ? (active ? 'In progress' : songResult) : playlistSummary.join(' · ');
+  const summary = job.indexer ? `${status} · ${job.indexer}` : status;
 
   return (
     <View style={styles.job}>
@@ -333,6 +413,7 @@ const styles = StyleSheet.create({
   result: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dot: { width: 8, height: 8, borderRadius: 4 },
   buttons: { flexDirection: 'row', gap: space.md },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   job: { gap: space.xs, paddingTop: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowIcon: { width: 40, height: 40, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },

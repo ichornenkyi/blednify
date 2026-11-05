@@ -34,10 +34,13 @@ type ApiError = { error: string };
 ```
 
 ```ts
+type ImportSong = { videoId: string; title: string; artists: string[]; album: string | null; durationMs: number | null };
+type ImportAlbum = { id: string; title: string; artists: string[]; type: string; year: string | null }; // type: "Album", "Single", "EP"
 type ImportJob = {
   id: string;
-  kind: "playlist" | "song";
-  source: string;        // the playlist id, or the song name as searched
+  kind: "playlist" | "album" | "song";
+  source: string;        // the YouTube Music id of the playlist, album or song
+  indexer: string | null; // the picked Jackett indexer; null means chosen per track by the server
   title: string;
   status: "queued" | "running" | "done" | "cancelled";
   createdAt: string; // ISO 8601
@@ -72,7 +75,9 @@ type ImportJob = {
 | DELETE | `/api/tracks/:id` | `204` (admin) |
 | POST | `/api/rescan` | `{ added: number; removed: number; total: number }` (admin) |
 | GET | `/api/imports` | `{ enabled: boolean; items: ImportJob[] }`, newest first |
-| POST | `/api/imports` | JSON `{ input: string }`, a YouTube Music playlist link or a song name → `202 ImportJob`; the running job if the same request is already importing. `400` blank input or a link that is not a playlist, `422` empty or private playlist, or no song with that name, `502` YouTube Music failed, `503` import not configured (admin) |
+| GET | `/api/imports/indexers` | `{ items: { id: string; name: string }[] }`, the trackers set up in Jackett. `502` Jackett failed, `503` import not configured |
+| POST | `/api/imports/search` | JSON `{ query: string }` → `{ songs: ImportSong[]; albums: ImportAlbum[] }`, up to 6 of each, best first. Starts nothing. `400` blank query, `502` YouTube Music failed, `503` import not configured (admin) |
+| POST | `/api/imports` | JSON with one of `{ url: string }` (playlist link), `{ albumId: string }` or `{ song: ImportSong }`, plus optional `indexer: string \| null` to search only that tracker → `202 ImportJob`; the running job if the same request is already importing. `400` bad request or a link that is not a playlist, `422` empty or private playlist, or empty album, `502` YouTube Music failed, `503` import not configured (admin) |
 | DELETE | `/api/imports/:id` | Cancels a queued or running job, or forgets a finished one → `204` (admin) |
 
 Errors: `{ error }` with 4xx/5xx. CORS enabled for all origins (GET).

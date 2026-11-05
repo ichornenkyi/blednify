@@ -124,7 +124,7 @@ src/app/album/[id].tsx         ?origin=remote|local
 src/app/artist/[id].tsx        ?origin=remote|local
 src/app/playlist/[id].tsx
 src/app/downloads.tsx
-src/app/settings.tsx           Server URL + test, add music (song name or playlist link), Wi-Fi only downloads, storage, about
+src/app/settings.tsx           Server URL + test, add music (search and pick a song or album, or a playlist link; tracker picker), Wi-Fi only downloads, storage, about
 ```
 
 ## Performance rules (both owners)
