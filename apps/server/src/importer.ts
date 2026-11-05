@@ -7,15 +7,17 @@ import type { Library, Track } from "./library";
 import type { Scanner } from "./scanner";
 import { cleanTitle, isSameSong, pickFile, rankReleases, type Release } from "./torrent-match";
 import type { TorrServer } from "./torrserver";
-import type { Playlist, PlaylistTrack } from "./ytmusic";
+import type { Album, Playlist, PlaylistTrack } from "./ytmusic";
 
 export type ImportTrackStatus = "pending" | "searching" | "downloading" | "done" | "exists" | "failed";
 export type ImportTrack = PlaylistTrack & { status: ImportTrackStatus; error: string | null; trackId: string | null };
 export type ImportJob = {
   id: string;
-  kind: "playlist" | "song";
-  /** The playlist id, or the song name as searched. */
+  kind: "playlist" | "album" | "song";
+  /** The YouTube Music id of the playlist, album or song. */
   source: string;
+  /** The Jackett indexer picked for this job. Null: chosen per track by its script. */
+  indexer: string | null;
   title: string;
   status: "queued" | "running" | "done" | "cancelled";
   createdAt: string;
@@ -33,9 +35,11 @@ export type ImporterDeps = {
   lib: Library;
   scanner: Scanner;
   jackett: Jackett;
+  /** Jackett indexer ids by the script of a track's name. Empty means every indexer. */
+  indexers: { latin: string[]; cyrillic: string[] };
   torrServer: TorrServer;
   fetchPlaylist(id: string): Promise<Playlist>;
-  searchSong(query: string): Promise<PlaylistTrack | null>;
+  fetchAlbum(id: string): Promise<Album>;
   uploadsDir: string;
   maxFileBytes: number;
   /** Reserves a free path for `name` in the uploads folder; `release` frees the reservation. */
@@ -46,7 +50,7 @@ export type ImporterDeps = {
 
 const isActive = (job: ImportJob) => job.status === "queued" || job.status === "running";
 
-/** Works through playlists and single songs one track at a time. Jobs live in memory: a server restart forgets them. */
+/** Works through playlists, albums and single songs one track at a time. Jobs live in memory: a server restart forgets them. */
 export class Importer {
   private jobs: ImportJob[] = [];
   private current: { job: ImportJob; abort: AbortController } | null = null;
@@ -59,39 +63,48 @@ export class Importer {
     return this.jobs;
   }
 
-  startPlaylist(playlistId: string): Promise<ImportJob> {
-    return this.start("playlist", playlistId, async () => {
+  /** The indexers set up in Jackett. */
+  indexers(signal: AbortSignal): Promise<{ id: string; name: string }[]> {
+    return this.deps.jackett.indexers(signal);
+  }
+
+  startPlaylist(playlistId: string, indexer: string | null = null): Promise<ImportJob> {
+    return this.start("playlist", playlistId, indexer, async () => {
       const playlist = await this.deps.fetchPlaylist(playlistId);
       if (playlist.tracks.length === 0) throw new NothingFoundError("playlist not found, empty or private");
       return playlist;
     });
   }
 
-  startSong(query: string): Promise<ImportJob> {
-    const source = query.trim().toLowerCase().replace(/\s+/g, " ");
-    return this.start("song", source, async () => {
-      const track = await this.deps.searchSong(source);
-      if (!track) throw new NothingFoundError("no song found with that name");
-      return { title: `${track.artists.join(", ")} – ${track.title}`, tracks: [track] };
+  startAlbum(albumId: string, indexer: string | null = null): Promise<ImportJob> {
+    return this.start("album", albumId, indexer, async () => {
+      const album = await this.deps.fetchAlbum(albumId);
+      if (album.tracks.length === 0) throw new NothingFoundError("album not found or empty");
+      return { title: `${album.artists.join(", ")} – ${album.title}`, tracks: album.tracks };
     });
   }
 
+  startSong(track: PlaylistTrack, indexer: string | null = null): Promise<ImportJob> {
+    return this.start("song", track.videoId, indexer, async () => ({ title: `${track.artists.join(", ")} – ${track.title}`, tracks: [track] }));
+  }
+
   /** Repeating a request that is still importing returns its job. */
-  private start(kind: ImportJob["kind"], source: string, load: () => Promise<Playlist>): Promise<ImportJob> {
-    const running = this.jobs.find((j) => j.kind === kind && j.source === source && isActive(j));
+  private start(kind: ImportJob["kind"], source: string, indexer: string | null, load: () => Promise<Playlist>): Promise<ImportJob> {
+    const running = this.jobs.find((j) => j.kind === kind && j.source === source && j.indexer === indexer && isActive(j));
     if (running) return Promise.resolve(running);
-    const key = `${kind}:${source}`;
-    const pending = this.starting.get(key) ?? this.create(kind, source, load).finally(() => this.starting.delete(key));
+    const key = `${kind}:${indexer ?? ""}:${source}`;
+    const pending = this.starting.get(key) ?? this.create(kind, source, indexer, load).finally(() => this.starting.delete(key));
     this.starting.set(key, pending);
     return pending;
   }
 
-  private async create(kind: ImportJob["kind"], source: string, load: () => Promise<Playlist>): Promise<ImportJob> {
+  private async create(kind: ImportJob["kind"], source: string, indexer: string | null, load: () => Promise<Playlist>): Promise<ImportJob> {
     const playlist = await load();
     const job: ImportJob = {
       id: randomUUID().replaceAll("-", "").slice(0, 16),
       kind,
       source,
+      indexer,
       title: playlist.title,
       status: "queued",
       createdAt: new Date().toISOString(),
@@ -148,13 +161,13 @@ export class Importer {
     job.status = "running";
     for (const track of job.tracks) {
       if (abort.signal.aborted) break;
-      await this.importTrack(track, abort.signal);
+      await this.importTrack(track, job, abort.signal);
     }
     job.status = abort.signal.aborted ? "cancelled" : "done";
     this.current = null;
   }
 
-  private async importTrack(track: ImportTrack, signal: AbortSignal): Promise<void> {
+  private async importTrack(track: ImportTrack, job: ImportJob, signal: AbortSignal): Promise<void> {
     try {
       const existing = this.findInLibrary(track);
       if (existing) {
@@ -162,7 +175,7 @@ export class Importer {
         return;
       }
       track.status = "searching";
-      const failure = await this.searchAndDownload(track, signal);
+      const failure = await this.searchAndDownload(track, job, signal);
       if (failure) Object.assign(track, { status: "failed", error: failure });
     } catch (err) {
       if (signal.aborted) Object.assign(track, { status: "pending", error: null });
@@ -175,17 +188,21 @@ export class Importer {
     return this.deps.lib.search(query, 20).tracks.find((t) => isSameSong(track, t.title, t.artist)) ?? null;
   }
 
-  /** Tries the song's own release first, then its album, then the artist's collections. Returns why it failed, if it did. */
-  private async searchAndDownload(track: ImportTrack, signal: AbortSignal): Promise<string | null> {
+  /** Tries the song's own release, then its album, then the artist's collections; albums search for the whole album first. Returns why it failed, if it did. */
+  private async searchAndDownload(track: ImportTrack, job: ImportJob, signal: AbortSignal): Promise<string | null> {
     const artist = track.artists[0];
     if (!artist) return "the playlist does not name an artist";
-    const queries = [`${artist} ${cleanTitle(track)}`, track.album && `${artist} ${track.album}`, artist].filter((q) => !!q) as string[];
+    const song = `${artist} ${cleanTitle(track)}`;
+    const album = track.album && `${artist} ${track.album}`;
+    const queries = (job.kind === "album" ? [album, song, artist] : [song, album, artist]).filter((q) => !!q) as string[];
+    const routed = /\p{Script=Cyrillic}/u.test(`${track.artists.join(" ")} ${track.title}`) ? this.deps.indexers.cyrillic : this.deps.indexers.latin;
+    const indexers = job.indexer ? [job.indexer] : routed;
     const tried = new Set<string>();
     let failure = "no matching torrent found";
     for (const query of queries) {
       let releases: Release[];
       try {
-        releases = await this.deps.jackett.search(query, signal);
+        releases = await this.deps.jackett.search(query, signal, indexers);
       } catch (err) {
         signal.throwIfAborted();
         failure = (err as Error).message;
@@ -213,7 +230,8 @@ export class Importer {
     const { hash, owned } = await torrServer.add(release.link, signal);
     try {
       const files = await torrServer.files(hash, signal);
-      const file = files && pickFile(files, track, this.deps.maxFileBytes);
+      if (!files) throw new Error("the torrent has no reachable peers");
+      const file = pickFile(files, track, this.deps.maxFileBytes);
       if (!file) return false;
       track.status = "downloading";
       await this.saveFile(hash, file, track, signal);

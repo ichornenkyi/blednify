@@ -17,17 +17,24 @@ export type ImportTrack = {
 };
 export type ImportJob = {
   id: string;
-  kind: 'playlist' | 'song';
+  kind: 'playlist' | 'album' | 'song';
   source: string;
+  indexer: string | null;
   title: string;
   status: 'queued' | 'running' | 'done' | 'cancelled';
   createdAt: string;
   tracks: ImportTrack[];
 };
+export type ImportIndexer = { id: string; name: string };
+export type ImportSong = Pick<ImportTrack, 'videoId' | 'title' | 'artists' | 'album' | 'durationMs'>;
+export type ImportAlbum = { id: string; title: string; artists: string[]; type: string; year: string | null };
+export type ImportResults = { songs: ImportSong[]; albums: ImportAlbum[] };
+export type ImportTarget = { url: string } | { albumId: string } | { song: ImportSong };
 type ApiImports = { enabled: boolean; items: ImportJob[] };
 
 const POLL_MS = 3_000;
 const START_TIMEOUT_MS = 120_000;
+const SEARCH_TIMEOUT_MS = 45_000;
 const CANCEL_TIMEOUT_MS = 12_000;
 const CATALOG_KEYS = [['health'], ['tracks'], ['albums'], ['album'], ['artist'], ['search']];
 
@@ -56,11 +63,36 @@ export function useImports(): { enabled: boolean; jobs: ImportJob[] } {
   return { enabled: data?.enabled ?? false, jobs: jobs ?? [] };
 }
 
-/** `input` is a YouTube Music playlist link or a song name; the server tells them apart. */
-export async function startImport(input: string): Promise<ImportJob | null> {
+/** The trackers that can be picked for an import. Empty while loading or if Jackett cannot be read. */
+export function useImportIndexers(enabled: boolean): ImportIndexer[] {
+  const base = useServerBase();
+  const { data } = useQuery({
+    queryKey: ['import-indexers', base],
+    queryFn: ({ signal }) => apiGet<{ items: ImportIndexer[] }>(base, '/api/imports/indexers', signal),
+    enabled: enabled && !!base,
+    retry: 0,
+  });
+  return data?.items ?? [];
+}
+
+/** True for text meant as a link, which is imported directly; anything else is searched for. */
+export function isImportLink(text: string): boolean {
+  return /^\S*(:\/\/|\.[a-z]{2,}\/)\S*$/i.test(text.trim());
+}
+
+export async function searchImports(query: string): Promise<ImportResults | null> {
+  return apiWrite<ImportResults>(getServerBase(), 'POST', '/api/imports/search', {
+    token: settingsStore.getState().adminToken,
+    body: { query },
+    timeoutMs: SEARCH_TIMEOUT_MS,
+  });
+}
+
+/** A null `indexer` lets the server choose. */
+export async function startImport(target: ImportTarget, indexer: string | null = null): Promise<ImportJob | null> {
   const job = await apiWrite<ImportJob>(getServerBase(), 'POST', '/api/imports', {
     token: settingsStore.getState().adminToken,
-    body: { input },
+    body: { ...target, indexer },
     timeoutMs: START_TIMEOUT_MS,
   });
   await queryClient.invalidateQueries({ queryKey: importsKey(getServerBase()) });

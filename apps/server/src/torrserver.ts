@@ -5,6 +5,7 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const METADATA_TIMEOUT_MS = 45_000;
 const POLL_MS = 2_000;
 const STALL_TIMEOUT_MS = 120_000;
+const MAX_READS = 8;
 
 type TorrentStatus = { hash: string; file_stats?: TorrentFile[] };
 
@@ -55,23 +56,42 @@ export class TorrServer {
     await this.post({ action: "rem", hash }, AbortSignal.timeout(REQUEST_TIMEOUT_MS));
   }
 
-  /** Saves one file to `dest`. Only that file's pieces are fetched, however large the torrent is. */
+  /**
+   * Saves one file to `dest`. Only that file's pieces are fetched, however large the torrent is.
+   *
+   * TorrServer can stream pieces before checking their hashes (its ResponsiveMode), so a first read often has the right
+   * length but wrong bytes. Bad pieces are replaced as they fail, so the file is read until two reads in a row match.
+   */
   async download(hash: string, file: TorrentFile, dest: string, signal: AbortSignal): Promise<void> {
+    let previous: string | null = null;
+    for (let read = 0; read < MAX_READS; read++) {
+      const digest = await this.read(hash, file, dest, signal);
+      if (digest === previous) return;
+      previous = digest;
+    }
+    throw new Error("the torrent kept returning different data");
+  }
+
+  /** Writes the file to `dest` once and returns a digest of its bytes. */
+  private async read(hash: string, file: TorrentFile, dest: string, signal: AbortSignal): Promise<string> {
     const stall = new AbortController();
     let timer = setTimeout(() => stall.abort(), STALL_TIMEOUT_MS);
-    const out = await open(dest, "wx");
+    const out = await open(dest, "w");
     try {
       const params = new URLSearchParams({ link: hash, index: String(file.id), play: "" });
       const res = await fetch(`${this.baseUrl}/stream/file?${params}`, { signal: AbortSignal.any([signal, stall.signal]) });
       if (!res.ok || !res.body) throw new Error(`TorrServer returned HTTP ${res.status}`);
+      const digest = new Bun.CryptoHasher("sha256");
       let received = 0;
       for await (const chunk of res.body) {
         clearTimeout(timer);
         timer = setTimeout(() => stall.abort(), STALL_TIMEOUT_MS);
         await out.appendFile(chunk);
+        digest.update(chunk);
         received += chunk.byteLength;
       }
       if (received !== file.length) throw new Error(`incomplete download (${received} of ${file.length} bytes)`);
+      return digest.digest("hex");
     } catch (err) {
       if (stall.signal.aborted && !signal.aborted) throw new Error("download stalled: peers stopped sending data");
       throw err;

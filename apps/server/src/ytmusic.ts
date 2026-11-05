@@ -6,12 +6,18 @@ export type PlaylistTrack = {
   durationMs: number | null;
 };
 export type Playlist = { title: string; tracks: PlaylistTrack[] };
+export type Album = Playlist & { artists: string[] };
+export type AlbumResult = { id: string; title: string; artists: string[]; type: string; year: string | null };
+export type MusicResults = { songs: PlaylistTrack[]; albums: AlbumResult[] };
 
 const YT_HOSTS = new Set(["music.youtube.com", "www.youtube.com", "youtube.com", "m.youtube.com"]);
 const LIST_ID_RE = /^[A-Za-z0-9_-]{10,}$/;
 const API_BASE = "https://music.youtube.com/youtubei/v1";
 /** YouTube Music's "Songs" search filter. */
 const SONGS_FILTER = "EgWKAQIIAWoKEAkQBRAKEAMQBA==";
+/** YouTube Music's "Albums" search filter, which also covers singles and EPs. */
+const ALBUMS_FILTER = "EgWKAQIYAWoKEAkQBRAKEAMQBA==";
+const MAX_RESULTS = 6;
 const CLIENT = { clientName: "WEB_REMIX", clientVersion: "1.20260101.01.00", hl: "en" };
 const MAX_PAGES = 100;
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -28,11 +34,6 @@ export function parsePlaylistId(raw: string): string | null {
   const browse = /^\/browse\/VL([^/]+)$/.exec(url.pathname)?.[1];
   const id = url.searchParams.get("list") ?? browse;
   return id && LIST_ID_RE.test(id) ? id : null;
-}
-
-/** True for text that is meant as a link, so a mistyped one is reported and not searched for as a song name. */
-export function looksLikeLink(raw: string): boolean {
-  return /^\S*(:\/\/|\.[a-z]{2,}\/)\S*$/i.test(raw.trim());
 }
 
 type Json = Record<string, any>;
@@ -99,6 +100,40 @@ export function parseSongResults(page: Json): PlaylistTrack[] {
   });
 }
 
+/** One album search response → its albums. Rows hold "Album • Artist • 2001" in a single column. */
+export function parseAlbumResults(page: Json): AlbumResult[] {
+  const scope = collect(page, "musicShelfRenderer")[0] ?? page;
+  return (collect(scope, "musicResponsiveListItemRenderer") as Json[]).flatMap((item) => {
+    const id = item.navigationEndpoint?.browseEndpoint?.browseId;
+    const columns = (item.flexColumns ?? []).map((c: Json) => c.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? []);
+    const title = columns[0]?.[0]?.text?.trim();
+    if (typeof id !== "string" || !title) return [];
+    const runs: Json[] = columns[1] ?? [];
+    const last = runs.at(-1)?.text?.trim();
+    const year = /^\d{4}$/.test(last ?? "") ? last : null;
+    const artists = runs
+      .filter((r) => pageTypeOf(r) === "MUSIC_PAGE_TYPE_ARTIST")
+      .map((r) => String(r.text).trim());
+    const unlinked = runs.map((r) => String(r.text).trim()).filter((t, i) => i > 0 && t && t !== "•" && t !== year);
+    return [{ id, title, artists: artists.length ? artists : unlinked.slice(0, 1), type: String(runs[0]?.text ?? "Album").trim(), year }];
+  });
+}
+
+/** One album page → its title, artists and tracks. Rows only name an artist when it differs from the album's. */
+export function parseAlbumPage(page: Json): Album {
+  const header = collect(page, "musicResponsiveHeaderRenderer")[0] as Json | undefined;
+  const title = header?.title?.runs?.[0]?.text?.trim() ?? "YouTube Music album";
+  const strapline: Json[] = header?.straplineTextOne?.runs ?? [];
+  const linked = strapline.filter((r) => pageTypeOf(r) === "MUSIC_PAGE_TYPE_ARTIST");
+  const artists = (linked.length ? linked : strapline.slice(0, 1)).map((r) => String(r.text).trim()).filter(Boolean);
+  const scope = collect(page, "musicShelfRenderer")[0] ?? page;
+  const tracks = (collect(scope, "musicResponsiveListItemRenderer") as Json[]).flatMap((item) => {
+    const track = parseItem(item);
+    return track ? [{ ...track, artists: track.artists.length ? track.artists : artists, album: title }] : [];
+  });
+  return { title, artists, tracks };
+}
+
 async function callYouTube(endpoint: "browse" | "search", body: Json): Promise<Json> {
   const res = await fetch(`${API_BASE}/${endpoint}?prettyPrint=false`, {
     method: "POST",
@@ -110,10 +145,18 @@ async function callYouTube(endpoint: "browse" | "search", body: Json): Promise<J
   return (await res.json()) as Json;
 }
 
-/** The best YouTube Music match for a typed song name, or null. */
-export async function searchSong(query: string): Promise<PlaylistTrack | null> {
-  const songs = parseSongResults(await callYouTube("search", { query, params: SONGS_FILTER }));
-  return songs.find((s) => s.artists.length > 0) ?? null;
+/** The songs and albums YouTube Music finds for a typed name, best first. */
+export async function searchMusic(query: string): Promise<MusicResults> {
+  const [songs, albums] = await Promise.all([
+    callYouTube("search", { query, params: SONGS_FILTER }).then(parseSongResults),
+    callYouTube("search", { query, params: ALBUMS_FILTER }).then(parseAlbumResults),
+  ]);
+  return { songs: songs.filter((s) => s.artists.length > 0).slice(0, MAX_RESULTS), albums: albums.slice(0, MAX_RESULTS) };
+}
+
+/** Reads an album by its YouTube Music id; returns no tracks when it is gone. */
+export async function fetchAlbum(albumId: string): Promise<Album> {
+  return parseAlbumPage(await callYouTube("browse", { browseId: albumId }));
 }
 
 /** Reads a public or unlisted playlist through YouTube Music's own web API; returns no tracks when it is private or gone. */

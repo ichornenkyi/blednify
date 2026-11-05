@@ -14,6 +14,8 @@ export type Config = {
   /** Playlist import needs all three; without them it is off. */
   jackettUrl: string | null;
   jackettApiKey: string | null;
+  jackettIndexersLatin: string[];
+  jackettIndexersCyrillic: string[];
   torrServerUrl: string | null;
   /** Reserved; currently has no effect (reads are always public). */
   public: boolean;
@@ -27,6 +29,8 @@ function int(name: string, value: string | undefined, fallback: number): number 
   return n;
 }
 
+const list = (raw: string | undefined): string[] => (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   return {
     port: int("PORT", env.PORT, 8787),
@@ -38,6 +42,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDir: env.WEB_DIR?.trim() ? resolve(env.WEB_DIR.trim()) : null,
     jackettUrl: env.JACKETT_URL?.trim().replace(/\/+$/, "") || null,
     jackettApiKey: env.JACKETT_API_KEY?.trim() || null,
+    jackettIndexersLatin: list(env.JACKETT_INDEXERS_LATIN),
+    jackettIndexersCyrillic: list(env.JACKETT_INDEXERS_CYRILLIC),
     torrServerUrl: env.TORRSERVER_URL?.trim().replace(/\/+$/, "") || null,
     public: /^(1|true|yes)$/i.test(env.PUBLIC ?? ""),
     logRequests: env.NODE_ENV !== "test" && env.LOG_REQUESTS !== "0",
