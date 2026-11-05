@@ -22,7 +22,7 @@ apps/server/            Bun + Hono + SQLite (FTS5) music server, Dockerfile, doc
 apps/mobile/            Expo SDK 58 app (expo-router, expo-audio, expo-sqlite, MMKV, FlashList, Reanimated)
 docs/API.md             server <-> app contract (v1), the single source of truth for both sides
 docs/MOBILE_ARCH.md     mobile module contract: core/ui ownership, the @/core API, routes, performance rules
-.github/workflows/      CI: checks, release APK, server Docker image
+.github/workflows/      CI: checks, server Docker image
 ```
 
 ## Run the server
@@ -73,20 +73,6 @@ stored in that browser, not on the server. Compared to the native app:
 |---|---|
 | Server · typecheck + test | `bun run typecheck`, `bun test` in `apps/server` |
 | Mobile · typecheck + lint + doctor | `tsc --noEmit`, `expo lint`, `expo-doctor` in `apps/mobile` |
-| Android · release APK | `expo prebuild` + `gradlew assembleRelease` (arm64-v8a), version code = run number |
 | Server · Docker image | pushes `ghcr.io/<owner>/blednify-server:latest` and `:<sha>` (main and `v*` tags) |
 
-Where the APK appears:
-
-- **Every run:** the workflow run's **Artifacts** section, `blednify-apk`
-  (`blednify-<run>-<sha>.apk`).
-- **Pushes to `main`:** the rolling pre-release **`latest`** on the Releases page, replaced on each push.
-  Install `blednify-latest.apk` from there.
-- **Tags `v*`:** a regular GitHub Release with the APK attached.
-
-Optional repository settings:
-
-- Variable `BLEDNIFY_API_URL`: default server URL baked into CI builds.
-- Secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`:
-  sign the release APK with your key. Without them the APK is signed with the template's public debug key, which
-  is fine for sideloading but not for store distribution.
+CI builds no APK or iOS app: this fork ships the web app, which the server image serves.
