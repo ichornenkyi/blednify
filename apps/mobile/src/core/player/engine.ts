@@ -28,6 +28,7 @@ import { kv } from '../settings';
 import { fromStorable, resolveTrack, toStorable } from '../tracks';
 import type { AppTrack, PlayerState, RepeatMode } from '../types';
 import { errorMessage, shuffled } from '../util';
+import { lockArtwork, prefetchLockArtwork } from './lock-art';
 import { playerStore, progressStore } from './store';
 
 type Entry = { uid: number; track: AppTrack };
@@ -138,9 +139,14 @@ const srcKey = (s: Source) => `${s.uri}\n${s.headers?.Authorization ?? ''}`;
 
 function metadataOf(t: AppTrack): AudioMetadata {
   const r = resolveTrack(t);
-  // Lock-screen artwork is fetched by the OS without our headers, so artwork that needs the token is left out.
-  const artworkUrl = r.artworkUri && !authHeadersFor(r.artworkUri) ? r.artworkUri : undefined;
-  return { title: r.title, artist: r.artist, albumTitle: r.album, artworkUrl };
+  const meta: AudioMetadata = { title: r.title, artist: r.artist, albumTitle: r.album };
+  // The OS fetches lock-screen artwork without our headers; covers that need the token come from a local copy.
+  meta.artworkUrl = lockArtwork(r.artworkUri, (local) => {
+    if (lockActive && entries[index]?.track.key === t.key) nat?.updateLockScreenMetadata({ ...meta, artworkUrl: local });
+  });
+  const next = nextIndex();
+  if (next !== null && next !== index) prefetchLockArtwork(resolveTrack(entries[next].track).artworkUri);
+  return meta;
 }
 
 /** Index that follows `index` during playback; repeat-all wraps. */
