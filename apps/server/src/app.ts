@@ -69,6 +69,13 @@ const tracksQuery = z.object({
 });
 const pageQuery = z.object({ q: qString, limit: limitParam(50, 500), offset: offsetParam });
 const searchQuery = z.object({ q: z.string().max(200).default(""), limit: limitParam(20, 100) });
+const goneQuery = z.object({
+  ids: z
+    .string()
+    .default("")
+    .transform((v) => v.split(",").filter((id) => ID_RE.test(id)))
+    .refine((ids) => ids.length <= 500, "at most 500 ids"),
+});
 const artQuery = z.object({ size: z.coerce.number().int().min(16).max(4096).optional() });
 
 /** Validates query params (empty values count as absent); 400 with the first issue on failure. */
@@ -194,6 +201,12 @@ export function createApp(ctx: AppContext): Hono {
   // ---------- tracks ----------
 
   app.get("/api/tracks", (c) => c.json(lib.listTracks(query(c, tracksQuery))));
+
+  // Which of the given ids were deleted from this server, so the app can drop them from likes/playlists/recents.
+  app.get("/api/tracks/gone", (c) => {
+    const { ids } = query(c, goneQuery);
+    return c.json({ gone: lib.goneIds([...new Set(ids)]) });
+  });
 
   app.get("/api/tracks/:id", (c) => {
     const row = lib.trackRow(param(c));

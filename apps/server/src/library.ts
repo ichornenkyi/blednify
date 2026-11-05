@@ -294,6 +294,14 @@ export class Library {
     })();
   }
 
+  /** The subset of `ids` this server deleted (retired and not indexed again). Unknown ids are not "gone". */
+  goneIds(ids: readonly string[]): string[] {
+    const q = this.sql.query<{ x: number }, [string]>(
+      "SELECT 1 AS x FROM retired_ids r WHERE r.id = ?1 AND NOT EXISTS (SELECT 1 FROM tracks t WHERE t.id = ?1)",
+    );
+    return ids.filter((id) => q.get(id) != null);
+  }
+
   /** True when `id` is indexed now or was ever deleted; new uploads must pick a path with a fresh id. */
   isIdTaken(id: string): boolean {
     return (

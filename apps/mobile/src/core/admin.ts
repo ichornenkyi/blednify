@@ -3,6 +3,7 @@ import { File } from 'expo-file-system';
 import { create, useStore } from 'zustand';
 
 import { ApiError, type ApiTrack } from './api';
+import { pruneGoneTracks } from './prune';
 import { queryClient } from './query-client';
 import { getServerBase, normalizeServerUrl, settingsStore } from './settings';
 import type { AppTrack } from './types';
@@ -79,14 +80,19 @@ export async function checkAdmin(url?: string, token?: string): Promise<{ ok: bo
 export async function rescanServer(): Promise<{ added: number; removed: number; total: number }> {
   const r = await adminRequest<{ added: number; removed: number; total: number }>('POST', '/api/rescan', { timeoutMs: 10 * 60_000 });
   refreshCatalog();
+  void pruneGoneTracks(true);
   return r;
 }
 
-/** Deletes a server track's file and index entry. A downloaded copy on this phone stays playable. */
+/**
+ * Deletes a server track's file and index entry, and drops it from likes, recents, playlists and the queue.
+ * A downloaded copy on this phone stays everywhere and keeps playing.
+ */
 export async function deleteFromServer(track: AppTrack): Promise<void> {
   if (track.origin !== 'remote') return;
   await adminRequest<void>('DELETE', `/api/tracks/${encodeURIComponent(track.id)}`);
   refreshCatalog();
+  await pruneGoneTracks(true);
 }
 
 // --- Uploads ---------------------------------------------------------------------------------

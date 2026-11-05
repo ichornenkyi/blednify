@@ -413,6 +413,13 @@ describe("writes", () => {
       expect((await s.app.request(`/api/tracks/${items[0]!.id}`)).status).toBe(404);
       expect((await s.app.request(`/api/tracks/${items[0]!.id}`, { method: "DELETE" })).status).toBe(404);
 
+      // The app asks which of its cached ids were deleted; live and unknown ids are not reported.
+      const unknown = "0123456789abcdef";
+      const gone = await s.app.request(`/api/tracks/gone?ids=${items[0]!.id},${items[1]!.id},${unknown},bogus,${items[0]!.id}`);
+      expect(gone.status).toBe(200);
+      expect(await gone.json()).toEqual({ gone: [items[0]!.id] });
+      expect(await (await s.app.request("/api/tracks/gone")).json()).toEqual({ gone: [] });
+
       // A new upload with the deleted name must not inherit the retired id (clients cache streams by id).
       const again = await s.app.request("/api/tracks", { method: "POST", body: form(["evilname.wav", wav({ title: "Different" })]) });
       expect(again.status).toBe(201);

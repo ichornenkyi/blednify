@@ -5,6 +5,7 @@ import { resumeDownloads } from './downloads';
 import { resumeImports } from './imports';
 import { loadLibIndex } from './lib-index';
 import { configureAudio, refreshQueueTracks } from './player/engine';
+import { startPruning } from './prune';
 import { queryClient } from './query-client';
 import { settingsStore } from './settings';
 
@@ -18,6 +19,7 @@ function startCore() {
   loadLibIndex()
     .then(() => {
       refreshQueueTracks();
+      startPruning();
       void resumeImports().catch((e) => console.warn('[core] imports resume failed', e));
       return resumeDownloads();
     })

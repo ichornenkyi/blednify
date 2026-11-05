@@ -46,6 +46,7 @@ type Lyrics = {
 |---|---|---|
 | GET | `/api/health` | `{ ok: true, name: "blednify", version: string, authRequired: boolean, trackCount?: number }` (count only with a valid token when required) |
 | GET | `/api/tracks?q=&limit=50&offset=0&sort=added\|title\|artist` | `Page<Track>` (limit max 500) |
+| GET | `/api/tracks/gone?ids=a,b,…` | `{ gone: string[] }` — the given ids this server deleted (max 500; unknown ids are not "gone") |
 | GET | `/api/tracks/:id` | `Track` |
 | GET | `/api/tracks/:id/stream` | audio bytes; MUST support `Range` (206), `Accept-Ranges`, `Content-Length`, correct `Content-Type`, `ETag`, `Cache-Control: public, max-age=31536000, immutable` |
 | GET | `/api/tracks/:id/lyrics` | `Lyrics` (sidecar `.lrc`/`.txt` → embedded tag → LRCLIB unless `LYRICS_ONLINE=0`); `200` with nulls when none |
