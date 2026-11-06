@@ -13,12 +13,14 @@ import { ArtworkCache } from "./artwork";
 import type { Config } from "./config";
 import { openDb, type Db } from "./db";
 import { audioMime, trackId } from "./ids";
+import { Covers } from "./covers";
 import { Importer, NothingFoundError } from "./importer";
 import { Jackett } from "./jackett";
 import { Library, toTrack } from "./library";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
 import { TorrServer } from "./torrserver";
+import { YtDlp, type AudioSource } from "./ytdlp";
 import { mountWebApp } from "./web";
 import { fetchAlbum, fetchPlaylist, parsePlaylistId, searchMusic, type Album, type MusicResults, type Playlist } from "./ytmusic";
 
@@ -35,10 +37,11 @@ export function createContext(config: Config): AppContext {
 }
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
-const ART_CACHE = "public, max-age=2592000";
+/** Covers can change (a cover is embedded later), so clients check the ETag each time instead of keeping a copy for weeks. */
+const ART_CACHE = "public, no-cache";
 const ID_RE = /^[0-9a-f]{16}$/;
 
-const fail = (status: 400 | 401 | 403 | 404 | 413 | 415 | 422 | 502 | 503, error: string): never => {
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 502 | 503, error: string): never => {
   throw new HTTPException(status, { message: error });
 };
 
@@ -71,6 +74,7 @@ const importBody = z.object({
     .optional(),
   indexer: z.string().regex(/^[\w.-]{1,100}$/).nullish(),
 });
+const coversBody = z.object({ trackIds: z.array(z.string().regex(/^[\w-]{1,100}$/)).min(1).max(500).optional() });
 const searchBody = z.object({ query: z.string().trim().min(1).max(500) });
 
 export type MusicSource = {
@@ -164,8 +168,10 @@ function storageError(err: unknown): { status: 500 | 507; error: string } | null
 export function createApp(
   ctx: AppContext,
   music: MusicSource = { fetchPlaylist, fetchAlbum, searchMusic },
+  audio?: AudioSource | null,
 ): Hono {
   const { config, lib, scanner, art } = ctx;
+  const youtube = audio !== undefined ? audio : config.ytdlpPath ? new YtDlp(config.ytdlpPath) : null;
   const app = new Hono();
   const admin = adminOnly(config.adminToken, config.allowOpenWrites);
   const uploadsDir = join(config.musicDir, "uploads");
@@ -189,14 +195,20 @@ export function createApp(
     throw new HTTPException(409, { message: `too many files named ${name}` });
   };
 
-  const importer =
+  const covers = new Covers({ lib, scanner, musicDir: config.musicDir, searchMusic: music.searchMusic });
+  const torrents =
     config.jackettUrl && config.jackettApiKey && config.torrServerUrl
+      ? { jackett: new Jackett(config.jackettUrl, config.jackettApiKey), torrServer: new TorrServer(config.torrServerUrl) }
+      : null;
+  const importer =
+    torrents || youtube
       ? new Importer({
           lib,
           scanner,
-          jackett: new Jackett(config.jackettUrl, config.jackettApiKey),
+          torrents,
+          youtube,
+          covers,
           indexers: { latin: config.jackettIndexersLatin, cyrillic: config.jackettIndexersCyrillic },
-          torrServer: new TorrServer(config.torrServerUrl),
           fetchPlaylist: music.fetchPlaylist,
           fetchAlbum: music.fetchAlbum,
           uploadsDir,
@@ -346,21 +358,29 @@ export function createApp(
 
   // ---------- music import ----------
 
+  app.post("/api/library/covers", admin, async (c) => {
+    noIdleTimeout(c);
+    const body = coversBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return fail(400, "expected JSON with an optional 'trackIds' list");
+    const result = await covers.fixMissing(c.req.raw.signal, body.data.trackIds);
+    return result ? c.json(result) : fail(409, "covers are already being added");
+  });
+
   app.get("/api/imports", (c) => c.json({ enabled: importer !== null, items: importer?.list() ?? [] }));
 
   app.get("/api/imports/indexers", async (c) => {
-    if (!importer) return fail(503, "music import is off: set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
+    if (!importer) return fail(503, "music import is off: install yt-dlp, or set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
     try {
       return c.json({ items: await importer.indexers(c.req.raw.signal) });
     } catch (err) {
       console.error(`[import] could not list indexers: ${(err as Error).message}`);
-      return fail(502, "could not read the tracker list from Jackett");
+      return fail(502, "could not read the provider list");
     }
   });
 
   app.post("/api/imports/search", admin, async (c) => {
     noIdleTimeout(c);
-    if (!importer) return fail(503, "music import is off: set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
+    if (!importer) return fail(503, "music import is off: install yt-dlp, or set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
     const body = searchBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return fail(400, "enter a song or album name");
     try {
@@ -373,7 +393,7 @@ export function createApp(
 
   app.post("/api/imports", admin, async (c) => {
     noIdleTimeout(c);
-    if (!importer) return fail(503, "music import is off: set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
+    if (!importer) return fail(503, "music import is off: install yt-dlp, or set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
     const body = importBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return fail(400, "expected JSON with one of 'url', 'albumId' or 'song'");
     const { url, albumId, song, indexer = null } = body.data;

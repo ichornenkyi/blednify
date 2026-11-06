@@ -132,4 +132,7 @@ export async function apiWrite<T>(
 
 const seg = encodeURIComponent;
 export const trackStreamUrl = (base: string, id: string) => `${base}/api/tracks/${seg(id)}/stream`;
-export const trackArtworkUrl = (base: string, id: string) => `${base}/api/tracks/${seg(id)}/artwork`;
+/** Bump to make every client drop the covers it has cached. */
+const ARTWORK_VERSION = 2;
+export const trackArtworkUrl = (base: string, id: string, size?: number) =>
+  `${base}/api/tracks/${seg(id)}/artwork?v=${ARTWORK_VERSION}${size ? `&size=${size}` : ''}`;

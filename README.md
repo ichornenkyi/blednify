@@ -12,8 +12,8 @@ for iPhone), backed by your own self-hosted music server. No ads, no tracking, n
   likes, playlists, recently played, instant search over local and server music, offline downloads
   (Wi-Fi only by default).
 
-- **Add music from Settings:** search for a song or album and pick it, or paste a YouTube Music playlist link. The server finds each song through your
-  Jackett, downloads it with your TorrServer and adds it to the library. Setup is in [`apps/server/README.md`](apps/server/README.md).
+- **Add music from Settings:** search for a song or album and pick it, or paste a YouTube Music playlist link. The server downloads each song from YouTube Music
+  (yt-dlp, included in the Docker image), or from a torrent through your Jackett and TorrServer, and adds it to the library. Setup is in [`apps/server/README.md`](apps/server/README.md).
 
 ## Repository
 

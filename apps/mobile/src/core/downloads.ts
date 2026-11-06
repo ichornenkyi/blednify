@@ -160,7 +160,7 @@ async function run(key: string): Promise<void> {
     let art: string | null = null;
     if (track.artworkUri) {
       try {
-        await File.downloadFileAsync(`${trackArtworkUrl(base, track.id)}?size=512`, fileAt(artRel), {
+        await File.downloadFileAsync(trackArtworkUrl(base, track.id, 512), fileAt(artRel), {
           idempotent: true,
           signal: ctrl.signal,
         });

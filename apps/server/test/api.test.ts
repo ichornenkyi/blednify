@@ -280,7 +280,7 @@ describe("artwork", () => {
     const res = await get(`/api/tracks/${HALO}/artwork`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
-    expect(res.headers.get("cache-control")).toContain("max-age=");
+    expect(res.headers.get("cache-control")).toBe("public, no-cache");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(COVER));
     expect(readdirSync(join(srv.dataDir, "art"))).toContain(`${HALO}.png`);
 

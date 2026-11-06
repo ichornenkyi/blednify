@@ -130,7 +130,7 @@ export function testServer(files: Record<string, Buffer> = {}, env: Record<strin
     return abs;
   };
   for (const [rel, data] of Object.entries(files)) write(rel, data);
-  const config = loadConfig({ MUSIC_DIR: musicDir, DATA_DIR: dataDir, NODE_ENV: "test", ALLOW_OPEN_WRITES: "1", ...env });
+  const config = loadConfig({ MUSIC_DIR: musicDir, DATA_DIR: dataDir, NODE_ENV: "test", YTDLP_PATH: "off", ALLOW_OPEN_WRITES: "1", ...env });
   const ctx = createContext(config);
   const app = createApp(ctx);
   return {
