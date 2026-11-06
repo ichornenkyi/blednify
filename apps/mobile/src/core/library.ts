@@ -427,6 +427,11 @@ export async function reorderPlaylist(id: string, from: number, to: number): Pro
   invalidatePlaylist(id);
 }
 
+/** Remove likes, recents and playlist entries for the given keys (platform-neutral entry point). */
+export async function purgeTrackReferences(keys: readonly string[]): Promise<void> {
+  await writeTx((db) => removeTrackReferences(db, keys));
+}
+
 /** Remove every library reference (likes, recents, playlist entries) to the given track keys. */
 export async function removeTrackReferences(db: SQLiteDatabase, keys: readonly string[]): Promise<void> {
   for (const key of keys) {

@@ -2,6 +2,8 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
+  ApiError,
+  apiDelete,
   apiGet,
   queryString,
   type ApiAlbum,
@@ -11,9 +13,12 @@ import {
   type ApiSearch,
   type ApiTrack,
 } from './api';
-import { fetchLocalAlbumTracks, fetchLocalArtistTracks, searchLocal } from './library';
-import { libKeys } from './query-client';
-import { normalizeServerUrl, useServerBase } from './settings';
+import { removeDownload } from './downloads';
+import { deleteLocalTrack } from './import/importer';
+import { fetchLocalAlbumTracks, fetchLocalArtistTracks, purgeTrackReferences, searchLocal } from './library';
+import { removeKeysFromQueue } from './player/engine';
+import { libKeys, queryClient } from './query-client';
+import { getServerBase, normalizeServerUrl, settingsStore, useServerBase } from './settings';
 import {
   albumsFromTracks,
   artistsFromTracks,
@@ -63,6 +68,80 @@ export async function testServer(url: string): Promise<{ ok: boolean; trackCount
   } catch (e) {
     return { ok: false, error: errorMessage(e) };
   }
+}
+
+export type DeleteResult = { deleted: number; failed: number; error?: string };
+
+/**
+ * Delete tracks' files from the server (admin token required), then clean up everything pointing at them.
+ * Stops at the first auth failure; a 404 counts as already deleted.
+ */
+async function deleteServerTracks(keys: readonly string[]): Promise<DeleteResult> {
+  const base = getServerBase();
+  const { adminToken } = settingsStore.getState();
+  const done: string[] = [];
+  let error: string | undefined;
+  for (const key of keys) {
+    try {
+      await apiDelete(base, `/api/tracks/${encodeURIComponent(key.slice(2))}`, adminToken);
+      done.push(key);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        done.push(key);
+        continue;
+      }
+      error ??= errorMessage(e);
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) break;
+    }
+  }
+  if (done.length) {
+    removeKeysFromQueue(new Set(done));
+    for (const key of done) await removeDownload(key);
+    await purgeTrackReferences(done);
+    // The server catalog (tracks, albums, artists, search, health) all changed.
+    void queryClient.invalidateQueries();
+  }
+  return { deleted: done.length, failed: keys.length - done.length, error };
+}
+
+export async function deleteServerTrack(key: string): Promise<void> {
+  if (!key.startsWith('r:')) return;
+  const r = await deleteServerTracks([key]);
+  if (r.failed) throw new Error(r.error ?? 'Could not delete the track');
+}
+
+/** Bulk delete by track key: `r:` keys from the server, `l:` keys from this device. */
+export async function deleteTracks(keys: readonly string[]): Promise<DeleteResult> {
+  const remote = keys.filter((k) => k.startsWith('r:'));
+  const local = keys.filter((k) => k.startsWith('l:'));
+  const res = remote.length ? await deleteServerTracks(remote) : { deleted: 0, failed: 0 };
+  let { deleted, failed } = res;
+  let error = (res as DeleteResult).error;
+  for (const key of local) {
+    try {
+      await deleteLocalTrack(key);
+      deleted++;
+    } catch (e) {
+      failed++;
+      error ??= errorMessage(e);
+    }
+  }
+  return { deleted, failed, error };
+}
+
+/** Track keys of whole albums, resolved at call time (remote via the server, local from the device). */
+export async function albumTrackKeys(albums: readonly Pick<AlbumView, 'id' | 'origin'>[]): Promise<string[]> {
+  const base = getServerBase();
+  const keys = new Set<string>();
+  for (const a of albums) {
+    if (a.origin === 'local') {
+      for (const t of await fetchLocalAlbumTracks('local', a.id)) keys.add(t.key);
+    } else {
+      const full = await apiGet<{ tracks: ApiTrack[] }>(base, `/api/albums/${encodeURIComponent(a.id)}`);
+      for (const t of full.tracks) keys.add(`r:${t.id}`);
+    }
+  }
+  return [...keys];
 }
 
 // ---------------------------------------------------------------------------------------------
