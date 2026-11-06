@@ -14,7 +14,7 @@ import {
   type DownloadStatus,
 } from '@/core';
 
-import { attempt, confirmDeleteLocal } from '../actions';
+import { attempt, confirmDeleteLocal, confirmDeleteRemote } from '../actions';
 import { nav } from '../nav';
 import { showSheet, showToast } from '../overlay';
 import { colors } from '../theme';
@@ -97,7 +97,9 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
       ) : null}
       {track.origin === 'local' ? (
         <SheetAction icon="trash-outline" label="Delete from device" destructive onPress={() => confirmDeleteLocal(track)} />
-      ) : null}
+      ) : (
+        <SheetAction icon="trash-outline" label="Delete from server" destructive onPress={() => confirmDeleteRemote(track)} />
+      )}
     </View>
   );
 }

@@ -10,6 +10,7 @@ export const nav = {
   queue: () => router.push('/queue'),
   settings: () => router.push('/settings'),
   downloads: () => router.push('/downloads'),
+  manage: () => router.push('/manage'),
   /** From a root-stack screen, pop back to the existing tabs instead of stacking a second tab navigator. */
   library: (filter?: LibraryFilter) => {
     const href = { pathname: '/library', params: filter ? { filter } : {} } as const;

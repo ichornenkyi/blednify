@@ -157,3 +157,16 @@ export async function reorderPlaylist(id: string, from: number, to: number): Pro
     return { tracks: list };
   });
 }
+
+// --- Deleted tracks --------------------------------------------------------------------------
+
+export async function purgeTrackReferences(keys: readonly string[]): Promise<void> {
+  const gone = new Set(keys);
+  const { likes, recents, playlists } = store.getState();
+  commit({
+    likes: likes.filter((l) => !gone.has(l.track.key)),
+    recents: recents.filter((r) => !gone.has(r.track.key)),
+    playlists: playlists.map((p) => ({ ...p, tracks: p.tracks.filter((t) => !gone.has(t.key)) })),
+  });
+  for (const k of keys) setLiked(k, false);
+}

@@ -1,6 +1,6 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
-import { deleteLocalTrack, importFromDevice, type AppTrack } from '@/core';
+import { deleteLocalTrack, deleteServerTrack, importFromDevice, type AppTrack } from '@/core';
 
 import { haptics } from './haptics';
 import { dismissToast, showToast } from './overlay';
@@ -47,9 +47,30 @@ export async function importMusic() {
   }
 }
 
+/** `Alert.alert` is a silent no-op on web, so fall back to the browser's confirm dialog there. */
+export function confirmAction(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+  ]);
+}
+
 export function confirmDeleteLocal(track: AppTrack) {
   Alert.alert('Delete from device?', `“${track.title}” will be removed from this phone.`, [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Delete', style: 'destructive', onPress: () => void attempt(deleteLocalTrack(track.key), 'Deleted from device') },
   ]);
+}
+
+export function confirmDeleteRemote(track: AppTrack) {
+  confirmAction(
+    'Delete from server?',
+    `“${track.title}” will be permanently deleted from your music server for every device.`,
+    'Delete',
+    () => void attempt(deleteServerTrack(track.key), 'Deleted from server'),
+  );
 }

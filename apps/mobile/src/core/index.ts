@@ -16,6 +16,9 @@ export { CoreProvider } from './provider';
 
 // Server catalog
 export {
+  albumTrackKeys,
+  deleteServerTrack,
+  deleteTracks,
   testServer,
   useAlbum,
   useArtist,
@@ -52,6 +55,7 @@ export { player } from './player/engine';
 export { usePlayer, useProgress } from './player/store';
 
 // Downloads
+export { uploadToServer } from './upload';
 export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDownloads } from './downloads';
 
 // Import

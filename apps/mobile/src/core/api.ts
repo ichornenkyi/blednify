@@ -136,3 +136,30 @@ export const trackStreamUrl = (base: string, id: string) => `${base}/api/tracks/
 const ARTWORK_VERSION = 2;
 export const trackArtworkUrl = (base: string, id: string, size?: number) =>
   `${base}/api/tracks/${seg(id)}/artwork?v=${ARTWORK_VERSION}${size ? `&size=${size}` : ''}`;
+
+/** DELETE `${base}${path}` with the admin bearer token; resolves on any 2xx. */
+export async function apiDelete(base: string, path: string, token: string): Promise<void> {
+  if (!base) throw new ApiError('No server configured');
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), DEFAULT_TIMEOUT_MS);
+  try {
+    const res = await fetch(base + path, { method: 'DELETE', headers, signal: ctrl.signal });
+    if (res.ok) return;
+    let message = `HTTP ${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: unknown };
+      if (typeof body?.error === 'string') message = body.error;
+    } catch {
+      // Non-JSON error body; keep the status text.
+    }
+    if (res.status === 401 || res.status === 403) message = token ? 'Admin token rejected by the server' : 'Set the admin token in Settings first';
+    throw new ApiError(message, res.status);
+  } catch (e) {
+    if (ctrl.signal.aborted) throw new ApiError('Server did not respond in time');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
