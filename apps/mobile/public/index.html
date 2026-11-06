@@ -9,8 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Blednify" />
-    <!-- Opaque bar: iOS lays the app out below it. "black-translucent" would draw the app underneath. -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- The app draws under the bar and pads itself with the safe-area insets. With "black", iOS reports a page one
+         status bar shorter than the screen and paints nothing below that, leaving a dead strip at the bottom. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#0A0A0C" />
     <style id="expo-reset">
       html {
@@ -32,6 +33,30 @@
         display: flex;
         height: 100%;
         flex: 1;
+      }
+      /*
+       * iOS home-screen apps get a viewport one status bar short of the screen and paint nothing below it, even if the
+       * body is taller (WebKit bug 301994). A fixed body keeps that short viewport; html and body in normal flow at
+       * 100lvh make iOS grow it to the full screen. #root stays fixed so the keyboard can't push the page.
+       * Not for Safari tabs: there 100lvh would put the bottom of the app behind the toolbar.
+       */
+      @media (display-mode: standalone) {
+        html {
+          height: 100lvh;
+        }
+        body {
+          position: static;
+          height: 100lvh;
+          overflow: visible;
+        }
+        #root {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 100lvh;
+          overflow: hidden;
+        }
       }
     </style>
   </head>
