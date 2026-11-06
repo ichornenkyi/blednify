@@ -36,12 +36,7 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
 | `MAX_UPLOAD_MB` | `200` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
 | `WEB_DIR` | unset (`/app/web` in Docker) | Folder with the exported web app, served at `/` next to the API. Unset: API only. |
-| `YTDLP_PATH` | `yt-dlp` on `PATH` | yt-dlp for downloading songs straight from YouTube Music (needs ffmpeg). The Docker image has both. `off` disables it. |
-| `JACKETT_URL` | unset | Jackett address, for music import. |
-| `JACKETT_API_KEY` | unset | Jackett API key (top right of its dashboard). |
-| `JACKETT_INDEXERS_LATIN` | unset | Comma-separated Jackett indexer ids for songs named only in Latin letters, e.g. `thepiratebay`. Unset means all indexers. |
-| `JACKETT_INDEXERS_CYRILLIC` | unset | Same, for songs with Cyrillic in the artist or title, e.g. `rutor,toloka`. |
-| `TORRSERVER_URL` | unset | TorrServer address, for music import. Torrent import needs all three of these; YouTube Music import only needs yt-dlp. Import is off when neither is available. |
+| `YTDLP_PATH` | `yt-dlp` on `PATH` | yt-dlp for downloading songs straight from YouTube Music (needs ffmpeg). The Docker image has both. `off` disables it, and music import is off without it. |
 | `PUBLIC` | unset | Reserved. Has no effect yet. |
 | `LOG_REQUESTS` | `1` | `0` turns off the one-line-per-request log. Successful `/api/health` calls are never logged. |
 
@@ -77,20 +72,13 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
   `MUSIC_DIR`). Success returns `201 {"items": Track[]}`, already indexed.
 - **Music import** (`POST /api/imports`): takes a public or unlisted YouTube Music playlist link, an album or a
   song. `POST /api/imports/search` finds albums and songs on YouTube Music to pick from, so each search has an exact
-  title and artist. Tracks are handled one at a time. A song already in the library is skipped. With the **YouTube Music** provider
-  (needs yt-dlp), the song's own video is downloaded as AAC (`.m4a`, copied without re-encoding when YouTube offers it, converted
-  from Opus otherwise) and tagged with the playlist's title, artist and album; the same length check applies. With no provider
-  picked, trackers are tried first and YouTube Music is the fallback when none has the song; a picked tracker is never
-  overridden. Without Jackett and TorrServer, YouTube Music is the only provider. Otherwise Jackett is searched for the song, then
-  its album, then the artist (for an album: the album first), in the Audio and Other categories (RuTor files everything under Other). A tracker picked in the app replaces those two settings for that job. Releases must be seeded and name the artist. Up to 5 are opened
-  in TorrServer until one has an audio file named after the song, and only that file's pieces are fetched. TorrServer
-  only streams and caches, so Blednify saves the stream to `MUSIC_DIR/uploads/`, where it is validated like an upload.
-  The stream can carry pieces that have not passed their hash check yet, so each file is read until two reads match.
-  A file more than 15 seconds off the playlist's length, or larger than `MAX_UPLOAD_MB`, is rejected. Torrents the
-  import added are removed from TorrServer afterwards; ones already there are left alone. Songs with no match are
+  title and artist. Tracks are handled one at a time. A song already in the library is skipped; the same title at a different
+  length counts as another version and is imported. Each song's own video is downloaded with yt-dlp as AAC (`.m4a`, copied without
+  re-encoding when YouTube offers it, converted from Opus otherwise) and tagged with the playlist's title, artist and album. A download
+  more than 15 seconds off the listed length is rejected. Songs that cannot be downloaded are
   reported as failed, with the reason. Jobs are held in memory, so a restart forgets them; run the playlist again
   and finished songs are skipped. Private playlists and auto-generated mixes cannot be read.
-- **Covers** (`POST /api/library/covers`): torrent files often have no cover, and album and artist covers come from a track's own, so
+- **Covers** (`POST /api/library/covers`): some files have no cover, and album and artist covers come from a track's own, so
   they stay blank too. This looks each cover-less song up on YouTube Music (the title, artist and length must match; live and remix
   versions are refused) and rewrites the file with the cover embedded and the audio copied unchanged. The new file replaces the
   original only when its tags and length match. `.wav` and `.ogg` files cannot be changed. New imports run this for songs that arrive without one.

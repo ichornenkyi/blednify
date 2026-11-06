@@ -11,7 +11,7 @@ export type ImportTrack = {
   artists: string[];
   album: string | null;
   durationMs: number | null;
-  status: 'pending' | 'searching' | 'downloading' | 'done' | 'exists' | 'failed';
+  status: 'pending' | 'downloading' | 'done' | 'exists' | 'failed';
   error: string | null;
   trackId: ApiTrack['id'] | null;
 };
@@ -19,13 +19,11 @@ export type ImportJob = {
   id: string;
   kind: 'playlist' | 'album' | 'song';
   source: string;
-  indexer: string | null;
   title: string;
   status: 'queued' | 'running' | 'done' | 'cancelled';
   createdAt: string;
   tracks: ImportTrack[];
 };
-export type ImportIndexer = { id: string; name: string };
 export type ImportSong = Pick<ImportTrack, 'videoId' | 'title' | 'artists' | 'album' | 'durationMs'>;
 export type ImportAlbum = { id: string; title: string; artists: string[]; type: string; year: string | null };
 export type ImportResults = { songs: ImportSong[]; albums: ImportAlbum[] };
@@ -63,18 +61,6 @@ export function useImports(): { enabled: boolean; jobs: ImportJob[] } {
   return { enabled: data?.enabled ?? false, jobs: jobs ?? [] };
 }
 
-/** The trackers that can be picked for an import. Empty while loading or if Jackett cannot be read. */
-export function useImportIndexers(enabled: boolean): ImportIndexer[] {
-  const base = useServerBase();
-  const { data } = useQuery({
-    queryKey: ['import-indexers', base],
-    queryFn: ({ signal }) => apiGet<{ items: ImportIndexer[] }>(base, '/api/imports/indexers', signal),
-    enabled: enabled && !!base,
-    retry: 0,
-  });
-  return data?.items ?? [];
-}
-
 /** True for text meant as a link, which is imported directly; anything else is searched for. */
 export function isImportLink(text: string): boolean {
   return /^\S*(:\/\/|\.[a-z]{2,}\/)\S*$/i.test(text.trim());
@@ -88,11 +74,10 @@ export async function searchImports(query: string): Promise<ImportResults | null
   });
 }
 
-/** A null `indexer` lets the server choose. */
-export async function startImport(target: ImportTarget, indexer: string | null = null): Promise<ImportJob | null> {
+export async function startImport(target: ImportTarget): Promise<ImportJob | null> {
   const job = await apiWrite<ImportJob>(getServerBase(), 'POST', '/api/imports', {
     token: settingsStore.getState().adminToken,
-    body: { ...target, indexer },
+    body: target,
     timeoutMs: START_TIMEOUT_MS,
   });
   await queryClient.invalidateQueries({ queryKey: importsKey(getServerBase()) });

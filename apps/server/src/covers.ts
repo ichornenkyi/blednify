@@ -4,7 +4,7 @@ import { dirname, extname, join } from "node:path";
 import { parseFile } from "music-metadata";
 import type { Library } from "./library";
 import type { Scanner } from "./scanner";
-import { isOtherVersion, isSameSong, normalize } from "./torrent-match";
+import { isOtherVersion, isSameSong, normalize } from "./track-match";
 import type { MusicResults, PlaylistTrack } from "./ytmusic";
 
 export type CoverDeps = {

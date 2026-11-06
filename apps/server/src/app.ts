@@ -15,11 +15,9 @@ import { openDb, type Db } from "./db";
 import { audioMime, trackId } from "./ids";
 import { Covers } from "./covers";
 import { Importer, NothingFoundError } from "./importer";
-import { Jackett } from "./jackett";
 import { Library, toTrack } from "./library";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
-import { TorrServer } from "./torrserver";
 import { YtDlp, type AudioSource } from "./ytdlp";
 import { mountWebApp } from "./web";
 import { fetchAlbum, fetchPlaylist, parsePlaylistId, searchMusic, type Album, type MusicResults, type Playlist } from "./ytmusic";
@@ -72,7 +70,6 @@ const importBody = z.object({
       durationMs: z.number().int().positive().nullable(),
     })
     .optional(),
-  indexer: z.string().regex(/^[\w.-]{1,100}$/).nullish(),
 });
 const coversBody = z.object({ trackIds: z.array(z.string().regex(/^[\w-]{1,100}$/)).min(1).max(500).optional() });
 const searchBody = z.object({ query: z.string().trim().min(1).max(500) });
@@ -196,23 +193,16 @@ export function createApp(
   };
 
   const covers = new Covers({ lib, scanner, musicDir: config.musicDir, searchMusic: music.searchMusic });
-  const torrents =
-    config.jackettUrl && config.jackettApiKey && config.torrServerUrl
-      ? { jackett: new Jackett(config.jackettUrl, config.jackettApiKey), torrServer: new TorrServer(config.torrServerUrl) }
-      : null;
   const importer =
-    torrents || youtube
+    youtube
       ? new Importer({
           lib,
           scanner,
-          torrents,
           youtube,
           covers,
-          indexers: { latin: config.jackettIndexersLatin, cyrillic: config.jackettIndexersCyrillic },
           fetchPlaylist: music.fetchPlaylist,
           fetchAlbum: music.fetchAlbum,
           uploadsDir,
-          maxFileBytes: config.maxUploadBytes,
           claim: claimUploadPath,
           release: (path) => claimed.delete(path),
           sanitize: sanitizeFileName,
@@ -368,19 +358,9 @@ export function createApp(
 
   app.get("/api/imports", (c) => c.json({ enabled: importer !== null, items: importer?.list() ?? [] }));
 
-  app.get("/api/imports/indexers", async (c) => {
-    if (!importer) return fail(503, "music import is off: install yt-dlp, or set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
-    try {
-      return c.json({ items: await importer.indexers(c.req.raw.signal) });
-    } catch (err) {
-      console.error(`[import] could not list indexers: ${(err as Error).message}`);
-      return fail(502, "could not read the provider list");
-    }
-  });
-
   app.post("/api/imports/search", admin, async (c) => {
     noIdleTimeout(c);
-    if (!importer) return fail(503, "music import is off: install yt-dlp, or set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
+    if (!importer) return fail(503, "music import is off: install yt-dlp on the server");
     const body = searchBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return fail(400, "enter a song or album name");
     try {
@@ -393,18 +373,18 @@ export function createApp(
 
   app.post("/api/imports", admin, async (c) => {
     noIdleTimeout(c);
-    if (!importer) return fail(503, "music import is off: install yt-dlp, or set JACKETT_URL, JACKETT_API_KEY and TORRSERVER_URL on the server");
+    if (!importer) return fail(503, "music import is off: install yt-dlp on the server");
     const body = importBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return fail(400, "expected JSON with one of 'url', 'albumId' or 'song'");
-    const { url, albumId, song, indexer = null } = body.data;
+    const { url, albumId, song } = body.data;
     if ([url, albumId, song].filter((v) => v !== undefined).length !== 1) return fail(400, "expected JSON with one of 'url', 'albumId' or 'song'");
     const playlistId = url === undefined ? null : (parsePlaylistId(url) ?? fail(400, "not a YouTube Music playlist link"));
     try {
       const job = playlistId
-        ? importer.startPlaylist(playlistId, indexer)
+        ? importer.startPlaylist(playlistId)
         : albumId
-          ? importer.startAlbum(albumId, indexer)
-          : importer.startSong(song!, indexer);
+          ? importer.startAlbum(albumId)
+          : importer.startSong(song!);
       return c.json(await job, 202);
     } catch (err) {
       if (err instanceof NothingFoundError) return fail(422, err.message);

@@ -16,12 +16,6 @@ services:
       # ALLOW_OPEN_WRITES: "1" lifts that on a trusted LAN only.
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       MAX_UPLOAD_MB: "200"
-      # Optional music import. Use addresses this container can reach; TorrServer must reach JACKETT_URL too.
-      JACKETT_URL: ${JACKETT_URL:-}
-      JACKETT_API_KEY: ${JACKETT_API_KEY:-}
-      JACKETT_INDEXERS_LATIN: ${JACKETT_INDEXERS_LATIN:-}
-      JACKETT_INDEXERS_CYRILLIC: ${JACKETT_INDEXERS_CYRILLIC:-}
-      TORRSERVER_URL: ${TORRSERVER_URL:-}
     # The image runs as uid/gid 1000 ("bun") and must be able to write the music folder for uploads/deletes.
     # Create it first so Docker does not create it as root: `mkdir -p music && sudo chown 1000:1000 music`.
     volumes:

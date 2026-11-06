@@ -1,9 +1,4 @@
-import { basename } from "node:path";
-import { audioMime } from "./ids";
 import type { PlaylistTrack } from "./ytmusic";
-
-export type Release = { title: string; link: string; seeders: number };
-export type TorrentFile = { id: number; path: string; length: number };
 
 const VARIANT_WORDS = ["instrumental", "karaoke", "remix", "live", "acapella", "a cappella", "cover"];
 
@@ -34,34 +29,6 @@ export function cleanTitle(track: Pick<PlaylistTrack, "title" | "artists">): str
 }
 
 const songName = (track: Pick<PlaylistTrack, "title" | "artists">) => normalize(cleanTitle(track));
-
-/** Releases worth opening, best first: seeded, by this artist, with the song's name in the title ranked ahead. */
-export function rankReleases(releases: Release[], track: PlaylistTrack): Release[] {
-  const artists = track.artists.map(normalize);
-  const song = songName(track);
-  const scored = releases
-    .map((release) => ({ release, name: normalize(release.title) }))
-    .filter(({ release, name }) => release.seeders > 0 && artists.some((a) => hasPhrase(name, a)));
-  return scored
-    .sort((a, b) => Number(hasPhrase(b.name, song)) - Number(hasPhrase(a.name, song)) || b.release.seeders - a.release.seeders)
-    .map(({ release }) => release);
-}
-
-/** The audio file for this song in a torrent: the closest name, ignoring live/remix/etc. unless the song is one. */
-export function pickFile(files: TorrentFile[], track: PlaylistTrack, maxBytes: number): TorrentFile | null {
-  const song = songName(track);
-  const fullTitle = normalize(track.title);
-  const rejected = VARIANT_WORDS.filter((w) => !hasPhrase(fullTitle, w));
-  let best: { file: TorrentFile; extra: number } | null = null;
-  for (const file of files) {
-    if (!audioMime(file.path) || file.length > maxBytes) continue;
-    const name = normalize(basename(file.path).replace(/\.[^.]+$/, ""));
-    if (!hasPhrase(name, song) || rejected.some((w) => hasPhrase(name, w))) continue;
-    const extra = name.length - song.length;
-    if (!best || extra < best.extra) best = { file, extra };
-  }
-  return best?.file ?? null;
-}
 
 /** Whether `candidate` is a live, remix or karaoke version that `own` is not. */
 export function isOtherVersion(candidate: string, own: string): boolean {
