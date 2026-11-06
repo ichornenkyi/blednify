@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApp } from "../src/app";
 import type { ImportJob } from "../src/importer";
+import type { AudioSource } from "../src/ytdlp";
 import { cleanTitle, isSameSong, pickFile, rankReleases } from "../src/torrent-match";
 import { parseAlbumPage, parseAlbumResults, parsePlaylistId, parsePlaylistPage, parseSongResults, type Album, type Playlist, type PlaylistTrack } from "../src/ytmusic";
 import { testServer, wav, type TestServer } from "./fixtures";
@@ -242,6 +243,7 @@ describe("import job", () => {
   let album: Album = { title: "I Am", artists: ["Beyoncé"], tracks: [] };
   let results: Record<string, unknown[]> = {};
   let jackettStatus = 200;
+  let youtube: AudioSource | null = null;
   let stream: (t: Torrent, index: number) => Response = (t, i) => new Response(t.data[i]);
   let jackett: ReturnType<typeof Bun.serve>;
   let torrServer: ReturnType<typeof Bun.serve>;
@@ -328,7 +330,7 @@ describe("import job", () => {
         musicQueries.push(q);
         return { songs: [song()], albums: [{ id: "MPREb_a", title: "I Am", artists: ["Beyoncé"], type: "Album", year: "2008" }] };
       },
-    });
+    }, youtube);
   };
   afterEach(() => {
     srv.close();
@@ -340,6 +342,7 @@ describe("import job", () => {
     album = { title: "I Am", artists: ["Beyoncé"], tracks: [] };
     results = {};
     jackettStatus = 200;
+    youtube = null;
     stream = (t, i) => new Response(t.data[i]);
   });
 
@@ -641,6 +644,83 @@ describe("import job", () => {
     await finished();
     expect(trackers.flat()).toEqual([]);
     expect(searches.length).toBeGreaterThan(0);
+  });
+
+  describe("YouTube Music", () => {
+    const calls: string[] = [];
+    const works: AudioSource = {
+      async download(track, dest) {
+        calls.push(`${track.videoId}:${dest.slice(dest.lastIndexOf(".") )}`);
+        await Bun.write(dest, Bun.file(join(import.meta.dir, "assets/halo.m4a")));
+      },
+    };
+    const fails: AudioSource = {
+      async download() {
+        throw new Error("YouTube Music: Video unavailable");
+      },
+    };
+    afterEach(() => (calls.length = 0));
+
+    test("downloads the song's own video when picked, without searching trackers", async () => {
+      youtube = works;
+      setup([song({ durationMs: 3000, videoId: "abcdefghijk" })]);
+      await postJson("/api/imports", { song: song({ durationMs: 3000, videoId: "abcdefghijk" }), indexer: "youtube" });
+      const job = await finished();
+      expect(job.tracks[0]).toMatchObject({ status: "done", error: null });
+      expect(calls).toEqual(["abcdefghijk:.m4a"]);
+      expect(searches).toEqual([]);
+      expect(uploads(srv.musicDir)).toEqual(["Beyoncé - Halo.m4a"]);
+      expect(readdirSync(join(srv.musicDir, "uploads")).filter((n) => n.startsWith(".import-"))).toEqual([]);
+    });
+
+    test("rejects a download of the wrong length", async () => {
+      youtube = works;
+      setup([song({ durationMs: 200_000 })]);
+      await post(undefined, "youtube");
+      expect((await finished()).tracks[0]).toMatchObject({ status: "failed", error: "the matching file has a different length" });
+      expect(uploads(srv.musicDir)).toEqual([]);
+    });
+
+    test("is the fallback in Auto when no torrent matches", async () => {
+      youtube = works;
+      setup([song({ durationMs: 3000 })]);
+      await post();
+      expect((await finished()).tracks[0]).toMatchObject({ status: "done", error: null });
+      expect(searches.length).toBeGreaterThan(0);
+      expect(calls).toHaveLength(1);
+    });
+
+    test("is not tried when a tracker was picked", async () => {
+      youtube = works;
+      setup([song({ durationMs: 3000 })]);
+      await post(undefined, "rutor");
+      expect((await finished()).tracks[0]).toMatchObject({ status: "failed", error: "no matching torrent found" });
+      expect(calls).toEqual([]);
+    });
+
+    test("reports both failures when neither source has the song", async () => {
+      youtube = fails;
+      setup([song()]);
+      await post();
+      expect((await finished()).tracks[0]).toMatchObject({ status: "failed", error: "no matching torrent found; YouTube Music: Video unavailable" });
+    });
+
+    test("works without Jackett or TorrServer", async () => {
+      youtube = works;
+      setup([song({ durationMs: 3000 })], { JACKETT_URL: "", JACKETT_API_KEY: "", TORRSERVER_URL: "" });
+      expect(await (await app.request("/api/imports/indexers")).json()).toEqual({ items: [{ id: "youtube", name: "YouTube Music" }] });
+      await post();
+      expect((await finished()).tracks[0]).toMatchObject({ status: "done" });
+      expect(searches).toEqual([]);
+    });
+
+    test("is listed first, and stays listed when Jackett is down", async () => {
+      youtube = works;
+      setup([]);
+      expect(((await (await app.request("/api/imports/indexers")).json()) as { items: { id: string }[] }).items.map((i) => i.id)).toEqual(["youtube", "rutor", "rb"]);
+      jackettStatus = 500;
+      expect(await (await app.request("/api/imports/indexers")).json()).toEqual({ items: [{ id: "youtube", name: "YouTube Music" }] });
+    });
   });
 
   test("YouTube failures give 502", async () => {

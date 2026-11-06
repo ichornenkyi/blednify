@@ -7,6 +7,7 @@ import type { Library, Track } from "./library";
 import type { Scanner } from "./scanner";
 import { cleanTitle, isSameSong, pickFile, rankReleases, type Release } from "./torrent-match";
 import type { TorrServer } from "./torrserver";
+import { YOUTUBE_PROVIDER, type AudioSource } from "./ytdlp";
 import type { Album, Playlist, PlaylistTrack } from "./ytmusic";
 
 export type ImportTrackStatus = "pending" | "searching" | "downloading" | "done" | "exists" | "failed";
@@ -16,7 +17,7 @@ export type ImportJob = {
   kind: "playlist" | "album" | "song";
   /** The YouTube Music id of the playlist, album or song. */
   source: string;
-  /** The Jackett indexer picked for this job. Null: chosen per track by its script. */
+  /** The provider picked for this job: a Jackett indexer id, or "youtube". Null: trackers chosen per track by its script, then YouTube Music. */
   indexer: string | null;
   title: string;
   status: "queued" | "running" | "done" | "cancelled";
@@ -34,10 +35,14 @@ const TMP_PREFIX = ".import-";
 export type ImporterDeps = {
   lib: Library;
   scanner: Scanner;
-  jackett: Jackett;
+  /** Torrent search and download; null when Jackett or TorrServer is not set up. */
+  torrents: { jackett: Jackett; torrServer: TorrServer } | null;
+  /** Adds a cover to songs that arrive without one (torrent files often have none). Null: off. */
+  covers: { fixTrack(id: string, signal: AbortSignal): Promise<string | null> } | null;
+  /** Direct download from YouTube Music; null when yt-dlp is not installed. */
+  youtube: AudioSource | null;
   /** Jackett indexer ids by the script of a track's name. Empty means every indexer. */
   indexers: { latin: string[]; cyrillic: string[] };
-  torrServer: TorrServer;
   fetchPlaylist(id: string): Promise<Playlist>;
   fetchAlbum(id: string): Promise<Album>;
   uploadsDir: string;
@@ -63,9 +68,18 @@ export class Importer {
     return this.jobs;
   }
 
-  /** The indexers set up in Jackett. */
-  indexers(signal: AbortSignal): Promise<{ id: string; name: string }[]> {
-    return this.deps.jackett.indexers(signal);
+  /** The providers a job can use: YouTube Music if yt-dlp is installed, then the trackers set up in Jackett. Jackett being down does not hide YouTube Music. */
+  async indexers(signal: AbortSignal): Promise<{ id: string; name: string }[]> {
+    const { torrents, youtube } = this.deps;
+    const direct = youtube ? [YOUTUBE_PROVIDER] : [];
+    if (!torrents) return direct;
+    try {
+      return [...direct, ...(await torrents.jackett.indexers(signal))];
+    } catch (err) {
+      if (!youtube) throw err;
+      signal.throwIfAborted();
+      return direct;
+    }
   }
 
   startPlaylist(playlistId: string, indexer: string | null = null): Promise<ImportJob> {
@@ -188,8 +202,34 @@ export class Importer {
     return this.deps.lib.search(query, 20).tracks.find((t) => isSameSong(track, t.title, t.artist)) ?? null;
   }
 
-  /** Tries the song's own release, then its album, then the artist's collections; albums search for the whole album first. Returns why it failed, if it did. */
+  /** Picks the provider: YouTube Music when chosen, else torrents, with YouTube Music as the fallback when no tracker was chosen. Returns why it failed, if it did. */
   private async searchAndDownload(track: ImportTrack, job: ImportJob, signal: AbortSignal): Promise<string | null> {
+    const { torrents, youtube } = this.deps;
+    if (job.indexer === YOUTUBE_PROVIDER.id || !torrents) {
+      if (!youtube) return "no download source is set up on the server";
+      return this.downloadFromYouTube(track, signal);
+    }
+    const failure = await this.searchTorrents(torrents, track, job, signal);
+    if (failure === null || job.indexer || !youtube) return failure;
+    const direct = await this.downloadFromYouTube(track, signal);
+    return direct === null ? null : `${failure}; ${direct}`;
+  }
+
+  /** Returns why it failed, if it did. */
+  private async downloadFromYouTube(track: ImportTrack, signal: AbortSignal): Promise<string | null> {
+    track.status = "downloading";
+    try {
+      await this.store(".m4a", track, signal, (tmp) => this.deps.youtube!.download(track, tmp, signal));
+      return null;
+    } catch (err) {
+      signal.throwIfAborted();
+      track.status = "searching";
+      return (err as Error).message;
+    }
+  }
+
+  /** Tries the song's own release, then its album, then the artist's collections; albums search for the whole album first. Returns why it failed, if it did. */
+  private async searchTorrents(torrents: NonNullable<ImporterDeps["torrents"]>, track: ImportTrack, job: ImportJob, signal: AbortSignal): Promise<string | null> {
     const artist = track.artists[0];
     if (!artist) return "the playlist does not name an artist";
     const song = `${artist} ${cleanTitle(track)}`;
@@ -202,7 +242,7 @@ export class Importer {
     for (const query of queries) {
       let releases: Release[];
       try {
-        releases = await this.deps.jackett.search(query, signal, indexers);
+        releases = await torrents.jackett.search(query, signal, indexers);
       } catch (err) {
         signal.throwIfAborted();
         failure = (err as Error).message;
@@ -213,7 +253,7 @@ export class Importer {
         if (tried.size >= MAX_ATTEMPTS_PER_TRACK) return failure;
         tried.add(release.link);
         try {
-          if (await this.downloadFrom(release, track, signal)) return null;
+          if (await this.downloadFrom(torrents.torrServer, release, track, signal)) return null;
         } catch (err) {
           signal.throwIfAborted();
           failure = (err as Error).message;
@@ -225,8 +265,7 @@ export class Importer {
   }
 
   /** True when the track was saved; false when this torrent does not have it. */
-  private async downloadFrom(release: Release, track: ImportTrack, signal: AbortSignal): Promise<boolean> {
-    const { torrServer } = this.deps;
+  private async downloadFrom(torrServer: TorrServer, release: Release, track: ImportTrack, signal: AbortSignal): Promise<boolean> {
     const { hash, owned } = await torrServer.add(release.link, signal);
     try {
       const files = await torrServer.files(hash, signal);
@@ -234,25 +273,26 @@ export class Importer {
       const file = pickFile(files, track, this.deps.maxFileBytes);
       if (!file) return false;
       track.status = "downloading";
-      await this.saveFile(hash, file, track, signal);
+      await this.store(extname(file.path).toLowerCase(), track, signal, (tmp) => torrServer.download(hash, file, tmp, signal));
       return true;
     } finally {
       if (owned) await torrServer.remove(hash).catch(() => undefined);
     }
   }
 
-  private async saveFile(hash: string, file: { id: number; path: string; length: number }, track: ImportTrack, signal: AbortSignal): Promise<void> {
-    const { uploadsDir, torrServer, scanner, sanitize, claim, release } = this.deps;
+  /** Fetches the audio into a temp file, checks it is the right song and adds it to the library. */
+  private async store(ext: string, track: ImportTrack, signal: AbortSignal, fetchTo: (tmp: string) => Promise<void>): Promise<void> {
+    const { uploadsDir, scanner, sanitize, claim, release } = this.deps;
     await mkdir(uploadsDir, { recursive: true });
-    const ext = extname(file.path).toLowerCase();
     const tmp = join(uploadsDir, `${TMP_PREFIX}${randomUUID()}${ext}`);
     let final: string | null = null;
     try {
-      await torrServer.download(hash, file, tmp, signal);
+      await fetchTo(tmp);
       await this.assertLength(tmp, track);
       final = claim(sanitize(`${track.artists.join(", ")} - ${cleanTitle(track)}${ext}`));
       const [saved] = await scanner.indexUploads([{ tmp, final }]);
       Object.assign(track, { status: "done", error: null, trackId: saved!.id });
+      if (!saved!.hasArtwork) await this.deps.covers?.fixTrack(saved!.id, signal);
     } finally {
       await rm(tmp, { force: true });
       if (final) release(final);

@@ -26,7 +26,8 @@ export function resolveTrack(t: AppTrack, ctx: ResolveCtx = currentCtx()): AppTr
   if (t.origin === 'local') return t;
   const dl = ctx.downloads.get(t.key);
   const localUri = dl ? absUri(dl.file) : null;
-  const artworkUri = dl?.art ? absUri(dl.art) : t.artworkUri && ctx.base ? trackArtworkUrl(ctx.base, t.id) : null;
+  // Not gated on the saved `artworkUri`: a track saved before it got a cover would never show it. Artwork falls back to a tile on a 404.
+  const artworkUri = dl?.art ? absUri(dl.art) : ctx.base ? trackArtworkUrl(ctx.base, t.id) : null;
   const streamUri = localUri ?? (ctx.base ? trackStreamUrl(ctx.base, t.id) : '');
   if (t.localUri === localUri && t.artworkUri === artworkUri && t.streamUri === streamUri) return t;
   return { ...t, localUri, artworkUri, streamUri };

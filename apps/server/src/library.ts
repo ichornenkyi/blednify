@@ -216,6 +216,10 @@ export class Library {
     return this.sql.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM tracks").get()!.n;
   }
 
+  tracksWithoutArt(): TrackRow[] {
+    return this.sql.query<TrackRow, []>("SELECT * FROM tracks WHERE has_art = 0 ORDER BY added_at").all();
+  }
+
   trackRow(id: string): TrackRow | null {
     return this.sql.query<TrackRow, [string]>("SELECT * FROM tracks WHERE id = ?").get(id);
   }

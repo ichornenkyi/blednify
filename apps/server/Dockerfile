@@ -18,6 +18,9 @@ ENV NODE_ENV=production \
     MUSIC_DIR=/music \
     DATA_DIR=/data \
     WEB_DIR=/app/web
+# yt-dlp downloads songs from YouTube Music and ffmpeg tags them. YouTube changes often: rebuild the image to get the latest yt-dlp.
+RUN apk add --no-cache python3 ffmpeg
+RUN wget -qO /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod 755 /usr/local/bin/yt-dlp
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=web /web ./web
 COPY apps/server/package.json apps/server/tsconfig.json ./

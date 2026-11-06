@@ -233,9 +233,9 @@ function AddMusicSection() {
   return (
     <Section title="Add music" icon="cloud-download-outline">
       <Text variant="caption">
-        Search for a song or album and pick the right one, or paste a public or unlisted YouTube Music playlist link. The server finds each song
-        through Jackett, downloads it with TorrServer and adds it to your library. Songs without a good match are listed as failed. Auto picks
-        trackers by language.
+        Search for a song or album and pick the right one, or paste a public or unlisted YouTube Music playlist link. The server adds each song
+        to your library. YouTube Music downloads the song itself and is the most reliable. Auto tries trackers by language first, then falls
+        back to YouTube Music. Songs that no source has are listed as failed.
       </Text>
       <TextInput
         value={input}

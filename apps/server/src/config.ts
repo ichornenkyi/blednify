@@ -11,7 +11,9 @@ export type Config = {
   maxUploadBytes: number;
   /** Folder with the exported web app, served at `/` next to the API. Null: API only. */
   webDir: string | null;
-  /** Playlist import needs all three; without them it is off. */
+  /** Path of yt-dlp for downloading straight from YouTube Music. Null: not installed (or `YTDLP_PATH=off`). */
+  ytdlpPath: string | null;
+  /** Torrent import needs all three of these. */
   jackettUrl: string | null;
   jackettApiKey: string | null;
   jackettIndexersLatin: string[];
@@ -31,6 +33,12 @@ function int(name: string, value: string | undefined, fallback: number): number 
 
 const list = (raw: string | undefined): string[] => (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
+function ytdlp(value: string | undefined): string | null {
+  const wanted = value?.trim();
+  if (wanted === "off") return null;
+  return Bun.which(wanted || "yt-dlp");
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   return {
     port: int("PORT", env.PORT, 8787),
@@ -40,6 +48,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     allowOpenWrites: /^(1|true|yes)$/i.test(env.ALLOW_OPEN_WRITES ?? ""),
     maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 200) * 1024 * 1024,
     webDir: env.WEB_DIR?.trim() ? resolve(env.WEB_DIR.trim()) : null,
+    ytdlpPath: ytdlp(env.YTDLP_PATH),
     jackettUrl: env.JACKETT_URL?.trim().replace(/\/+$/, "") || null,
     jackettApiKey: env.JACKETT_API_KEY?.trim() || null,
     jackettIndexersLatin: list(env.JACKETT_INDEXERS_LATIN),

@@ -63,6 +63,12 @@ export function pickFile(files: TorrentFile[], track: PlaylistTrack, maxBytes: n
   return best?.file ?? null;
 }
 
+/** Whether `candidate` is a live, remix or karaoke version that `own` is not. */
+export function isOtherVersion(candidate: string, own: string): boolean {
+  const [a, b] = [normalize(candidate), normalize(own)];
+  return VARIANT_WORDS.some((w) => hasPhrase(a, w) && !hasPhrase(b, w));
+}
+
 /** Whether a library track is this playlist track. */
 export function isSameSong(track: PlaylistTrack, title: string, artist: string): boolean {
   const name = normalize(artist);
