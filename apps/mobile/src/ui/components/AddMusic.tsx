@@ -6,7 +6,6 @@ import {
   isImportLink,
   searchImports,
   startImport,
-  useImportIndexers,
   useImports,
   type ImportJob,
   type ImportResults,
@@ -15,7 +14,6 @@ import {
 
 import { attempt } from '../actions';
 import { colors, radius, space } from '../theme';
-import { Chip } from './Chip';
 import { Icon } from './Icon';
 import { ListRow } from './ListRow';
 import { PrimaryButton } from './PrimaryButton';
@@ -24,10 +22,7 @@ import { Text } from './Text';
 
 export function AddMusicSection() {
   const { enabled, jobs } = useImports();
-  const indexers = useImportIndexers(enabled);
   const [input, setInput] = useState('');
-  const [picked, setPicked] = useState<string | null>(null);
-  const indexer = indexers.some((i) => i.id === picked) ? picked : null;
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<ImportResults | null>(null);
 
@@ -37,7 +32,7 @@ export function AddMusicSection() {
 
   const add = async (target: ImportTarget) => {
     setBusy(true);
-    const job = await attempt(startImport(target, indexer));
+    const job = await attempt(startImport(target));
     setBusy(false);
     if (!job) return;
     setInput('');
@@ -57,9 +52,8 @@ export function AddMusicSection() {
   return (
     <Section title="Add music" icon="cloud-download-outline">
       <Text variant="caption">
-        Search for a song or album and pick the right one, or paste a public or unlisted YouTube Music playlist link. The server adds each song
-        to your library. YouTube Music downloads the song itself and is the most reliable. Auto tries trackers by language first, then falls
-        back to YouTube Music. Songs that no source has are listed as failed.
+        Search for a song or album and pick the right one, or paste a public or unlisted YouTube Music playlist link. The server downloads each
+        song from YouTube Music and adds it to your library. Songs it cannot download are listed as failed.
       </Text>
       <TextInput
         value={input}
@@ -77,14 +71,6 @@ export function AddMusicSection() {
         cursorColor={colors.accent}
         style={styles.input}
       />
-      {indexers.length > 0 ? (
-        <View style={styles.chips}>
-          <Chip label="Auto" selected={indexer === null} onPress={() => setPicked(null)} />
-          {indexers.map((i) => (
-            <Chip key={i.id} label={i.name} selected={indexer === i.id} onPress={() => setPicked(i.id)} />
-          ))}
-        </View>
-      ) : null}
       <PrimaryButton
         label={isLink ? 'Add' : 'Search'}
         icon={isLink ? 'arrow-down' : 'search'}
@@ -140,7 +126,7 @@ function ImportJobRow({ job }: { job: ImportJob }) {
   const added = job.tracks.filter((t) => t.status === 'done').length;
   const existing = job.tracks.filter((t) => t.status === 'exists').length;
   const failed = job.tracks.filter((t) => t.status === 'failed');
-  const current = job.tracks.find((t) => t.status === 'searching' || t.status === 'downloading');
+  const current = job.tracks.find((t) => t.status === 'downloading');
   const active = job.status === 'queued' || job.status === 'running';
   const songResult = added ? 'Added' : existing ? 'Already in library' : failed.length ? 'Failed' : 'Cancelled';
   const playlistSummary = [
@@ -151,17 +137,16 @@ function ImportJobRow({ job }: { job: ImportJob }) {
     job.status === 'cancelled' ? 'cancelled' : null,
   ].filter(Boolean);
   const status = job.kind === 'song' ? (active ? 'In progress' : songResult) : playlistSummary.join(' · ');
-  const summary = job.indexer ? `${status} · ${job.indexer}` : status;
 
   return (
     <View style={styles.job}>
       <Text variant="bodyStrong" numberOfLines={1}>
         {job.title}
       </Text>
-      <Text variant="caption">{summary}</Text>
+      <Text variant="caption">{status}</Text>
       {current ? (
         <Text variant="caption" numberOfLines={1}>
-          {current.status === 'downloading' ? 'Downloading' : 'Searching for'} {current.title}
+          Downloading {current.title}
         </Text>
       ) : null}
       {failed.slice(0, MAX_FAILURES_SHOWN).map((t) => (
@@ -190,6 +175,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   job: { gap: space.xs, paddingTop: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
 });

@@ -40,7 +40,6 @@ type ImportJob = {
   id: string;
   kind: "playlist" | "album" | "song";
   source: string;        // the YouTube Music id of the playlist, album or song
-  indexer: string | null; // the picked provider: a Jackett indexer id or "youtube"; null means trackers chosen per track, then YouTube Music
   title: string;
   status: "queued" | "running" | "done" | "cancelled";
   createdAt: string; // ISO 8601
@@ -50,7 +49,7 @@ type ImportJob = {
     artists: string[];
     album: string | null;
     durationMs: number | null;
-    status: "pending" | "searching" | "downloading" | "done" | "exists" | "failed";
+    status: "pending" | "downloading" | "done" | "exists" | "failed";
     error: string | null;
     trackId: string | null; // set for "done" and "exists"
   }[];
@@ -75,9 +74,8 @@ type ImportJob = {
 | DELETE | `/api/tracks/:id` | `204` (admin) |
 | POST | `/api/rescan` | `{ added: number; removed: number; total: number }` (admin) |
 | GET | `/api/imports` | `{ enabled: boolean; items: ImportJob[] }`, newest first |
-| GET | `/api/imports/indexers` | `{ items: { id: string; name: string }[] }`, the providers a job can pick: `youtube` (when yt-dlp is installed), then the trackers set up in Jackett. `502` Jackett failed and there is no yt-dlp, `503` import not configured |
 | POST | `/api/imports/search` | JSON `{ query: string }` → `{ songs: ImportSong[]; albums: ImportAlbum[] }`, up to 6 of each, best first. Starts nothing. `400` blank query, `502` YouTube Music failed, `503` import not configured (admin) |
-| POST | `/api/imports` | JSON with one of `{ url: string }` (playlist link), `{ albumId: string }` or `{ song: ImportSong }`, plus optional `indexer: string \| null` (`"youtube"` or a tracker id) to use only that provider → `202 ImportJob`; the running job if the same request is already importing. `400` bad request or a link that is not a playlist, `422` empty or private playlist, or empty album, `502` YouTube Music failed, `503` import not configured (admin) |
+| POST | `/api/imports` | JSON with one of `{ url: string }` (playlist link), `{ albumId: string }` or `{ song: ImportSong }` → `202 ImportJob`; the running job if the same request is already importing. `400` bad request or a link that is not a playlist, `422` empty or private playlist, or empty album, `502` YouTube Music failed, `503` import not configured (admin) |
 | POST | `/api/library/covers` | For every track without a cover (or, with JSON `{ trackIds: string[] }`, for just those tracks, replacing any cover they have), finds the song on YouTube Music, preferring the release with the file's own album, and embeds its cover in the file (`.m4a`, `.mp3`, `.flac`). The original is replaced only if the copy has the same tags and length. → `{ fixed: number; skipped: { title: string; artist: string; reason: string }[] }`. `409` already running (admin). Imports do this automatically for songs that arrive without a cover |
 | DELETE | `/api/imports/:id` | Cancels a queued or running job, or forgets a finished one → `204` (admin) |
 

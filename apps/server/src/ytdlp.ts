@@ -8,9 +8,6 @@ export interface AudioSource {
   download(track: PlaylistTrack, dest: string, signal: AbortSignal): Promise<void>;
 }
 
-/** The provider id that picks this source in place of a torrent tracker. */
-export const YOUTUBE_PROVIDER = { id: "youtube", name: "YouTube Music" };
-
 const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;
 const VIDEO_ID = /^[\w-]{11}$/;
 

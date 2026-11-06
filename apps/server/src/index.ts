@@ -21,7 +21,7 @@ if (import.meta.main) {
       ` · music ${config.musicDir} · data ${config.dataDir}` +
       ` · writes ${config.adminToken ? "require ADMIN_TOKEN" : config.allowOpenWrites ? "OPEN (ALLOW_OPEN_WRITES)" : "disabled (no ADMIN_TOKEN)"}` +
       ` · search ${ctx.db.fts ? "fts5" : "like"}` +
-      ` · import: youtube ${config.ytdlpPath ? "on" : "off"}, torrents ${config.jackettUrl && config.jackettApiKey && config.torrServerUrl ? "on" : "off"}`,
+      ` · import ${config.ytdlpPath ? "on" : "off"}`,
   );
 
   // Answer requests immediately; index in the background.

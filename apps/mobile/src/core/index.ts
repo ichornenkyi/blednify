@@ -29,8 +29,8 @@ export {
 } from './catalog';
 
 // Playlist import
-export { discardImport, isImportLink, searchImports, startImport, useImportIndexers, useImports } from './imports';
-export type { ImportAlbum, ImportIndexer, ImportJob, ImportResults, ImportSong, ImportTarget, ImportTrack } from './imports';
+export { discardImport, isImportLink, searchImports, startImport, useImports } from './imports';
+export type { ImportAlbum, ImportJob, ImportResults, ImportSong, ImportTarget, ImportTrack } from './imports';
 
 // Local library
 export {
