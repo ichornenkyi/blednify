@@ -18,6 +18,8 @@
         height: 100%;
         background-color: #0a0a0c;
         -webkit-text-size-adjust: 100%;
+        /* No double-tap zoom: iOS keeps the page zoomed, which pushes bottom bars off the screen. Pinch still works. */
+        touch-action: manipulation;
       }
       /* Pinned to the visible screen: iOS can't scroll or push the page, e.g. when the keyboard opens. */
       body {

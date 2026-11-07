@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2,
     paddingHorizontal: space.lg,
     color: colors.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
   },
   searchBox: {
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   search: {
     flex: 1,
     color: colors.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
     height: 44,
   },

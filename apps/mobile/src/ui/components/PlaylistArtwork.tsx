@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 
 import { colors, radius as radii } from '../theme';
-import { Artwork } from './Artwork';
+import { Artwork, sizedArtworkUri } from './Artwork';
 
 /** 2×2 mosaic when a playlist has 4 covers, single cover otherwise, branded fallback when empty. */
 export function PlaylistArtwork({ uris, name, size, radius = radii.sm }: { uris: string[]; name: string; size?: number; radius?: number }) {
@@ -13,7 +13,7 @@ export function PlaylistArtwork({ uris, name, size, radius = radii.sm }: { uris:
   return (
     <View style={[styles.grid, box, { borderRadius: radius }]}>
       {uris.slice(0, 4).map((uri, i) => (
-        <Image key={i} source={uri} style={styles.cell} contentFit="cover" cachePolicy="memory-disk" recyclingKey={uri} transition={120} />
+        <Image key={i} source={sizedArtworkUri(uri, size && size / 2)} style={styles.cell} contentFit="cover" cachePolicy="memory-disk" recyclingKey={uri} transition={120} />
       ))}
     </View>
   );

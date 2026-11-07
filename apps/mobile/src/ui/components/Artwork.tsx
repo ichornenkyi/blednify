@@ -1,11 +1,16 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { PixelRatio, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+
+import { resizedArtworkUrl } from '@/core';
 
 import { colors, gradientFor, radius as radii } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
+
+/** Assumed width of artwork that fills its parent, in points. */
+const DEFAULT_FILL_SIZE = 200;
 
 export type ArtworkProps = {
   uri: string | null | undefined;
@@ -31,6 +36,30 @@ function initials(label: string) {
   return (words[0][0] + (words[1]?.[0] ?? '')).toUpperCase();
 }
 
+/** A copy of a server cover big enough to look sharp at `size` points, so a thumbnail never decodes a 3000px original. */
+export function sizedArtworkUri(uri: string, size: number | undefined) {
+  return resizedArtworkUrl(uri, Math.ceil((size ?? DEFAULT_FILL_SIZE) * PixelRatio.get()));
+}
+
+/**
+ * Blurred full-bleed cover behind a screen. Browsers re-run a CSS blur this large whenever the area repaints, which
+ * stutters on iPhones, so web stretches a 16px copy instead: that looks the same under the screen's dark gradient and
+ * costs nothing to draw. Larger copies still show the cover's shapes.
+ */
+export function ArtworkBackdrop({ uri, blurRadius, transition }: { uri: string; blurRadius: number; transition: number }) {
+  const web = Platform.OS === 'web';
+  return (
+    <Image
+      source={resizedArtworkUrl(uri, web ? 16 : 256)}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      blurRadius={web ? undefined : blurRadius}
+      cachePolicy="memory-disk"
+      transition={transition}
+    />
+  );
+}
+
 /** Cover art via expo-image (memory+disk cache) with a branded gradient fallback. */
 export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIcon, recyclingKey, priority, style }: ArtworkProps) {
   const [failedUri, setFailedUri] = useState<string | null>(null);
@@ -42,7 +71,7 @@ export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIc
     <View style={[styles.base, box, { borderRadius }, style]}>
       {showImage ? (
         <Image
-          source={uri}
+          source={sizedArtworkUri(uri, size)}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           cachePolicy="memory-disk"

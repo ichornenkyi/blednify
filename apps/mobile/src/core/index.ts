@@ -14,6 +14,9 @@ export type {
 // Provider
 export { CoreProvider } from './provider';
 
+// Artwork
+export { resizedArtworkUrl } from './api';
+
 // Server catalog
 export {
   albumTrackKeys,

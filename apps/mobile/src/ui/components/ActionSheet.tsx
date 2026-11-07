@@ -7,7 +7,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { haptics } from '../haptics';
 import { closeSheet, useOverlay } from '../overlay';
-import { colors, radius, space } from '../theme';
+import { colors, radius, space, webLayer } from '../theme';
 import { Artwork } from './Artwork';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
@@ -222,6 +222,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     paddingTop: space.sm,
     overflow: 'hidden',
+    ...webLayer,
   },
   grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.surface3, marginBottom: space.sm },
   header: {

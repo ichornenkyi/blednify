@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -105,8 +105,9 @@ function MiniProgress() {
   const ratio = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
   const p = useSharedValue(ratio);
   useEffect(() => {
-    // Animate between ~4 Hz ticks for a smooth line; snap on big jumps (seek / track change).
-    p.set(Math.abs(p.get() - ratio) > 0.05 ? ratio : withTiming(ratio, { duration: 260, easing: Easing.linear }));
+    // Animate between ~4 Hz ticks for a smooth line; snap on big jumps (seek / track change). Not on web, where
+    // that would redraw from JavaScript every frame during playback to move the line a fraction of a pixel.
+    p.set(Platform.OS === 'web' || Math.abs(p.get() - ratio) > 0.05 ? ratio : withTiming(ratio, { duration: 260, easing: Easing.linear }));
   }, [ratio, p]);
   const style = useAnimatedStyle(() => ({ transform: [{ scaleX: p.get() }] }));
   return (
