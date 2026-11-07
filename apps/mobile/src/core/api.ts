@@ -137,6 +137,15 @@ const ARTWORK_VERSION = 2;
 export const trackArtworkUrl = (base: string, id: string, size?: number) =>
   `${base}/api/tracks/${seg(id)}/artwork?v=${ARTWORK_VERSION}${size ? `&size=${size}` : ''}`;
 
+/** The server's resize buckets. Asking for exactly these lets nearby sizes share one URL in the image cache. */
+const ARTWORK_SIZES = [16, 64, 128, 256, 512, 1024];
+
+/** Points a full-size server artwork URL at a copy at least `px` wide. Anything else, like a downloaded file, is unchanged. */
+export function resizedArtworkUrl(uri: string, px: number) {
+  if (!/\/artwork\?v=\d+$/.test(uri)) return uri;
+  return `${uri}&size=${ARTWORK_SIZES.find((s) => s >= px) ?? 1024}`;
+}
+
 /** DELETE `${base}${path}` with the admin bearer token; resolves on any 2xx. */
 export async function apiDelete(base: string, path: string, token: string): Promise<void> {
   if (!base) throw new ApiError('No server configured');

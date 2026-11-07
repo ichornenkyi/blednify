@@ -1,10 +1,10 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radius, space } from '../theme';
+import { ArtworkBackdrop } from './Artwork';
 import { PrimaryButton } from './PrimaryButton';
 import { Text } from './Text';
 
@@ -47,9 +47,7 @@ export function DetailHeader({
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.xxxl }]}>
       <View style={styles.backdrop} pointerEvents="none">
-        {backdropUri ? (
-          <Image source={backdropUri} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
-        ) : null}
+        {backdropUri ? <ArtworkBackdrop uri={backdropUri} blurRadius={60} transition={200} /> : null}
         <LinearGradient
           colors={backdropUri ? ['rgba(10,10,12,0.35)', 'rgba(10,10,12,0.75)', colors.bg] : [colors.accentDeep, 'rgba(10,10,12,0.6)', colors.bg]}
           locations={[0, 0.55, 1]}

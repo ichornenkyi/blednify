@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2,
     paddingHorizontal: space.lg,
     color: colors.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '500',
   },
   job: { gap: space.xs, paddingTop: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },

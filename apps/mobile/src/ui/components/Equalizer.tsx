@@ -1,15 +1,5 @@
-import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-  type SharedValue,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 
 import { colors } from '../theme';
 
@@ -17,9 +7,15 @@ const BARS = [
   { min: 0.25, max: 1, duration: 420, rest: 0.45 },
   { min: 0.35, max: 0.8, duration: 560, rest: 0.75 },
   { min: 0.2, max: 0.95, duration: 360, rest: 0.35 },
-] as const;
+].map((bar) => ({
+  ...bar,
+  keyframes: { from: { transform: [{ scaleY: bar.min }] }, to: { transform: [{ scaleY: bar.max }] } },
+}));
 
-/** Animated "now playing" bars. Runs fully on the UI thread; freezes when paused. */
+/**
+ * Animated "now playing" bars; they settle when paused. A CSS animation, so on web the browser runs it instead of
+ * JavaScript redrawing every frame for as long as music plays.
+ */
 export function Equalizer({ playing, size = 14, color = colors.accent }: { playing: boolean; size?: number; color?: string }) {
   return (
     <View style={[styles.row, { height: size, width: size }]} accessibilityLabel={playing ? 'Playing' : 'Paused'}>
@@ -31,29 +27,23 @@ export function Equalizer({ playing, size = 14, color = colors.accent }: { playi
 }
 
 function Bar({ bar, playing, color }: { bar: (typeof BARS)[number]; playing: boolean; color: string }) {
-  const h = useSharedValue<number>(bar.rest);
-  useEffect(() => {
-    if (playing) {
-      const ease = Easing.inOut(Easing.quad);
-      h.set(
-        withRepeat(
-          withSequence(withTiming(bar.max, { duration: bar.duration, easing: ease }), withTiming(bar.min, { duration: bar.duration, easing: ease })),
-          -1,
-          true,
-        ),
-      );
-    } else {
-      cancelAnimation(h);
-      h.set(withTiming(bar.rest, { duration: 180 }));
-    }
-    return () => cancelAnimation(h);
-  }, [playing, bar, h]);
-  return <BarView h={h} color={color} />;
-}
-
-function BarView({ h, color }: { h: SharedValue<number>; color: string }) {
-  const style = useAnimatedStyle(() => ({ transform: [{ scaleY: h.get() }] }));
-  return <Animated.View style={[styles.bar, { backgroundColor: color }, style]} />;
+  return (
+    <Animated.View
+      style={[
+        styles.bar,
+        { backgroundColor: color },
+        playing
+          ? {
+              animationName: bar.keyframes,
+              animationDuration: bar.duration,
+              animationTimingFunction: 'ease-in-out',
+              animationIterationCount: 'infinite',
+              animationDirection: 'alternate',
+            }
+          : { transform: [{ scaleY: bar.rest }], transitionProperty: 'transform', transitionDuration: 180 },
+      ]}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

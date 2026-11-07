@@ -1,15 +1,14 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { player, supportsOffline, usePlayer, type AppTrack, type RepeatMode } from '@/core';
-import { Artwork } from '@/ui/components/Artwork';
+import { Artwork, ArtworkBackdrop } from '@/ui/components/Artwork';
 import { DownloadButton } from '@/ui/components/DownloadButton';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Icon } from '@/ui/components/Icon';
@@ -23,7 +22,7 @@ import { openTrackActions } from '@/ui/components/TrackActions';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import { showSheet } from '@/ui/overlay';
-import { colors, radius, space } from '@/ui/theme';
+import { colors, radius, space, webLayer } from '@/ui/theme';
 
 const DISMISS_DISTANCE = 140;
 
@@ -59,7 +58,8 @@ export default function PlayerScreen() {
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: y.get() }],
-    borderRadius: interpolate(y.get(), [0, 80], [0, radius.xl], 'clamp'),
+    // Switched, not interpolated: a radius that changes every frame makes browsers repaint the whole clipped sheet.
+    borderRadius: y.get() > 0 ? radius.xl : 0,
   }));
 
   return (
@@ -152,9 +152,7 @@ function NowPlaying({ track }: { track: AppTrack }) {
 function Backdrop({ uri }: { uri: string | null }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {uri ? (
-        <Image source={uri} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={70} cachePolicy="memory-disk" transition={300} />
-      ) : null}
+      {uri ? <ArtworkBackdrop uri={uri} blurRadius={70} transition={300} /> : null}
       <LinearGradient
         colors={uri ? ['rgba(10,10,12,0.45)', 'rgba(10,10,12,0.78)', 'rgba(10,10,12,0.96)'] : [colors.accentDeep, '#2A0A0B', colors.bg]}
         locations={[0, 0.5, 1]}
@@ -169,10 +167,7 @@ function PulsingArtwork({ track, size, playing }: { track: AppTrack; size: numbe
   useEffect(() => {
     scale.set(withSpring(playing ? 1 : 0.86, { damping: 15, stiffness: 140 }));
   }, [playing, scale]);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.get() }],
-    shadowOpacity: interpolate(scale.get(), [0.86, 1], [0.25, 0.6]),
-  }));
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
   return (
     <Animated.View style={[styles.artShadow, { width: size, height: size }, style]}>
       <Artwork uri={track.artworkUri} label={track.album || track.title} size={size} radius={radius.lg} recyclingKey={track.key} priority="high" />
@@ -239,7 +234,7 @@ function Transport() {
 }
 
 const styles = StyleSheet.create({
-  sheet: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
+  sheet: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden', ...webLayer },
   empty: { flex: 1, justifyContent: 'center' },
   root: { flex: 1, paddingHorizontal: space.xl, gap: space.lg },
   topBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: -space.md },
@@ -250,9 +245,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: colors.surface2,
     shadowColor: colors.black,
+    shadowOpacity: 0.5,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 18 },
     elevation: 20,
+    ...webLayer,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   titleText: { flex: 1, minWidth: 0, gap: 2 },

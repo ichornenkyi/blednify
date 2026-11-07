@@ -58,7 +58,7 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
   `If-Range`, `If-None-Match` (`304`) and `HEAD`. Responses are sent zero-copy via `Bun.file` and are never
   compressed. Cache policy is `public, max-age=31536000, immutable`, as the contract requires.
 - **Artwork**: the embedded cover is extracted on first request and cached as `DATA_DIR/art/<id>.jpg|png`.
-  Later requests are a plain file send. `?size=N` is supported: it is rounded up to 64/128/256/512/1024, resized
+  Later requests are a plain file send. `?size=N` is supported: it is rounded up to 16/64/128/256/512/1024, resized
   with the built-in `Bun.Image` (aspect kept, no upscaling), encoded as JPEG and cached as `<id>-<bucket>.jpg`.
   Sizes above 1024, or covers already smaller than the bucket, return the original. If resizing fails, the
   original is served. Covers that are neither JPEG nor PNG are converted to JPEG. Cache policy is

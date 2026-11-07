@@ -1,5 +1,5 @@
 import { DarkTheme, type Theme } from 'expo-router';
-import { StyleSheet, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 
 export const colors = {
   bg: '#0A0A0C',
@@ -38,6 +38,9 @@ export const type = StyleSheet.create({
   micro: { fontSize: 11, lineHeight: 14, fontWeight: '700', letterSpacing: 0.6, color: colors.textSecondary },
   mono: { fontSize: 12, lineHeight: 16, fontWeight: '600', fontVariant: ['tabular-nums'], color: colors.textSecondary },
 }) satisfies Record<string, TextStyle>;
+
+/** For views that slide around: browsers keep them on their own GPU layer instead of repainting them every frame. */
+export const webLayer = Platform.select<ViewStyle>({ web: { willChange: 'transform' } as ViewStyle, default: {} });
 
 export const TAB_BAR_HEIGHT = 56;
 export const MINI_PLAYER_HEIGHT = 60;

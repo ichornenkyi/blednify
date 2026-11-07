@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2,
     paddingHorizontal: space.lg,
     color: colors.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "500",
   },
   result: { flexDirection: "row", alignItems: "center", gap: space.sm },
