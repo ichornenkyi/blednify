@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -42,7 +42,8 @@ export function SeekBar({ fallbackDurationMs }: { fallbackDurationMs: number }) 
   useEffect(() => {
     if (scrubMs !== null) return;
     const r = durationMs > 0 ? clamp01(positionMs / durationMs) : 0;
-    ratio.set(Math.abs(ratio.get() - r) > 0.02 ? r : withTiming(r, { duration: 260, easing: Easing.linear }));
+    // No easing between ticks on web: it would redraw from JavaScript every frame to move a fraction of a pixel.
+    ratio.set(Platform.OS === 'web' || Math.abs(ratio.get() - r) > 0.02 ? r : withTiming(r, { duration: 260, easing: Easing.linear }));
   }, [positionMs, durationMs, scrubMs, ratio]);
 
   const commit = (r: number) => {

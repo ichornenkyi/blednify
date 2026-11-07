@@ -280,7 +280,7 @@ describe("artwork", () => {
     const res = await get(`/api/tracks/${HALO}/artwork`);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
-    expect(res.headers.get("cache-control")).toContain("max-age=");
+    expect(res.headers.get("cache-control")).toBe("public, no-cache");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array(COVER));
     expect(readdirSync(join(srv.dataDir, "art"))).toContain(`${HALO}.png`);
 
@@ -289,6 +289,10 @@ describe("artwork", () => {
     expect(small.headers.get("content-type")).toBe("image/jpeg");
     const meta = await new Bun.Image(new Uint8Array(await small.arrayBuffer())).metadata();
     expect(Math.max(meta.width, meta.height)).toBe(128);
+
+    const tiny = await get(`/api/tracks/${HALO}/artwork?size=16`);
+    const tinyMeta = await new Bun.Image(new Uint8Array(await tiny.arrayBuffer())).metadata();
+    expect(Math.max(tinyMeta.width, tinyMeta.height)).toBe(16);
   });
 
   test("404 when no artwork", async () => {

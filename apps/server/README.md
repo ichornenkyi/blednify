@@ -35,6 +35,8 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `ADMIN_TOKEN` | unset | When set, `POST /api/tracks`, `DELETE /api/tracks/:id` and `POST /api/rescan` need `Authorization: Bearer <token>`. When unset, those writes return `403`. Reads are always public. |
 | `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
 | `MAX_UPLOAD_MB` | `200` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
+| `WEB_DIR` | unset (`/app/web` in Docker) | Folder with the exported web app, served at `/` next to the API. Unset: API only. |
+| `YTDLP_PATH` | `yt-dlp` on `PATH` | yt-dlp for downloading songs straight from YouTube Music (needs ffmpeg). The Docker image has both. `off` disables it, and music import is off without it. |
 | `PUBLIC` | unset | Reserved. Has no effect yet. |
 | `LOG_REQUESTS` | `1` | `0` turns off the one-line-per-request log. Successful `/api/health` calls are never logged. |
 
@@ -56,11 +58,11 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
   `If-Range`, `If-None-Match` (`304`) and `HEAD`. Responses are sent zero-copy via `Bun.file` and are never
   compressed. Cache policy is `public, max-age=31536000, immutable`, as the contract requires.
 - **Artwork**: the embedded cover is extracted on first request and cached as `DATA_DIR/art/<id>.jpg|png`.
-  Later requests are a plain file send. `?size=N` is supported: it is rounded up to 64/128/256/512/1024, resized
+  Later requests are a plain file send. `?size=N` is supported: it is rounded up to 16/64/128/256/512/1024, resized
   with the built-in `Bun.Image` (aspect kept, no upscaling), encoded as JPEG and cached as `<id>-<bucket>.jpg`.
   Sizes above 1024, or covers already smaller than the bucket, return the original. If resizing fails, the
   original is served. Covers that are neither JPEG nor PNG are converted to JPEG. Cache policy is
-  `public, max-age=2592000` plus an ETag.
+  `public, no-cache` plus an ETag, so a changed cover shows up on the next load.
 - **Uploads**: multipart field `file`, repeatable. Filenames are sanitized (no path parts or control/reserved
   characters, at most 200 UTF-8 bytes) and made unique with a ` (n)` suffix. A name whose track id was used
   before (a deleted track) is never reused, since clients cache streams and downloads by id. Files are written
@@ -68,14 +70,26 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
   corrupt file returns `422`, and nothing from that request is kept. Unsupported extensions return `415`.
   Storage failures return `507` (disk full) or `500` with the errno (for example a read-only or wrongly owned
   `MUSIC_DIR`). Success returns `201 {"items": Track[]}`, already indexed.
+- **Music import** (`POST /api/imports`): takes a public or unlisted YouTube Music playlist link, an album or a
+  song. `POST /api/imports/search` finds albums and songs on YouTube Music to pick from, so each search has an exact
+  title and artist. Tracks are handled one at a time. A song already in the library is skipped; the same title at a different
+  length counts as another version and is imported. Each song's own video is downloaded with yt-dlp as AAC (`.m4a`, copied without
+  re-encoding when YouTube offers it, converted from Opus otherwise) and tagged with the playlist's title, artist and album. A download
+  more than 15 seconds off the listed length is rejected. Songs that cannot be downloaded are
+  reported as failed, with the reason. Jobs are held in memory, so a restart forgets them; run the playlist again
+  and finished songs are skipped. Private playlists and auto-generated mixes cannot be read.
+- **Covers** (`POST /api/library/covers`): some files have no cover, and album and artist covers come from a track's own, so
+  they stay blank too. This looks each cover-less song up on YouTube Music (the title, artist and length must match; live and remix
+  versions are refused) and rewrites the file with the cover embedded and the audio copied unchanged. The new file replaces the
+  original only when its tags and length match. `.wav` and `.ogg` files cannot be changed. New imports run this for songs that arrive without one.
 - **Errors** are always JSON: `{ "error": "..." }`. JSON responses are gzip/deflate-compressed when the client
   accepts it. CORS allows all origins.
 
 ## Docker
 
 ```sh
-cd apps/server
-docker build -t blednify-server .
+# from the repository root: the image also bundles the web app
+docker build -f apps/server/Dockerfile -t blednify-server .
 docker run -d --name blednify -p 8787:8787 \
   -e ADMIN_TOKEN=change-me \
   -v /path/to/music:/music -v blednify-data:/data \

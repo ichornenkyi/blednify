@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { downloadTracks, player, usePlaylist, type AppTrack } from '@/core';
+import { downloadTracks, player, supportsOffline, usePlaylist, type AppTrack } from '@/core';
 import { DetailHeader } from '@/ui/components/DetailHeader';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { IconButton } from '@/ui/components/IconButton';
@@ -70,7 +70,7 @@ export default function PlaylistScreen() {
             onShuffle={tracks.length ? () => player.playTracks(tracks, undefined, { shuffle: true }) : undefined}
             actions={
               <>
-                {remoteMissing.length > 0 ? (
+                {supportsOffline && remoteMissing.length > 0 ? (
                   <IconButton
                     icon="arrow-down-circle-outline"
                     label="Download playlist"

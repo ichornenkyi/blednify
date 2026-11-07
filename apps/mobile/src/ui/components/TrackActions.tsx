@@ -6,6 +6,7 @@ import {
   player,
   removeDownload,
   removeFromPlaylist,
+  supportsOffline,
   toggleLike,
   useDownloadState,
   useIsLiked,
@@ -13,7 +14,7 @@ import {
   type DownloadStatus,
 } from '@/core';
 
-import { attempt, confirmDeleteLocal } from '../actions';
+import { attempt, confirmDeleteLocal, confirmDeleteRemote } from '../actions';
 import { nav } from '../nav';
 import { showSheet, showToast } from '../overlay';
 import { colors } from '../theme';
@@ -80,7 +81,7 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
         label={liked ? 'Remove from Liked' : 'Like'}
         onPress={() => void attempt(toggleLike(track), liked ? 'Removed from Liked' : 'Added to Liked')}
       />
-      {track.origin === 'remote' ? <DownloadAction track={track} status={download.status} progress={download.progress} /> : null}
+      {supportsOffline && track.origin === 'remote' ? <DownloadAction track={track} status={download.status} progress={download.progress} /> : null}
       {playlist ? (
         <SheetAction
           icon="remove-circle-outline"
@@ -96,7 +97,9 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
       ) : null}
       {track.origin === 'local' ? (
         <SheetAction icon="trash-outline" label="Delete from device" destructive onPress={() => confirmDeleteLocal(track)} />
-      ) : null}
+      ) : (
+        <SheetAction icon="trash-outline" label="Delete from server" destructive onPress={() => confirmDeleteRemote(track)} />
+      )}
     </View>
   );
 }

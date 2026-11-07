@@ -6,7 +6,7 @@ import { parseFile, selectCover } from "music-metadata";
 export type ArtFile = { path: string; mime: "image/jpeg" | "image/png" };
 
 /** Resized variants are cached per bucket so arbitrary ?size values can't blow up the cache. */
-const SIZE_BUCKETS = [64, 128, 256, 512, 1024] as const;
+const SIZE_BUCKETS = [16, 64, 128, 256, 512, 1024] as const;
 const ORIGINAL_EXTS = ["jpg", "png"] as const;
 
 /**

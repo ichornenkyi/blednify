@@ -1,0 +1,14 @@
+**/node_modules
+**/.expo
+**/dist
+**/android
+**/ios
+**/*.md
+**/*.log
+.git
+.github
+.playwright-mcp
+apps/server/data
+apps/server/music
+apps/server/test
+tools

@@ -13,9 +13,14 @@ import { ArtworkCache } from "./artwork";
 import type { Config } from "./config";
 import { openDb, type Db } from "./db";
 import { audioMime, trackId } from "./ids";
+import { Covers } from "./covers";
+import { Importer, NothingFoundError } from "./importer";
 import { Library, toTrack } from "./library";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
+import { YtDlp, type AudioSource } from "./ytdlp";
+import { mountWebApp } from "./web";
+import { fetchAlbum, fetchPlaylist, parsePlaylistId, searchMusic, type Album, type MusicResults, type Playlist } from "./ytmusic";
 
 export const VERSION: string = pkg.version;
 
@@ -30,10 +35,11 @@ export function createContext(config: Config): AppContext {
 }
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
-const ART_CACHE = "public, max-age=2592000";
+/** Covers can change (a cover is embedded later), so clients check the ETag each time instead of keeping a copy for weeks. */
+const ART_CACHE = "public, no-cache";
 const ID_RE = /^[0-9a-f]{16}$/;
 
-const fail = (status: 400 | 401 | 403 | 404 | 413 | 415 | 422, error: string): never => {
+const fail = (status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 422 | 502 | 503, error: string): never => {
   throw new HTTPException(status, { message: error });
 };
 
@@ -51,6 +57,28 @@ const tracksQuery = z.object({
 const pageQuery = z.object({ q: qString, limit: limitParam(50, 500), offset: offsetParam });
 const searchQuery = z.object({ q: z.string().max(200).default(""), limit: limitParam(20, 100) });
 const artQuery = z.object({ size: z.coerce.number().int().min(16).max(4096).optional() });
+const shortText = z.string().trim().min(1).max(500);
+const importBody = z.object({
+  url: z.string().trim().min(1).max(2000).optional(),
+  albumId: z.string().regex(/^[\w-]{1,100}$/).optional(),
+  song: z
+    .object({
+      videoId: z.string().regex(/^[\w-]{1,100}$/),
+      title: shortText,
+      artists: z.array(shortText).min(1).max(50),
+      album: shortText.nullable(),
+      durationMs: z.number().int().positive().nullable(),
+    })
+    .optional(),
+});
+const coversBody = z.object({ trackIds: z.array(z.string().regex(/^[\w-]{1,100}$/)).min(1).max(500).optional() });
+const searchBody = z.object({ query: z.string().trim().min(1).max(500) });
+
+export type MusicSource = {
+  fetchPlaylist(id: string): Promise<Playlist>;
+  fetchAlbum(id: string): Promise<Album>;
+  searchMusic(query: string): Promise<MusicResults>;
+};
 
 /** Validates query params (empty values count as absent); 400 with the first issue on failure. */
 function query<S extends z.ZodType>(c: Context, schema: S): z.output<S> {
@@ -134,8 +162,13 @@ function storageError(err: unknown): { status: 500 | 507; error: string } | null
   return { status: 500, error: `server could not store the upload (${code})` };
 }
 
-export function createApp(ctx: AppContext): Hono {
+export function createApp(
+  ctx: AppContext,
+  music: MusicSource = { fetchPlaylist, fetchAlbum, searchMusic },
+  audio?: AudioSource | null,
+): Hono {
   const { config, lib, scanner, art } = ctx;
+  const youtube = audio !== undefined ? audio : config.ytdlpPath ? new YtDlp(config.ytdlpPath) : null;
   const app = new Hono();
   const admin = adminOnly(config.adminToken, config.allowOpenWrites);
   const uploadsDir = join(config.musicDir, "uploads");
@@ -159,6 +192,23 @@ export function createApp(ctx: AppContext): Hono {
     throw new HTTPException(409, { message: `too many files named ${name}` });
   };
 
+  const covers = new Covers({ lib, scanner, musicDir: config.musicDir, searchMusic: music.searchMusic });
+  const importer =
+    youtube
+      ? new Importer({
+          lib,
+          scanner,
+          youtube,
+          covers,
+          fetchPlaylist: music.fetchPlaylist,
+          fetchAlbum: music.fetchAlbum,
+          uploadsDir,
+          claim: claimUploadPath,
+          release: (path) => claimed.delete(path),
+          sanitize: sanitizeFileName,
+        })
+      : null;
+
   if (config.logRequests) {
     app.use(async (c, next) => {
       const t = performance.now();
@@ -176,7 +226,7 @@ export function createApp(ctx: AppContext): Hono {
       maxAge: 86400,
     }),
   );
-  app.use(compress({ contentTypeFilter: /^application\/json/ }));
+  app.use(compress({ contentTypeFilter: /^(application\/json|text\/|application\/(javascript|manifest\+json))/ }));
 
   app.onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message || "error" }, err.status);
@@ -295,6 +345,60 @@ export function createApp(ctx: AppContext): Hono {
     const { q, limit } = query(c, searchQuery);
     return c.json(lib.search(q, limit));
   });
+
+  // ---------- music import ----------
+
+  app.post("/api/library/covers", admin, async (c) => {
+    noIdleTimeout(c);
+    const body = coversBody.safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return fail(400, "expected JSON with an optional 'trackIds' list");
+    const result = await covers.fixMissing(c.req.raw.signal, body.data.trackIds);
+    return result ? c.json(result) : fail(409, "covers are already being added");
+  });
+
+  app.get("/api/imports", (c) => c.json({ enabled: importer !== null, items: importer?.list() ?? [] }));
+
+  app.post("/api/imports/search", admin, async (c) => {
+    noIdleTimeout(c);
+    if (!importer) return fail(503, "music import is off: install yt-dlp on the server");
+    const body = searchBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return fail(400, "enter a song or album name");
+    try {
+      return c.json(await music.searchMusic(body.data.query));
+    } catch (err) {
+      console.error(`[import] YouTube Music search failed: ${(err as Error).message}`);
+      return fail(502, "could not reach YouTube Music");
+    }
+  });
+
+  app.post("/api/imports", admin, async (c) => {
+    noIdleTimeout(c);
+    if (!importer) return fail(503, "music import is off: install yt-dlp on the server");
+    const body = importBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return fail(400, "expected JSON with one of 'url', 'albumId' or 'song'");
+    const { url, albumId, song } = body.data;
+    if ([url, albumId, song].filter((v) => v !== undefined).length !== 1) return fail(400, "expected JSON with one of 'url', 'albumId' or 'song'");
+    const playlistId = url === undefined ? null : (parsePlaylistId(url) ?? fail(400, "not a YouTube Music playlist link"));
+    try {
+      const job = playlistId
+        ? importer.startPlaylist(playlistId)
+        : albumId
+          ? importer.startAlbum(albumId)
+          : importer.startSong(song!);
+      return c.json(await job, 202);
+    } catch (err) {
+      if (err instanceof NothingFoundError) return fail(422, err.message);
+      console.error(`[import] YouTube Music request failed: ${(err as Error).message}`);
+      return fail(502, "could not reach YouTube Music");
+    }
+  });
+
+  app.delete("/api/imports/:id", admin, (c) => {
+    if (!importer?.discard(param(c))) return fail(404, "import not found");
+    return c.body(null, 204);
+  });
+
+  if (config.webDir) mountWebApp(app, config.webDir);
 
   return app;
 }

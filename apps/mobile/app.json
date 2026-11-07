@@ -86,6 +86,11 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/icon.png"
+    },
     "backgroundColor": "#0A0A0C"
   }
 }

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   player,
+  supportsOffline,
   useLikedTracks,
   useLocalAlbums,
   useLocalTracks,
@@ -89,7 +90,7 @@ export default function HomeScreen() {
           </Text>
           <ServerPill online={server.online} loading={server.isLoading} hasServer={hasServer} trackCount={server.trackCount} />
         </View>
-        <IconButton icon="arrow-down-circle-outline" label="Downloads" onPress={nav.downloads} />
+        {supportsOffline ? <IconButton icon="arrow-down-circle-outline" label="Downloads" onPress={nav.downloads} /> : null}
         <IconButton icon="settings-outline" label="Settings" onPress={nav.settings} />
       </View>
 
@@ -99,7 +100,7 @@ export default function HomeScreen() {
           title="Your music, nothing else"
           message="Connect your Blednify server to stream your collection, or import audio files already on this phone.">
           <PrimaryButton label="Connect server" icon="server-outline" onPress={nav.settings} />
-          <PrimaryButton label="Import music" icon="add" variant="surface" onPress={importMusic} />
+          {supportsOffline ? <PrimaryButton label="Import music" icon="add" variant="surface" onPress={importMusic} /> : null}
         </EmptyState>
       ) : (
         <>

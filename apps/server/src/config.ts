@@ -9,6 +9,10 @@ export type Config = {
   /** Without an admin token, writes are refused (403) unless this is set (`ALLOW_OPEN_WRITES=1`). */
   allowOpenWrites: boolean;
   maxUploadBytes: number;
+  /** Folder with the exported web app, served at `/` next to the API. Null: API only. */
+  webDir: string | null;
+  /** Path of yt-dlp for downloading straight from YouTube Music. Null: not installed (or `YTDLP_PATH=off`). */
+  ytdlpPath: string | null;
   /** Reserved; currently has no effect (reads are always public). */
   public: boolean;
   logRequests: boolean;
@@ -21,6 +25,12 @@ function int(name: string, value: string | undefined, fallback: number): number 
   return n;
 }
 
+function ytdlp(value: string | undefined): string | null {
+  const wanted = value?.trim();
+  if (wanted === "off") return null;
+  return Bun.which(wanted || "yt-dlp");
+}
+
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   return {
     port: int("PORT", env.PORT, 8787),
@@ -29,6 +39,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     adminToken: env.ADMIN_TOKEN?.trim() || null,
     allowOpenWrites: /^(1|true|yes)$/i.test(env.ALLOW_OPEN_WRITES ?? ""),
     maxUploadBytes: int("MAX_UPLOAD_MB", env.MAX_UPLOAD_MB, 200) * 1024 * 1024,
+    webDir: env.WEB_DIR?.trim() ? resolve(env.WEB_DIR.trim()) : null,
+    ytdlpPath: ytdlp(env.YTDLP_PATH),
     public: /^(1|true|yes)$/i.test(env.PUBLIC ?? ""),
     logRequests: env.NODE_ENV !== "test" && env.LOG_REQUESTS !== "0",
   };

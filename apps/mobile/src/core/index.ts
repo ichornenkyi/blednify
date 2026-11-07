@@ -14,8 +14,14 @@ export type {
 // Provider
 export { CoreProvider } from './provider';
 
+// Artwork
+export { resizedArtworkUrl } from './api';
+
 // Server catalog
 export {
+  albumTrackKeys,
+  deleteServerTrack,
+  deleteTracks,
   testServer,
   useAlbum,
   useArtist,
@@ -24,6 +30,10 @@ export {
   useSearch,
   useServerStatus,
 } from './catalog';
+
+// Playlist import
+export { discardImport, isImportLink, searchImports, startImport, useImports } from './imports';
+export type { ImportAlbum, ImportJob, ImportResults, ImportSong, ImportTarget, ImportTrack } from './imports';
 
 // Local library
 export {
@@ -48,10 +58,14 @@ export { player } from './player/engine';
 export { usePlayer, useProgress } from './player/store';
 
 // Downloads
+export { uploadToServer } from './upload';
 export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDownloads } from './downloads';
 
 // Import
 export { deleteLocalTrack, importFromDevice } from './import/importer';
+
+// Platform
+export { supportsOffline } from './platform';
 
 // Settings
 export { useSettings } from './settings';
