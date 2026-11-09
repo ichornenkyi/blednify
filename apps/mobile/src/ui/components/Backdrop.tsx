@@ -1,13 +1,16 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { useIsFocused } from 'expo-router';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withRepeat,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
@@ -34,25 +37,44 @@ const STARS: Star[] = (() => {
   });
 })();
 
-/** A few brighter stars that twinkle, positioned in % of the screen. */
-const TWINKLERS = (() => {
-  const rand = rng(42);
-  return Array.from({ length: 9 }, () => ({
-    left: `${4 + rand() * 92}%` as const,
-    top: `${3 + rand() * 80}%` as const,
-    size: 2 + Math.round(rand() * 2),
+type Spot = { left: `${number}%`; top: `${number}%`; size: number; delay: number; duration: number };
+
+function spots(seed: number, count: number, minSize: number, sizeRange: number): Spot[] {
+  const rand = rng(seed);
+  return Array.from({ length: count }, () => ({
+    left: `${4 + rand() * 92}%`,
+    top: `${3 + rand() * 85}%`,
+    size: minSize + Math.round(rand() * sizeRange),
     delay: Math.round(rand() * 3000),
     duration: 1600 + Math.round(rand() * 2200),
   }));
-})();
+}
 
-function Twinkle({ left, top, size, delay, duration, color }: (typeof TWINKLERS)[number] & { color: string }) {
-  const o = useSharedValue(0.2);
+/** Brighter stars that twinkle (Starry night). */
+const TWINKLERS = spots(42, 9, 2, 2);
+/** Haloed stars and four-point sparkles (Night sky). */
+const GLOWS = spots(11, 10, 3, 2);
+const SPARKLES = spots(23, 8, 9, 6);
+
+/** A twinkle loop: 0.2 → 1 → 0.2 …, started after `delay`. Static (fully on) when not animating. */
+function useTwinkle(animate: boolean, delay: number, duration: number) {
+  const o = useSharedValue(animate ? 0.2 : 1);
   useEffect(() => {
+    if (!animate) {
+      o.value = 1;
+      return;
+    }
+    o.value = 0.2;
     o.value = withDelay(delay, withRepeat(withTiming(1, { duration, easing: Easing.inOut(Easing.quad) }), -1, true));
     return () => cancelAnimation(o);
-  }, [o, delay, duration]);
+  }, [o, animate, delay, duration]);
+  return o;
+}
+
+function Twinkle({ spot, color, animate }: { spot: Spot; color: string; animate: boolean }) {
+  const o = useTwinkle(animate, spot.delay, spot.duration);
   const style = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ scale: 0.7 + o.value * 0.5 }] }));
+  const { left, top, size } = spot;
   return (
     <Animated.View
       style={[
@@ -64,7 +86,130 @@ function Twinkle({ left, top, size, delay, duration, color }: (typeof TWINKLERS)
   );
 }
 
-function Stars({ colors }: { colors: Palette }) {
+/** A star with a soft halo (two translucent rings around a bright core). */
+function GlowStar({ spot, color, animate }: { spot: Spot; color: string; animate: boolean }) {
+  const o = useTwinkle(animate, spot.delay, spot.duration + 800);
+  const style = useAnimatedStyle(() => ({ opacity: 0.45 + o.value * 0.55 }));
+  const halo = spot.size * 5;
+  return (
+    <Animated.View
+      style={[{ position: 'absolute', left: spot.left, top: spot.top, width: halo, height: halo, marginLeft: -halo / 2, marginTop: -halo / 2 }, style]}
+    >
+      <View style={[styles.center, { width: halo, height: halo, borderRadius: halo / 2, backgroundColor: color, opacity: 0.08 }]} />
+      <View
+        style={[
+          styles.abs,
+          { left: halo * 0.3, top: halo * 0.3, width: halo * 0.4, height: halo * 0.4, borderRadius: halo * 0.2, backgroundColor: color, opacity: 0.18 },
+        ]}
+      />
+      <View
+        style={[
+          styles.abs,
+          {
+            left: (halo - spot.size) / 2,
+            top: (halo - spot.size) / 2,
+            width: spot.size,
+            height: spot.size,
+            borderRadius: spot.size / 2,
+            backgroundColor: '#FFFFFF',
+          },
+        ]}
+      />
+    </Animated.View>
+  );
+}
+
+/** A four-point sparkle (✦ drawn as two thin crossed bars) that pulses and turns slightly. */
+function Sparkle({ spot, color, animate }: { spot: Spot; color: string; animate: boolean }) {
+  const o = useTwinkle(animate, spot.delay, spot.duration);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.3 + o.value * 0.7,
+    transform: [{ scale: 0.6 + o.value * 0.5 }, { rotate: `${o.value * 20}deg` }],
+  }));
+  const s = spot.size;
+  const bar = Math.max(1.5, s / 7);
+  return (
+    <Animated.View style={[{ position: 'absolute', left: spot.left, top: spot.top, width: s, height: s }, style]}>
+      <View style={[styles.abs, { left: (s - bar) / 2, top: 0, width: bar, height: s, borderRadius: bar, backgroundColor: color }]} />
+      <View style={[styles.abs, { top: (s - bar) / 2, left: 0, height: bar, width: s, borderRadius: bar, backgroundColor: color }]} />
+    </Animated.View>
+  );
+}
+
+type Meteor = { startX: number; startY: number; delay: number; every: number; length: number };
+
+/** Shooting stars: start (fraction of the screen), first delay and repeat period in ms, trail length. */
+const METEORS: readonly Meteor[] = [
+  { startX: 0.85, startY: 0.04, delay: 1200, every: 7000, length: 120 },
+  { startX: 0.55, startY: 0.18, delay: 4600, every: 9500, length: 90 },
+  { startX: 1.05, startY: 0.35, delay: 8200, every: 12000, length: 140 },
+];
+/** Travel direction: down and to the left. */
+const METEOR_ANGLE = 152;
+const METEOR_FLIGHT_MS = 1100;
+
+function ShootingStar({ meteor, color }: { meteor: Meteor; color: string }) {
+  const { width, height } = useWindowDimensions();
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = 0;
+    t.value = withDelay(
+      meteor.delay,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: METEOR_FLIGHT_MS, easing: Easing.in(Easing.quad) }),
+          withDelay(meteor.every - METEOR_FLIGHT_MS, withTiming(0, { duration: 0 })),
+        ),
+        -1,
+      ),
+    );
+    return () => cancelAnimation(t);
+  }, [t, meteor]);
+  const travel = Math.max(width, height) * 0.55;
+  const rad = (METEOR_ANGLE * Math.PI) / 180;
+  const dx = Math.cos(rad) * travel;
+  const dy = Math.sin(rad) * travel;
+  const style = useAnimatedStyle(() => ({
+    // Fade in quickly, out over the last third of the flight; hidden between flights.
+    opacity: t.value === 0 ? 0 : Math.min(1, t.value * 6) * Math.min(1, (1 - t.value) * 3),
+    transform: [{ translateX: t.value * dx }, { translateY: t.value * dy }, { rotate: `${METEOR_ANGLE}deg` }],
+  }));
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          left: meteor.startX * width - meteor.length,
+          top: meteor.startY * height,
+          width: meteor.length,
+          height: 2,
+          transformOrigin: 'right',
+        },
+        style,
+      ]}
+    >
+      <LinearGradient
+        colors={['transparent', color]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={[StyleSheet.absoluteFill, { borderRadius: 1 }]}
+      />
+      <View style={[styles.meteorHead, { backgroundColor: '#FFFFFF', shadowColor: color }]} />
+    </Animated.View>
+  );
+}
+
+function StarDots({ tint }: { tint: string }) {
+  return (
+    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 200" preserveAspectRatio="xMidYMid slice">
+      {STARS.map((s, i) => (
+        <Circle key={i} cx={s.x} cy={s.y} r={s.r} fill={tint} opacity={s.o} />
+      ))}
+    </Svg>
+  );
+}
+
+function Stars({ colors, animate }: { colors: Palette; animate: boolean }) {
   const tint = colors.isLight ? colors.textTertiary : '#FFFFFF';
   return (
     <>
@@ -73,29 +218,53 @@ function Stars({ colors }: { colors: Palette }) {
         locations={[0, 0.35, 0.7, 1]}
         style={StyleSheet.absoluteFill}
       />
-      <Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 200" preserveAspectRatio="xMidYMid slice">
-        {STARS.map((s, i) => (
-          <Circle key={i} cx={s.x} cy={s.y} r={s.r} fill={tint} opacity={s.o} />
-        ))}
-      </Svg>
+      <StarDots tint={tint} />
       {TWINKLERS.map((t, i) => (
-        <Twinkle key={i} {...t} color={i % 3 === 0 ? colors.accent : tint} />
+        <Twinkle key={i} spot={t} color={i % 3 === 0 ? colors.accent : tint} animate={animate} />
       ))}
     </>
   );
 }
 
+/** Night sky: violet-to-indigo depth, haloed stars, four-point sparkles and the odd shooting star. */
+function NightSky({ colors, animate }: { colors: Palette; animate: boolean }) {
+  const starTint = '#D8E2FF';
+  return (
+    <>
+      <LinearGradient
+        colors={['#2A0A5E', 'transparent', colors.surface]}
+        locations={[0, 0.55, 1]}
+        style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
+      />
+      <StarDots tint={starTint} />
+      {GLOWS.map((g, i) => (
+        <GlowStar key={`g${i}`} spot={g} color={i % 2 ? colors.accent : starTint} animate={animate} />
+      ))}
+      {SPARKLES.map((s, i) => (
+        <Sparkle key={`s${i}`} spot={s} color={starTint} animate={animate} />
+      ))}
+      {animate ? METEORS.map((m, i) => <ShootingStar key={`m${i}`} meteor={m} color={colors.accent} />) : null}
+    </>
+  );
+}
+
 /**
- * Theme decoration behind a screen's content (Starry night's sky, a soft accent glow). Render it as the
- * first child of a screen's root view; it draws nothing for themes without a backdrop.
+ * Theme decoration behind a screen's content (star skies, a soft accent glow). Render it as the first child of
+ * a screen's root view; it draws nothing for themes without a backdrop. Animates only on the focused screen and
+ * stays still when the system asks for reduced motion.
  */
 export function Backdrop() {
   const colors = useColors();
+  const focused = useIsFocused();
+  const reduceMotion = useReducedMotion();
   if (colors.backdrop === 'none') return null;
+  const animate = focused && !reduceMotion;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {colors.backdrop === 'stars' ? (
-        <Stars colors={colors} />
+        <Stars colors={colors} animate={animate} />
+      ) : colors.backdrop === 'night' ? (
+        <NightSky colors={colors} animate={animate} />
       ) : (
         <LinearGradient
           colors={[colors.accentSoft, 'transparent']}
@@ -108,3 +277,20 @@ export function Backdrop() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  abs: { position: 'absolute' },
+  center: { position: 'absolute', left: 0, top: 0 },
+  meteorHead: {
+    position: 'absolute',
+    right: -1,
+    top: -1,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
+});

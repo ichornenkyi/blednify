@@ -8,7 +8,7 @@ import { themeStore, type ThemePref } from '@/core';
 // ---------------------------------------------------------------------------------------------
 // Palette
 
-export type Backdrop = 'none' | 'stars' | 'glow';
+export type Backdrop = 'none' | 'stars' | 'night' | 'glow';
 
 export type Palette = {
   bg: string;
@@ -60,6 +60,23 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
     overrides: { surface: '#141418', surface2: '#1C1C22', surface3: '#26262E', accentDeep: '#7A1517' },
   },
   { id: 'starry', name: 'Starry night', bg: '#060A1A', accent: '#F5C451', backdrop: 'stars' },
+  {
+    id: 'night',
+    name: 'Stars at night',
+    bg: '#1A0038',
+    accent: '#A9C1FF',
+    backdrop: 'night',
+    overrides: {
+      surface: '#0A1A4C',
+      surface2: '#0E2260',
+      surface3: '#16307A',
+      border: 'rgba(169,193,255,0.12)',
+      borderStrong: 'rgba(169,193,255,0.22)',
+      textSecondary: '#AAB5E2',
+      textTertiary: '#7482B8',
+      accentDeep: '#2B3F9E',
+    },
+  },
   { id: 'oled', name: 'OLED black', bg: '#000000', accent: '#E5383B' },
   { id: 'aurora', name: 'Aurora', bg: '#05110E', accent: '#2EE6A6', backdrop: 'glow' },
   { id: 'ocean', name: 'Deep ocean', bg: '#06111C', accent: '#38BDF8', backdrop: 'glow' },

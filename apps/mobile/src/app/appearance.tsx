@@ -4,19 +4,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { setThemePref, useThemePref } from '@/core';
 import { Backdrop } from '@/ui/components/Backdrop';
+import { ColorPickerSheet } from '@/ui/components/ColorPickerSheet';
 import { Icon } from '@/ui/components/Icon';
 import { PressableScale } from '@/ui/components/PressableScale';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
-import { PromptSheet } from '@/ui/components/PromptSheet';
 import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
-import { showSheet, showToast } from '@/ui/overlay';
+import { showSheet } from '@/ui/overlay';
 import {
   ACCENT_SWATCHES,
   BACKGROUND_SWATCHES,
   makeStyles,
-  normalizeHex,
   paletteFor,
   presetById,
   radius,
@@ -51,20 +50,8 @@ export default function AppearanceScreen() {
     setThemePref({ background: hex });
   };
 
-  const promptHex = (title: string, current: string, apply: (hex: string) => void) =>
-    showSheet(
-      <PromptSheet
-        title={title}
-        initialValue={current}
-        placeholder="#E5383B"
-        submitLabel="Apply"
-        onSubmit={(value) => {
-          const hex = normalizeHex(value);
-          if (hex) apply(hex);
-          else showToast('Use a hex color like #E5383B', 'error');
-        }}
-      />,
-    );
+  const pickColor = (title: string, current: string, swatches: readonly string[], apply: (hex: string) => void) =>
+    showSheet(<ColorPickerSheet title={title} initial={current} swatches={swatches} onApply={apply} />);
 
   return (
     <View style={styles.root}>
@@ -94,7 +81,7 @@ export default function AppearanceScreen() {
             active={pref.accent !== null && !(ACCENT_SWATCHES as readonly string[]).includes(pref.accent)}
             color={pref.accent}
             label="Custom accent"
-            onPress={() => promptHex('Accent color', pref.accent ?? colors.accent, (hex) => pickAccent(hex))}
+            onPress={() => pickColor('Accent color', pref.accent ?? colors.accent, ACCENT_SWATCHES, pickAccent)}
           />
         </View>
 
@@ -110,7 +97,7 @@ export default function AppearanceScreen() {
             active={pref.background !== null && !(BACKGROUND_SWATCHES as readonly string[]).includes(pref.background)}
             color={pref.background}
             label="Custom background"
-            onPress={() => promptHex('Background color', pref.background ?? colors.bg, (hex) => pickBackground(hex))}
+            onPress={() => pickColor('Background color', pref.background ?? colors.bg, BACKGROUND_SWATCHES, pickBackground)}
           />
         </View>
         <Text variant="caption">Surfaces, text and contrast are derived from the background, so any color stays readable.</Text>
@@ -193,7 +180,7 @@ function PresetCard({ preset, selected, onPress }: { preset: ThemePreset; select
       style={[styles.presetCard, selected && { borderColor: colors.accent }]}
     >
       <View style={[styles.presetSwatch, { backgroundColor: p.bg }]}>
-        {preset.backdrop === 'stars' ? <Icon name="sparkles" size={14} color={p.accent} /> : null}
+        {preset.backdrop === 'stars' || preset.backdrop === 'night' ? <Icon name="sparkles" size={14} color={p.accent} /> : null}
         <View style={[styles.presetBar, { backgroundColor: p.surface2, width: '70%' }]} />
         <View style={[styles.presetBar, { backgroundColor: p.surface3, width: '45%' }]} />
         <View style={[styles.presetDot, { backgroundColor: p.accent }]} />
