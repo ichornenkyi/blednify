@@ -223,7 +223,7 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.about}>
-          <BrandMark size={64} color={colors.accent} glyphColor={colors.onAccent} />
+          <BrandMark size={64} />
           <Text variant="subheading">Blednify</Text>
           <Text variant="caption">Version {version}</Text>
           <Text variant="caption" style={styles.centerText}>
