@@ -63,7 +63,7 @@ export {
 
 // Player
 export { player } from './player/engine';
-export { usePlayer, useProgress } from './player/store';
+export { onProgress, usePlayer, useProgress, useProgressSeconds } from './player/store';
 
 // Downloads
 export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDownloads } from './downloads';
@@ -72,7 +72,7 @@ export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDo
 export { deleteLocalTrack, importFromDevice } from './import/importer';
 
 // Lyrics
-export { activeLyricIndex, hasLyrics, useLyrics, type LyricLine, type Lyrics } from './lyrics';
+export { activeLyricIndex, hasLyrics, useActiveLyric, useLyrics, usePrefetchLyrics, type LyricLine, type Lyrics } from './lyrics';
 
 // Admin (server uploads / delete / rescan)
 export {

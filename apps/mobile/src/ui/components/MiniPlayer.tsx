@@ -5,7 +5,7 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { player, usePlayer, useProgress } from '@/core';
+import { onProgress, player, usePlayer } from '@/core';
 
 import { haptics } from '../haptics';
 import { nav } from '../nav';
@@ -119,16 +119,19 @@ export function DockedMiniPlayer() {
   );
 }
 
-/** Isolated so only this line re-renders on progress ticks. */
+/** Follows progress through a store subscription, so ticks never re-render React. */
 function MiniProgress() {
   const styles = useStyles();
-  const { positionMs, durationMs } = useProgress();
-  const ratio = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
-  const p = useSharedValue(ratio);
-  useEffect(() => {
-    // Animate between ~4 Hz ticks for a smooth line; snap on big jumps (seek / track change).
-    p.set(Math.abs(p.get() - ratio) > 0.05 ? ratio : withTiming(ratio, { duration: 260, easing: Easing.linear }));
-  }, [ratio, p]);
+  const p = useSharedValue(0);
+  useEffect(
+    () =>
+      onProgress(({ positionMs, durationMs }) => {
+        const ratio = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
+        // Animate between ~4 Hz ticks for a smooth line; snap on big jumps (seek / track change).
+        p.set(Math.abs(p.get() - ratio) > 0.05 ? ratio : withTiming(ratio, { duration: 260, easing: Easing.linear }));
+      }),
+    [p],
+  );
   const style = useAnimatedStyle(() => ({ transform: [{ scaleX: p.get() }] }));
   return (
     <View style={styles.track} pointerEvents="none">

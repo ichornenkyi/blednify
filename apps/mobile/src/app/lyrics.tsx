@@ -17,13 +17,13 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  activeLyricIndex,
   hasLyrics,
   player,
+  useActiveLyric,
   useImageSource,
   useLyrics,
   usePlayer,
-  useProgress,
+  usePrefetchLyrics,
   type AppTrack,
   type LyricLine,
   type Lyrics,
@@ -37,8 +37,6 @@ import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
 import { ForceDark, gradientFor, makeStyles, radius, space, useColors } from '@/ui/theme';
 
-/** Highlight slightly early: progress ticks at ~4 Hz, and a line should light up as it starts, not after. */
-const LEAD_MS = 250;
 /** After the user scrolls by hand, wait this long before following the song again. */
 const USER_SCROLL_HOLD_MS = 3500;
 
@@ -61,6 +59,7 @@ function LyricsScreenContent() {
   const colors = useColors();
   const current = usePlayer((s) => s.current);
   const { lyrics, isLoading, isError } = useLyrics(current);
+  usePrefetchLyrics(usePlayer((s) => s.queue[s.index + 1]));
   const insets = useSafeAreaInsets();
   const [tint] = gradientFor(current?.album || current?.title || '');
 
@@ -135,27 +134,33 @@ function Backdrop({ track, tint }: { track: AppTrack; tint: string }) {
 
 function SyncedLyrics({ lines, source }: { lines: LyricLine[]; source: Lyrics['source'] }) {
   const styles = useStyles();
-  const { positionMs } = useProgress();
   const { height } = useWindowDimensions();
   const scroll = useRef<ScrollViewInstance>(null);
   const ys = useRef<number[]>([]);
   const holdUntil = useRef(0);
+  const laidOut = useRef(0);
+  /** All lines measured: the first follow waits for this so it can jump straight to the line, without a sweep. */
+  const [ready, setReady] = useState(false);
+  const placed = useRef(false);
   const [viewportH, setViewportH] = useState(height * 0.6);
-  const active = activeLyricIndex(lines, positionMs + LEAD_MS);
+  const active = useActiveLyric(lines);
 
   const follow = (index: number, animated = true) => {
     const y = ys.current[Math.max(0, index)];
-    if (y === undefined) return;
+    if (y === undefined) return false;
     scroll.current?.scrollTo({ y: Math.max(0, y - viewportH * 0.3), animated });
+    return true;
   };
 
   useEffect(() => {
     if (Date.now() < holdUntil.current) return;
-    follow(active);
+    // Opening mid-song lands on the current line at once; after that, glide line to line.
+    if (follow(active, placed.current)) placed.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- follow reads refs; re-run only when the line changes
-  }, [active, viewportH]);
+  }, [active, viewportH, ready]);
 
   const measure = (i: number, y: number) => {
+    if (ys.current[i] === undefined && ++laidOut.current === lines.length) setReady(true);
     ys.current[i] = y;
   };
 

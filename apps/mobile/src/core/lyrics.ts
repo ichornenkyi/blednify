@@ -1,10 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { File } from 'expo-file-system';
 import { createMMKV } from 'react-native-mmkv';
 import { useStore } from 'zustand';
 
 import { apiGet } from './api';
 import { openReader } from './import/importer';
+import { progressStore } from './player/store';
 import { readTags } from './import/tags';
 import { settingsStore, useServerBase } from './settings';
 import type { AppTrack } from './types';
@@ -178,17 +180,41 @@ async function loadLyrics(t: AppTrack, base: string, signal: AbortSignal): Promi
   return l ?? NONE;
 }
 
+function lyricsQuery(track: AppTrack | null, base: string, online: boolean) {
+  return {
+    queryKey: ['lyrics', track?.key ?? '', track?.origin === 'remote' ? base : online] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) => loadLyrics(track!, base, signal),
+    staleTime: 60 * 60_000,
+    gcTime: 60 * 60_000,
+    retry: 1,
+  };
+}
+
 /** Lyrics for a track (server lookup for server tracks; embedded tag, then LRCLIB, for imported ones). */
 export function useLyrics(track: AppTrack | null): { lyrics: Lyrics | null; isLoading: boolean; isError: boolean } {
   const base = useServerBase();
   const online = useStore(settingsStore, (s) => s.lyricsOnline);
-  const q = useQuery({
-    queryKey: ['lyrics', track?.key ?? '', track?.origin === 'remote' ? base : online],
-    queryFn: ({ signal }) => loadLyrics(track!, base, signal),
-    enabled: !!track,
-    staleTime: 60 * 60_000,
-    gcTime: 60 * 60_000,
-    retry: 1,
-  });
+  const q = useQuery({ ...lyricsQuery(track, base, online), enabled: !!track });
   return { lyrics: q.data ?? null, isLoading: q.isLoading, isError: q.isError };
+}
+
+/** Warm the cache for the song that plays next, so skipping shows its lyrics at once instead of a spinner. */
+export function usePrefetchLyrics(track: AppTrack | null | undefined): void {
+  const client = useQueryClient();
+  const base = useServerBase();
+  const online = useStore(settingsStore, (s) => s.lyricsOnline);
+  useEffect(() => {
+    if (!track) return;
+    // Let the current song's own work settle first.
+    const t = setTimeout(() => void client.prefetchQuery(lyricsQuery(track, base, online)), 1_500);
+    return () => clearTimeout(t);
+  }, [client, track, base, online]);
+}
+
+/** Highlight slightly early: progress ticks at ~4 Hz, and a line should light up as it starts, not after. */
+const LEAD_MS = 250;
+
+/** Index of the line being sung now. Re-renders only when the line changes, not on every progress tick. */
+export function useActiveLyric(lines: readonly LyricLine[]): number {
+  return useStore(progressStore, (s) => activeLyricIndex(lines, s.positionMs + LEAD_MS));
 }

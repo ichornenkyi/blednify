@@ -66,6 +66,11 @@ let natSub: { remove(): void } | null = null;
 let natUids: number[] = [];
 let natUris: string[] = [];
 let natCur = -1;
+/**
+ * Native slot a JS-initiated skip is waiting for. Until native reports it, status events still describe the
+ * previous song (its position especially), and publishing them would flash the old position on the new song.
+ */
+let advancingTo: { ci: number; until: number } | null = null;
 /** Native holds the current entry and can be played without a reload. */
 let natReady = false;
 /** Native player hit an error and must be recreated (ExoPlayer stays idle after errors). */
@@ -334,6 +339,7 @@ function load(idx: number, play: boolean, positionMs = 0) {
   clearWatchdog();
   index = idx;
   pendingSeekMs = null;
+  advancingTo = null;
   resetTrackCounters();
   wantPlay = play;
   lastCommandAt = Date.now();
@@ -395,6 +401,7 @@ function load(idx: number, play: boolean, positionMs = 0) {
 
 function stopAll() {
   clearWatchdog();
+  advancingTo = null;
   wantPlay = false;
   pendingSeekMs = null;
   if (nat) {
@@ -445,6 +452,10 @@ function onStatus(s: NativeStatus) {
   }
   // Events emitted before the latest add/remove describe a different window; skip them.
   if (s.trackCount !== natUids.length || !natReady) return;
+  if (advancingTo) {
+    if (s.currentIndex !== advancingTo.ci && Date.now() < advancingTo.until) return;
+    advancingTo = null;
+  }
 
   if (s.currentIndex !== natCur && s.currentIndex >= 0 && s.currentIndex < natUids.length) {
     onNativeIndex(s.currentIndex);
@@ -704,6 +715,7 @@ function next() {
   if (nat && natReady && !natBroken && natUids[natCur + 1] === entries[ni].uid && nat.trackCount === natUids.length) {
     // Already pre-buffered natively: let native advance; `onNativeIndex` finalizes state.
     index = ni;
+    advancingTo = { ci: natCur + 1, until: Date.now() + 2_000 };
     nat.next();
     resetTrackCounters();
     lastCommandAt = Date.now();

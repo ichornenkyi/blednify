@@ -28,6 +28,7 @@ import {
   useImageSource,
   useLyrics,
   usePlayer,
+  usePrefetchLyrics,
   type AppTrack,
   type RepeatMode,
 } from '@/core';
@@ -175,6 +176,7 @@ function NowPlaying({
   const { width } = useWindowDimensions();
   const isPlaying = usePlayer((s) => s.isPlaying);
   const { lyrics, isLoading: lyricsLoading } = useLyrics(track);
+  usePrefetchLyrics(usePlayer((s) => s.queue[s.index + 1]));
   const withLyrics = hasLyrics(lyrics);
   // Keep the previous layout while the next track's lyrics load, so the cover doesn't
   // flash at the larger no-lyrics size on every skip.

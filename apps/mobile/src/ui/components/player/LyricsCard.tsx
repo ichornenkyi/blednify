@@ -1,9 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View, type ScrollViewInstance } from 'react-native';
 
 import {
-  activeLyricIndex,
-  useProgress,
+  useActiveLyric,
   type AppTrack,
   type LyricLine,
   type Lyrics,
@@ -13,8 +12,6 @@ import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import { gradientFor, makeStyles, radius, space, useColors } from '@/ui/theme';
-
-const LEAD_MS = 250;
 
 export function LyricsCard({ track, lyrics }: { track: AppTrack; lyrics: Lyrics }) {
   const styles = useStyles();
@@ -47,9 +44,9 @@ export function LyricsCard({ track, lyrics }: { track: AppTrack; lyrics: Lyrics 
 
       <View style={styles.content}>
         {isSynced ? (
-          <SyncedPreview lines={lyrics.synced!} />
+          <SyncedPreview key={track.key} lines={lyrics.synced!} />
         ) : (
-          <PlainPreview text={lyrics.plain ?? ''} />
+          <PlainPreview key={track.key} text={lyrics.plain ?? ''} />
         )}
       </View>
     </Pressable>
@@ -58,17 +55,25 @@ export function LyricsCard({ track, lyrics }: { track: AppTrack; lyrics: Lyrics 
 
 function SyncedPreview({ lines }: { lines: LyricLine[] }) {
   const styles = useStyles();
-  const { positionMs } = useProgress();
   const scrollRef = useRef<ScrollViewInstance>(null);
   const ys = useRef<number[]>([]);
-  const active = activeLyricIndex(lines, positionMs + LEAD_MS);
+  const laidOut = useRef(0);
+  const [ready, setReady] = useState(false);
+  const placed = useRef(false);
+  const active = useActiveLyric(lines);
 
   useEffect(() => {
     const y = ys.current[active];
-    if (y !== undefined) {
-      scrollRef.current?.scrollTo({ y: Math.max(0, y - 48), animated: true });
-    }
-  }, [active]);
+    if (y === undefined) return;
+    // First placement jumps (mid-song open or skip); later lines glide.
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 48), animated: placed.current });
+    placed.current = true;
+  }, [active, ready]);
+
+  const measure = (i: number, y: number) => {
+    if (ys.current[i] === undefined && ++laidOut.current === lines.length) setReady(true);
+    ys.current[i] = y;
+  };
 
   return (
     <ScrollView
@@ -78,37 +83,42 @@ function SyncedPreview({ lines }: { lines: LyricLine[] }) {
       scrollEnabled={false}
       showsVerticalScrollIndicator={false}
       pointerEvents="none">
-      {lines.map((l, i) => {
-        const isActive = i === active;
-        const isPast = i < active;
-        const stateStyle = isActive
-          ? styles.lineActive
-          : isPast
-            ? styles.linePast
-            : styles.lineFuture;
-        const isGap = !l.text;
-        return (
-          <View
-            key={i}
-            onLayout={(e) => {
-              ys.current[i] = e.nativeEvent.layout.y;
-            }}
-            style={styles.lineWrap}>
-            <Text
-              style={[
-                styles.lineText,
-                stateStyle,
-                isGap && styles.gapText,
-              ]}
-              numberOfLines={2}>
-              {isGap ? '♪' : l.text}
-            </Text>
-          </View>
-        );
-      })}
+      {lines.map((l, i) => (
+        <PreviewLine
+          key={i}
+          index={i}
+          text={l.text}
+          state={i === active ? 'active' : i < active ? 'past' : 'future'}
+          onMeasure={measure}
+        />
+      ))}
     </ScrollView>
   );
 }
+
+type LineState = 'past' | 'active' | 'future';
+
+const PreviewLine = memo(function PreviewLine({
+  index,
+  text,
+  state,
+  onMeasure,
+}: {
+  index: number;
+  text: string;
+  state: LineState;
+  onMeasure: (i: number, y: number) => void;
+}) {
+  const styles = useStyles();
+  const stateStyle = state === 'active' ? styles.lineActive : state === 'past' ? styles.linePast : styles.lineFuture;
+  return (
+    <View onLayout={(e) => onMeasure(index, e.nativeEvent.layout.y)} style={styles.lineWrap}>
+      <Text style={[styles.lineText, stateStyle, !text && styles.gapText]} numberOfLines={2}>
+        {text || '♪'}
+      </Text>
+    </View>
+  );
+});
 
 function PlainPreview({ text }: { text: string }) {
   const styles = useStyles();

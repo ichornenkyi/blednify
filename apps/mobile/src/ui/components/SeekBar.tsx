@@ -4,7 +4,7 @@ import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } f
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { formatDuration, player, useProgress } from '@/core';
+import { formatDuration, onProgress, player, useProgressSeconds } from '@/core';
 
 import { haptics } from '../haptics';
 import { makeStyles, space, useColors } from '../theme';
@@ -20,12 +20,14 @@ function clamp01(v: number) {
 
 /**
  * Seek slider. Scrubs locally on the UI thread and only seeks on release.
- * The only Now Playing component subscribed to progress.
+ * The thumb follows playback through a store subscription on the UI thread; React only re-renders the
+ * time labels, once a second.
  */
 export function SeekBar({ fallbackDurationMs }: { fallbackDurationMs: number }) {
   const styles = useStyles();
   const colors = useColors();
-  const { positionMs, durationMs: liveDuration } = useProgress();
+  const { positionSec, durationMs: liveDuration } = useProgressSeconds();
+  const positionMs = positionSec * 1000;
   const durationMs = liveDuration > 0 ? liveDuration : fallbackDurationMs;
 
   const width = useSharedValue(0);
@@ -43,9 +45,11 @@ export function SeekBar({ fallbackDurationMs }: { fallbackDurationMs: number }) 
   // native player arrives there, so neither the thumb nor the time label bounces back while it settles.
   useEffect(() => {
     if (scrubMs !== null) return;
-    const r = durationMs > 0 ? clamp01(positionMs / durationMs) : 0;
-    ratio.set(Math.abs(ratio.get() - r) > 0.02 ? r : withTiming(r, { duration: 260, easing: Easing.linear }));
-  }, [positionMs, durationMs, scrubMs, ratio]);
+    return onProgress((p) => {
+      const r = durationMs > 0 ? clamp01(p.positionMs / durationMs) : 0;
+      ratio.set(Math.abs(ratio.get() - r) > 0.02 ? r : withTiming(r, { duration: 260, easing: Easing.linear }));
+    });
+  }, [durationMs, scrubMs, ratio]);
 
   const commit = (r: number) => {
     player.seekTo(Math.round(r * durationMs));

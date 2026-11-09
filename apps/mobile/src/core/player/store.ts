@@ -28,3 +28,16 @@ export function useProgress(): Progress {
   const durationMs = useStore(progressStore, (s) => s.durationMs);
   return { positionMs, durationMs };
 }
+
+/** Whole seconds played and the duration, for time labels: re-renders once a second instead of on every tick. */
+export function useProgressSeconds(): { positionSec: number; durationMs: number } {
+  const positionSec = useStore(progressStore, (s) => Math.floor(s.positionMs / 1000));
+  const durationMs = useStore(progressStore, (s) => s.durationMs);
+  return { positionSec, durationMs };
+}
+
+/** Calls `fn` now and on every progress tick, outside React. For driving animated values without re-renders. */
+export function onProgress(fn: (p: Progress) => void): () => void {
+  fn(progressStore.getState());
+  return progressStore.subscribe(fn);
+}
