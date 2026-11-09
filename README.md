@@ -30,7 +30,7 @@ docs/MOBILE_ARCH.md     mobile module contract: core/ui ownership, the @/core AP
 ```sh
 cd apps/server
 bun install
-MUSIC_DIR=~/Music ADMIN_TOKEN=change-me bun start      # http://0.0.0.0:8787
+MUSIC_DIR=~/Music LISTEN_TOKEN=<secret> ADMIN_TOKEN=<other-secret> bun start   # http://0.0.0.0:8787
 ```
 
 Or with Docker: `docker compose up -d` in `apps/server` (mounts `./music`). Environment variables, indexing,

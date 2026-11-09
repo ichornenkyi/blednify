@@ -23,6 +23,7 @@
       }
     },
     "android": {
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#0B0A12",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -73,6 +74,7 @@
         "expo-build-properties",
         {
           "android": {
+      "allowBackup": false,
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "buildArchs": [

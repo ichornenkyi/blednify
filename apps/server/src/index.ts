@@ -5,6 +5,11 @@ export { createApp, createContext } from "./app";
 
 if (import.meta.main) {
   const config = loadConfig();
+  // Fail closed like writes do: an open library behind a tunnel is readable by anyone who finds the URL.
+  if (!config.listenToken && !config.allowOpenReads) {
+    console.error("LISTEN_TOKEN is not set: refusing to serve the library to anyone. Set LISTEN_TOKEN, or ALLOW_OPEN_READS=1 on a trusted LAN.");
+    process.exit(1);
+  }
   const ctx = createContext(config);
   const app = createApp(ctx);
 
@@ -19,7 +24,7 @@ if (import.meta.main) {
   console.log(
     `blednify-server ${VERSION} on http://${server.hostname}:${server.port}` +
       ` · music ${config.musicDir} · data ${config.dataDir}` +
-      ` · reads ${config.listenToken ? "require LISTEN_TOKEN" : "open (no LISTEN_TOKEN)"}` +
+      ` · reads ${config.listenToken ? "require LISTEN_TOKEN" : "OPEN (ALLOW_OPEN_READS)"}` +
       ` · writes ${config.adminToken ? "require ADMIN_TOKEN" : config.allowOpenWrites ? "OPEN (ALLOW_OPEN_WRITES)" : "disabled (no ADMIN_TOKEN)"}` +
       ` · search ${ctx.db.fts ? "fts5" : "like"}`,
   );

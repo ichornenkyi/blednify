@@ -8,7 +8,8 @@ files and serves the JSON API and audio streams described in [`docs/API.md`](../
 ```sh
 cd apps/server
 bun install
-MUSIC_DIR=~/Music ADMIN_TOKEN=change-me bun start      # http://0.0.0.0:8787
+MUSIC_DIR=~/Music LISTEN_TOKEN=<secret> ADMIN_TOKEN=<other-secret> bun start   # http://0.0.0.0:8787
+MUSIC_DIR=~/Music ALLOW_OPEN_READS=1 bun start          # trusted LAN / local dev: no listen token
 bun run dev                                            # same, with --watch
 bun run scan                                           # one-off index of MUSIC_DIR, prints {added,removed,total}
 bun run typecheck && bun test
@@ -33,7 +34,8 @@ symlinks are followed. A file that fails to parse is logged and skipped until it
 | `MUSIC_DIR` | `./music` | Library root (scanned recursively). Uploads go to `MUSIC_DIR/uploads/`. |
 | `DATA_DIR` | `./data` | `blednify.db` (SQLite index) and `art/` (artwork cache). Safe to delete; it is rebuilt by a scan. |
 | `ADMIN_TOKEN` | unset | When set, `POST /api/tracks`, `DELETE /api/tracks/:id`, `POST /api/rescan` and `POST /api/admin/check` need `Authorization: Bearer <token>`. When unset, those writes return `403`. The app's **Admin mode** (Settings) uses it to upload music. |
-| `LISTEN_TOKEN` | unset | When set, every read (except `/api/health`) needs `Authorization: Bearer <token>`. Writes use `ADMIN_TOKEN` instead. |
+| `LISTEN_TOKEN` | unset | Every read (except `/api/health`) needs `Authorization: Bearer <token>`. Writes use `ADMIN_TOKEN` instead. Unset: the server refuses to start unless `ALLOW_OPEN_READS=1`. |
+| `ALLOW_OPEN_READS` | unset | `1` serves the library without a listen token. Only for a trusted LAN. |
 | `ALLOW_OPEN_WRITES` | unset | `1` allows writes without a token when `ADMIN_TOKEN` is unset. Only for a trusted LAN. |
 | `MAX_UPLOAD_MB` | `95` | Max size of one upload request. Larger requests get `413 {"error": ...}`. |
 | `LYRICS_ONLINE` | `1` | `0` stops looking up missing lyrics on [lrclib.net](https://lrclib.net). Lookups send only artist, title, album and duration, and are cached (hits 180 days, misses 7 days). |

@@ -4,19 +4,23 @@
 #   mkdir -p music && sudo chown 1000:1000 music
 #   docker compose up -d      # builds the server locally; the tunnel starts only when COMPOSE_PROFILES=tunnel
 #
-# Without the tunnel (LAN only), remove COMPOSE_PROFILES from .env and the app talks to http://<LAN-ip>:8787.
+# Without the tunnel (LAN only), remove COMPOSE_PROFILES from .env, publish the port on the LAN ("8787:8787"
+# below) and the app talks to http://<LAN-ip>:8787.
 services:
   blednify:
     image: ghcr.io/vetos5/blednify-server:latest
     build: .
     container_name: blednify
     restart: unless-stopped
+    # Loopback only: the tunnel reaches the server over the compose network, and Docker's published ports bypass
+    # the host firewall. For LAN-only use (no tunnel), change this to "8787:8787".
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     environment:
-      # Every library read needs this token (the app sends it as a Bearer header). Set it whenever the
-      # server is reachable beyond your LAN.
+      # Every library read needs this token (the app sends it as a Bearer header). Without it the server
+      # refuses to start, unless ALLOW_OPEN_READS=1 (trusted LAN only).
       LISTEN_TOKEN: ${LISTEN_TOKEN:-}
+      ALLOW_OPEN_READS: ${ALLOW_OPEN_READS:-}
       # Uploads, deletes and rescans need this token. Without it they are refused (403); reads still work.
       # ALLOW_OPEN_WRITES: "1" lifts that on a trusted LAN only.
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}

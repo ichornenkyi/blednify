@@ -371,7 +371,7 @@ index 53c36f7e3c0a0bcb8b4de1f5e6d2d3e214d3fbf2..117fc394cc4085f038cef8b9d9ad0ef5
      sessionMetadataPlayer = null
      currentPlayable = null
 diff --git a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
-index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..67a9776b276a208a4eaca98e3a681848fad15d6e 100644
+index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..fe6e57f5e3868512ddb3ece818c9dfa695a43fe8 100644
 --- a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
 +++ b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
 @@ -2,54 +2,40 @@ package expo.modules.audio.service
@@ -443,18 +443,30 @@ index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..67a9776b276a208a4eaca98e3a681848
          .setAvailableSessionCommands(availableSessionCommands)
          .build()
      } catch (e: Exception) {
-@@ -83,4 +69,67 @@ class AudioMediaSessionCallback(
+@@ -83,4 +69,91 @@ class AudioMediaSessionCallback(
        else -> super.onCustomCommand(session, controller, command, args)
      }
    }
 +
 +  // --- Browsing (Android Auto) -------------------------------------------------------------------
 +
++  /**
++   * The browse tree lists the user's library, and the service is exported for the car, so any installed app
++   * could bind to it. Only this app, trusted system controllers (system UI, Bluetooth, apps holding
++   * MEDIA_CONTENT_CONTROL) and the known car / assistant / watch apps may browse. Playback controls stay open.
++   */
++  private fun canBrowse(browser: MediaSession.ControllerInfo): Boolean =
++    browser.packageName == service.packageName || browser.isTrusted || browser.packageName in BROWSERS
++
++  private fun <T> denied(): ListenableFuture<LibraryResult<T>> =
++    Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_PERMISSION_DENIED))
++
 +  override fun onGetLibraryRoot(
 +    session: MediaLibrarySession,
 +    browser: MediaSession.ControllerInfo,
 +    params: MediaLibraryService.LibraryParams?
 +  ): ListenableFuture<LibraryResult<MediaItem>> {
++    if (!canBrowse(browser)) return denied()
 +    AutoLibrary.ensureLoaded(service)
 +    val rootParams = MediaLibraryService.LibraryParams.Builder()
 +      .setExtras(AutoLibrary.rootExtras())
@@ -467,6 +479,7 @@ index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..67a9776b276a208a4eaca98e3a681848
 +    browser: MediaSession.ControllerInfo,
 +    mediaId: String
 +  ): ListenableFuture<LibraryResult<MediaItem>> {
++    if (!canBrowse(browser)) return denied()
 +    AutoLibrary.ensureLoaded(service)
 +    val item = AutoLibrary.item(mediaId)
 +      ?: return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
@@ -481,6 +494,7 @@ index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..67a9776b276a208a4eaca98e3a681848
 +    pageSize: Int,
 +    params: MediaLibraryService.LibraryParams?
 +  ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
++    if (!canBrowse(browser)) return denied()
 +    AutoLibrary.ensureLoaded(service)
 +    val children = AutoLibrary.children(parentId, page, pageSize)
 +      ?: return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
@@ -509,6 +523,16 @@ index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..67a9776b276a208a4eaca98e3a681848
 +    }
 +    val resolved = mediaItems.map { AutoLibrary.item(it.mediaId) ?: it }
 +    return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs))
++  }
++
++  private companion object {
++    val BROWSERS = setOf(
++      "com.google.android.projection.gearhead", // Android Auto
++      "com.android.car.media", // Android Automotive media centre
++      "com.google.android.carassistant",
++      "com.google.android.googlequicksearchbox", // Google Assistant
++      "com.google.android.wearable.app", // Wear OS companion
++    )
 +  }
  }
 diff --git a/android/src/main/java/expo/modules/audio/service/AutoLibrary.kt b/android/src/main/java/expo/modules/audio/service/AutoLibrary.kt

@@ -30,6 +30,8 @@ describe("web app hosting", () => {
       expect(res.headers.get("cross-origin-opener-policy")).toBe("same-origin");
       expect(res.headers.get("cross-origin-embedder-policy")).toBe("require-corp");
       expect(res.headers.get("cache-control")).toBe("no-cache");
+      expect(res.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
+      expect(res.headers.get("x-frame-options")).toBe("DENY");
     }
   });
 

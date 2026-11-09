@@ -5,7 +5,8 @@ import { serveFile } from "./serve-file";
 /**
  * Static hosting for the web app (installable on iOS from Safari: Share → Add to Home Screen).
  *
- * Every response is cross-origin isolated (COOP + COEP): expo-sqlite's web build needs SharedArrayBuffer.
+ * Every response is cross-origin isolated (COOP + COEP): expo-sqlite's web build needs SharedArrayBuffer. No page
+ * may frame it.
  * Hashed bundles are immutable; index.html and the manifest are revalidated so updates land on next launch.
  * Unknown paths without an extension fall back to index.html (client-side routes like /album/123).
  */
@@ -13,6 +14,10 @@ const ISOLATION = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",
   "X-Content-Type-Options": "nosniff",
+  // Never framed by another site (clickjacking of admin actions such as delete).
+  "Content-Security-Policy": "frame-ancestors 'none'",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
 } as const;
 
 const TYPES: Record<string, string> = {

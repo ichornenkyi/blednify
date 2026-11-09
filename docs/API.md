@@ -3,7 +3,7 @@
 Single source of truth between `apps/server` and `apps/mobile`. Change both sides together.
 
 Base URL: configurable in the app (Settings → Server). Default from `EXPO_PUBLIC_API_URL`.
-All JSON. Reads need `Authorization: Bearer <LISTEN_TOKEN>` only when the server sets `LISTEN_TOKEN` (`/api/health` is always open and reports `authRequired`). Writes (upload/delete/rescan/admin check, all `POST`/`DELETE`) require `Authorization: Bearer <ADMIN_TOKEN>` instead; a server without `ADMIN_TOKEN` refuses them with `403` unless it runs with `ALLOW_OPEN_WRITES=1`.
+All JSON. Reads need `Authorization: Bearer <LISTEN_TOKEN>` (`/api/health` is always open and reports `authRequired`); a server without `LISTEN_TOKEN` refuses to start unless it runs with `ALLOW_OPEN_READS=1`, which leaves reads open. Writes (upload/delete/rescan/admin check, all `POST`/`DELETE`) require `Authorization: Bearer <ADMIN_TOKEN>` instead; a server without `ADMIN_TOKEN` refuses them with `403` unless it runs with `ALLOW_OPEN_WRITES=1`.
 
 ## Types
 

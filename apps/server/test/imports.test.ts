@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { GOOD_MATCH, MIN_MATCH, score } from "../src/imports/match";
+import { imageDemuxer } from "../src/imports/importer";
 import { LinkError, parseLink, splitVideoTitle } from "../src/imports/sources";
 import { testServer } from "./fixtures";
 
@@ -91,4 +92,17 @@ test("imports need the admin token", async () => {
   } finally {
     srv.close();
   }
+});
+
+test("imageDemuxer accepts only known image formats", () => {
+  const b = (...parts: (number[] | string)[]) =>
+    Buffer.concat(parts.map((p) => (typeof p === "string" ? Buffer.from(p, "latin1") : Buffer.from(p))));
+  expect(imageDemuxer(b([0xff, 0xd8, 0xff, 0xe0]))).toBe("jpeg_pipe");
+  expect(imageDemuxer(b([0x89], "PNG\r\n"))).toBe("png_pipe");
+  expect(imageDemuxer(b("RIFF", [0, 0, 0, 0], "WEBPVP8 "))).toBe("webp_pipe");
+  expect(imageDemuxer(b("GIF89a"))).toBe("gif");
+  // Playlists and anything else must never reach ffmpeg's format probing.
+  expect(imageDemuxer(b("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n"))).toBeNull();
+  expect(imageDemuxer(b("ffconcat version 1.0\n"))).toBeNull();
+  expect(imageDemuxer(b(""))).toBeNull();
 });

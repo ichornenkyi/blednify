@@ -346,7 +346,12 @@ export class Importer {
       const raw = join(this.coverDir, `.${id}.src`);
       await writeFile(raw, buf);
       // Normalise to a square JPEG (YouTube thumbnails are 16:9, SoundCloud may be PNG/WebP).
-      const r = await run([this.d.config.imports.ffmpeg, "-v", "error", "-y", "-i", raw, "-vf", SQUARE, "-frames:v", "1", "-q:v", "2", join(this.coverDir, `${id}.jpg`)]);
+      const demuxer = imageDemuxer(buf);
+      if (!demuxer) {
+        await rm(raw, { force: true });
+        return false;
+      }
+      const r = await run([this.d.config.imports.ffmpeg, "-v", "error", "-y", "-f", demuxer, "-i", raw, "-vf", SQUARE, "-frames:v", "1", "-q:v", "2", join(this.coverDir, `${id}.jpg`)]);
       await rm(raw, { force: true });
       return r.code === 0;
     } catch {
@@ -450,6 +455,8 @@ export class Importer {
         }
       }
       if (!cover && files.includes("audio.jpg")) cover = join(work, "audio.jpg");
+      const coverDemuxer = cover ? imageDemuxer(Buffer.from(await Bun.file(cover).slice(0, 16).arrayBuffer())) : null;
+      if (!coverDemuxer) cover = null;
 
       // 4. Tag (and transcode only codecs the phone's MP4/MP3 path can't hold).
       const codec = await this.codecOf(join(work, audio));
@@ -469,7 +476,7 @@ export class Importer {
         genre: info.genre,
         comment: item.source.startsWith("spotify:") ? `${item.source} via youtube:${info.id}` : item.source,
       };
-      await this.tag(join(work, audio), cover, out, codec, meta, signal);
+      await this.tag(join(work, audio), cover && coverDemuxer ? { path: cover, demuxer: coverDemuxer } : null, out, codec, meta, signal);
 
       // 5. Move into the library like an upload.
       const name = sanitizeFileName(`${artist} - ${item.title}.${ext}`);
@@ -544,7 +551,7 @@ export class Importer {
 
   private async tag(
     input: string,
-    cover: string | null,
+    cover: { path: string; demuxer: string } | null,
     out: string,
     codec: string,
     meta: Record<string, string | number | null | undefined>,
@@ -553,7 +560,7 @@ export class Importer {
     const ff = this.d.config.imports.ffmpeg;
     const base = (withCover: boolean) => {
       const a = ["-hide_banner", "-v", "error", "-y", "-i", input];
-      if (withCover) a.push("-i", cover!);
+      if (withCover) a.push("-f", cover!.demuxer, "-i", cover!.path);
       a.push("-map", "0:a:0");
       if (withCover) a.push("-map", "1:v:0", "-c:v", "mjpeg", "-q:v", "2", "-vf", SQUARE, "-disposition:v:0", "attached_pic");
       if (codec === "mp3") a.push("-c:a", "copy", "-id3v2_version", "3", "-f", "mp3");
@@ -587,6 +594,21 @@ export class Importer {
 }
 
 /** "…/hinas-favorite-toy" → "hinas favorite toy": a placeholder until the real title is fetched. */
+/**
+ * The ffmpeg demuxer for an image, picked from its magic bytes, or null when it is not a known image format.
+ * Covers come from third-party URLs: forcing the demuxer stops ffmpeg from probing them as a playlist format
+ * (HLS, concat, ...) that could make it read other local files or URLs.
+ */
+export function imageDemuxer(head: Uint8Array): string | null {
+  const ascii = (from: number, to: number) => String.fromCharCode(...head.subarray(from, to));
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "jpeg_pipe";
+  if (head[0] === 0x89 && ascii(1, 4) === "PNG") return "png_pipe";
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "webp_pipe";
+  if (ascii(0, 4) === "GIF8") return "gif";
+  if (ascii(0, 2) === "BM") return "bmp_pipe";
+  return null;
+}
+
 const slugTitle = (url: string | null) => {
   const seg = url ? decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() ?? "") : "";
   return seg && !/^watch$/i.test(seg) ? seg.replace(/[-_]+/g, " ").trim() : "";
