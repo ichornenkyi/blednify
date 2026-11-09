@@ -13,6 +13,7 @@ export type {
 
 // Provider
 export { CoreProvider } from './provider';
+export { serverUrlProblem } from './api';
 
 // Server catalog
 export {

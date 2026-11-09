@@ -8,6 +8,7 @@ import {
   formatBytes,
   rescanServer,
   saveConnection,
+  serverUrlProblem,
   testServer,
   useDownloads,
   useServerStatus,
@@ -76,6 +77,12 @@ export default function SettingsScreen() {
   };
 
   const save = () => {
+    const problem = normalized ? serverUrlProblem(normalized) : null;
+    if (problem) {
+      setResult({ ok: false, message: problem });
+      haptics.warn();
+      return;
+    }
     saveConnection(normalized, token);
     setUrl(normalized);
     setToken(token.trim());

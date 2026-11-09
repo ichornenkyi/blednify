@@ -2,7 +2,7 @@ import { getDocumentAsync } from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { create, useStore } from 'zustand';
 
-import { ApiError, type ApiTrack } from './api';
+import { ApiError, toApiError, type ApiTrack } from './api';
 import { pruneGoneTracks } from './prune';
 import { queryClient } from './query-client';
 import { getServerBase, normalizeServerUrl, settingsStore } from './settings';
@@ -36,7 +36,7 @@ export async function adminRequest<T>(
     return (res.status === 204 ? undefined : await res.json()) as T;
   } catch (e) {
     if (ctrl.signal.aborted) throw new ApiError('Server did not respond in time');
-    throw e;
+    throw toApiError(e);
   } finally {
     clearTimeout(timer);
   }

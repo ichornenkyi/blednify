@@ -6,6 +6,7 @@ import {
   ApiError,
   apiGet,
   queryString,
+  serverUrlProblem,
   type ApiAlbum,
   type ApiArtist,
   type ApiHealth,
@@ -72,6 +73,8 @@ export async function testServer(
 ): Promise<{ ok: boolean; trackCount?: number; authRequired?: boolean; error?: string }> {
   const base = normalizeServerUrl(url);
   if (!base) return { ok: false, error: 'Enter a server URL' };
+  const problem = serverUrlProblem(base);
+  if (problem) return { ok: false, error: problem };
   try {
     const h = await apiGet<ApiHealth>(base, '/api/health', undefined, 6_000, token.trim());
     if (!h?.ok || h.name !== 'blednify') return { ok: false, error: 'Not a Blednify server' };

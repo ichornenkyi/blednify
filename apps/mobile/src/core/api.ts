@@ -52,6 +52,38 @@ export class ApiError extends Error {
   }
 }
 
+/** Plain-language reason for a server URL that can't work, or null when it looks fine. */
+export function serverUrlProblem(url: string): string | null {
+  const m = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)/i.exec(url);
+  if (!m) return 'Enter an address like https://music.example.com';
+  if (!/^https?$/i.test(m[1])) return 'The address must start with http:// or https://';
+  if (!m[2]) return 'The address is missing a host name';
+  return null;
+}
+
+/**
+ * Turns low-level fetch failures (expo/fetch's "fetch failed: … Caused by: java.net…",
+ * "Network request failed", TLS errors) into a short message a person can act on.
+ * The raw error is logged for debugging.
+ */
+export function toApiError(e: unknown): ApiError {
+  if (e instanceof ApiError) return e;
+  const raw = e instanceof Error ? `${e.message} ${String((e as { cause?: unknown }).cause ?? '')}` : String(e);
+  console.warn('[api] request failed:', raw);
+  const has = (re: RegExp) => re.test(raw);
+  if (has(/MalformedURL|unknown protocol|invalid url|cannot be cast to type class java\.net\.URL/i))
+    return new ApiError('The server address is not valid');
+  if (has(/UnknownHost|Unable to resolve host|ENOTFOUND|No address associated/i))
+    return new ApiError("Couldn't find that server — check the address");
+  if (has(/ConnectException|ECONNREFUSED|Failed to connect|Connection refused/i))
+    return new ApiError("Couldn't connect — is the server running?");
+  if (has(/SSL|TLS|certificate|CertPath|handshake/i)) return new ApiError('Secure connection failed — check https and the certificate');
+  if (has(/Cleartext HTTP traffic|CLEARTEXT/i)) return new ApiError('This server needs https://');
+  if (has(/timeout|timed out|SocketTimeout/i)) return new ApiError('Server did not respond in time');
+  if (has(/JSON Parse|Unexpected token|not valid JSON/i)) return new ApiError("That address didn't answer like a Blednify server");
+  return new ApiError("Couldn't reach the server — check the address and your connection");
+}
+
 export function queryString(params: Record<string, string | number | undefined>): string {
   const parts: string[] = [];
   for (const [k, v] of Object.entries(params)) {
@@ -96,7 +128,8 @@ export async function apiGet<T>(
     return (await res.json()) as T;
   } catch (e) {
     if (timedOut) throw new ApiError('Server did not respond in time');
-    throw e;
+    if (signal?.aborted) throw e;
+    throw toApiError(e);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
