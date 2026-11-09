@@ -116,6 +116,9 @@ export {
   type ThemePref,
 } from './settings';
 
+// Launcher icon
+export { APP_ICONS, appIconById, appIconSupported, setAppIcon, useAppIcon, type AppIconId } from './app-icon';
+
 // Images (adds the access token for server URLs)
 export { imageSourceFor, useImageSource, type ImageSource } from './auth';
 

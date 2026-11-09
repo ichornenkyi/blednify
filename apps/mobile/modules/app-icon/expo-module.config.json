@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["pro.vetos.blednify.appicon.AppIconModule"]
+  }
+}

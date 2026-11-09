@@ -1,9 +1,12 @@
 import Constants from 'expo-constants';
+import { Image } from 'expo-image';
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  appIconById,
+  appIconSupported,
   checkAdmin,
   formatBytes,
   rescanServer,
@@ -12,6 +15,7 @@ import {
   testServer,
   useDownloads,
   useServerStatus,
+  useAppIcon,
   useSettings,
   useThemePref,
   useUploads,
@@ -91,6 +95,7 @@ export default function SettingsScreen() {
 
   const version = Constants.expoConfig?.version ?? '—';
   const theme = useThemePref();
+  const appIcon = useAppIcon();
   const themeLabel = presetById(theme.preset).name + (theme.accent || theme.background ? ' · custom colors' : '');
 
   return (
@@ -213,6 +218,15 @@ export default function SettingsScreen() {
             chevron
             onPress={nav.appearance}
           />
+          {appIconSupported ? (
+            <ListRow
+              leading={<Image source={appIconById(appIcon).image} style={styles.rowAppIcon} />}
+              title="App icon"
+              subtitle={appIconById(appIcon).name}
+              chevron
+              onPress={nav.appIcon}
+            />
+          ) : null}
           <ListRow
             leading={<RowIcon name="folder-outline" />}
             title="Storage used"
@@ -438,6 +452,7 @@ const useStyles = makeStyles((colors) => ({
   buttons: { flexDirection: 'row', gap: space.md },
   adminLinks: { marginHorizontal: -space.lg, marginBottom: -space.lg },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  rowAppIcon: { width: 40, height: 40, borderRadius: 12 },
   rowIcon: { width: 40, height: 40, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },
   about: { alignItems: 'center', gap: space.xs, paddingVertical: space.xl },
   centerText: { textAlign: 'center', marginTop: space.sm },

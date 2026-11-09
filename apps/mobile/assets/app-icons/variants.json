@@ -1,0 +1,50 @@
+[
+  {
+    "id": "neon",
+    "name": "Neon"
+  },
+  {
+    "id": "sunset",
+    "name": "Sunset"
+  },
+  {
+    "id": "aurora",
+    "name": "Aurora"
+  },
+  {
+    "id": "daylight",
+    "name": "Daylight"
+  },
+  {
+    "id": "midnight",
+    "name": "Midnight"
+  },
+  {
+    "id": "cyber",
+    "name": "Cyber"
+  },
+  {
+    "id": "vinyl",
+    "name": "Vinyl"
+  },
+  {
+    "id": "mint",
+    "name": "Mint"
+  },
+  {
+    "id": "ocean",
+    "name": "Ocean"
+  },
+  {
+    "id": "ember",
+    "name": "Ember"
+  },
+  {
+    "id": "mono",
+    "name": "Mono"
+  },
+  {
+    "id": "paper",
+    "name": "Paper"
+  }
+]
