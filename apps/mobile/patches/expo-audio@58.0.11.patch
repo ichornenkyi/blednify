@@ -371,7 +371,7 @@ index 53c36f7e3c0a0bcb8b4de1f5e6d2d3e214d3fbf2..117fc394cc4085f038cef8b9d9ad0ef5
      sessionMetadataPlayer = null
      currentPlayable = null
 diff --git a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
-index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..19176a288107d93ec102a5dfc32942133c9a3517 100644
+index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..5f2ad7195d0d496e12be57da7fd86c31c58e37a6 100644
 --- a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
 +++ b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
 @@ -2,54 +2,40 @@ package expo.modules.audio.service
@@ -458,7 +458,7 @@ index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..19176a288107d93ec102a5dfc3294213
 +  private fun canBrowse(browser: MediaSession.ControllerInfo): Boolean =
 +    browser.packageName == service.packageName || browser.isTrusted || browser.packageName in BROWSERS
 +
-+  private fun <T> denied(): ListenableFuture<LibraryResult<T>> =
++  private fun <T : Any> denied(): ListenableFuture<LibraryResult<T>> =
 +    Futures.immediateFuture(LibraryResult.ofError<T>(LibraryResult.RESULT_ERROR_PERMISSION_DENIED))
 +
 +  override fun onGetLibraryRoot(
