@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { downloadTracks, player, useAlbum, type AppTrack } from '@/core';
+import { downloadTracks, player, useAlbum, type AppTrack, fileStorageSupported } from '@/core';
 import { Backdrop } from '@/ui/components/Backdrop';
 import { Artwork } from '@/ui/components/Artwork';
 import { DetailHeader } from '@/ui/components/DetailHeader';
@@ -78,7 +78,7 @@ export default function AlbumScreen() {
             onShuffle={tracks.length ? () => player.playTracks(tracks, undefined, { shuffle: true }) : undefined}
             actions={
               <>
-                {remoteMissing.length > 0 ? (
+                {fileStorageSupported && remoteMissing.length > 0 ? (
                   <IconButton
                     icon="arrow-down-circle-outline"
                     label="Download album"

@@ -18,6 +18,7 @@ import {
   type AppTrack,
   type ArtistView,
   type SearchHistoryEntry,
+  fileStorageSupported,
 } from '@/core';
 import { importMusic } from '@/ui/actions';
 import { Backdrop } from '@/ui/components/Backdrop';
@@ -274,7 +275,8 @@ function RecentHistoryRow({
   );
 }
 
-const BROWSE: { label: string; icon: IconName; colors: readonly [string, string]; filter?: LibraryFilter; action?: () => void }[] = [
+type BrowseItem = { label: string; icon: IconName; colors: readonly [string, string]; filter?: LibraryFilter; action?: () => void };
+const BROWSE_ALL: BrowseItem[] = [
   { label: 'Liked songs', icon: 'heart', colors: ['#E5383B', '#6A1214'], filter: 'liked' },
   { label: 'Downloaded', icon: 'arrow-down-circle', colors: ['#2B5876', '#101C2B'], filter: 'downloaded' },
   { label: 'On this device', icon: 'phone-portrait', colors: ['#1F8A70', '#0B2B24'], filter: 'device' },
@@ -282,6 +284,8 @@ const BROWSE: { label: string; icon: IconName; colors: readonly [string, string]
   { label: 'Albums', icon: 'disc', colors: ['#C06C2B', '#3B1A08'], filter: 'albums' },
   { label: 'Import music', icon: 'add-circle', colors: ['#4A5BD6', '#141A45'], action: importMusic },
 ];
+const FILE_ONLY = new Set(['Downloaded', 'On this device', 'Import music']);
+const BROWSE = fileStorageSupported ? BROWSE_ALL : BROWSE_ALL.filter((b) => !FILE_ONLY.has(b.label));
 
 function BrowseGrid() {
   const styles = useStyles();

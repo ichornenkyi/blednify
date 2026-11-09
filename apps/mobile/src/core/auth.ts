@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Platform } from 'react-native';
 import { useStore } from 'zustand';
 
 import { normalizeServerUrl, settingsStore } from './settings';
@@ -19,7 +20,9 @@ export function authHeadersFor(url: string): Record<string, string> | undefined 
 
 /** expo-image source for a URI, with the token attached when the URI is on the configured server. */
 export function imageSourceFor(uri: string): ImageSource {
-  const headers = authHeadersFor(uri);
+  // Web: the session cookie authorises plain <img> loads (cached by the browser); headers would make
+  // expo-image fetch every cover through JS instead.
+  const headers = Platform.OS === 'web' ? undefined : authHeadersFor(uri);
   return headers ? { uri, headers } : { uri };
 }
 

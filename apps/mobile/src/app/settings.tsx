@@ -19,6 +19,7 @@ import {
   useSettings,
   useThemePref,
   useUploads,
+  fileStorageSupported,
 } from '@/core';
 import { attempt, errorMessage, importMusic } from '@/ui/actions';
 import { Backdrop } from '@/ui/components/Backdrop';
@@ -180,24 +181,26 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
-        <Section title="Downloads" icon="arrow-down-circle-outline">
-          <View style={styles.toggleRow}>
-            <View style={styles.flex}>
-              <Text variant="bodyStrong">Download on Wi-Fi only</Text>
-              <Text variant="caption">Pause downloads on mobile data.</Text>
+        {fileStorageSupported ? (
+          <Section title="Downloads" icon="arrow-down-circle-outline">
+            <View style={styles.toggleRow}>
+              <View style={styles.flex}>
+                <Text variant="bodyStrong">Download on Wi-Fi only</Text>
+                <Text variant="caption">Pause downloads on mobile data.</Text>
+              </View>
+              <Switch
+                value={settings.downloadOnWifiOnly}
+                onValueChange={(v) => {
+                  haptics.select();
+                  settings.setDownloadOnWifiOnly(v);
+                }}
+                trackColor={{ false: colors.surface3, true: colors.accent }}
+                thumbColor={colors.white}
+                ios_backgroundColor={colors.surface3}
+              />
             </View>
-            <Switch
-              value={settings.downloadOnWifiOnly}
-              onValueChange={(v) => {
-                haptics.select();
-                settings.setDownloadOnWifiOnly(v);
-              }}
-              trackColor={{ false: colors.surface3, true: colors.accent }}
-              thumbColor={colors.white}
-              ios_backgroundColor={colors.surface3}
-            />
-          </View>
-        </Section>
+          </Section>
+        ) : null}
 
         <Section title="Lyrics" icon="text-outline">
           <ToggleRow
@@ -227,20 +230,24 @@ export default function SettingsScreen() {
               onPress={nav.appIcon}
             />
           ) : null}
-          <ListRow
-            leading={<RowIcon name="folder-outline" />}
-            title="Storage used"
-            subtitle={`${formatBytes(bytesUsed)} · ${plural(completedCount, 'download')}`}
-            chevron
-            onPress={nav.downloads}
-          />
-          <ListRow
-            leading={<RowIcon name="add-circle-outline" />}
-            title="Import music"
-            subtitle="Add audio files from this phone"
-            chevron
-            onPress={importMusic}
-          />
+          {fileStorageSupported ? (
+            <>
+              <ListRow
+                leading={<RowIcon name="folder-outline" />}
+                title="Storage used"
+                subtitle={`${formatBytes(bytesUsed)} · ${plural(completedCount, 'download')}`}
+                chevron
+                onPress={nav.downloads}
+              />
+              <ListRow
+                leading={<RowIcon name="add-circle-outline" />}
+                title="Import music"
+                subtitle="Add audio files from this phone"
+                chevron
+                onPress={importMusic}
+              />
+            </>
+          ) : null}
         </View>
 
         <View style={styles.about}>
@@ -374,13 +381,15 @@ function AdminSection() {
             />
           </View>
           <View style={styles.adminLinks}>
-            <ListRow
-              leading={<RowIcon name="cloud-upload-outline" />}
-              title="Upload music"
-              subtitle={active ? `${plural(active, 'file')} in progress` : 'Send audio files from this phone to the server'}
-              chevron
-              onPress={nav.upload}
-            />
+            {fileStorageSupported ? (
+              <ListRow
+                leading={<RowIcon name="cloud-upload-outline" />}
+                title="Upload music"
+                subtitle={active ? `${plural(active, 'file')} in progress` : 'Send audio files from this phone to the server'}
+                chevron
+                onPress={nav.upload}
+              />
+            ) : null}
             <ListRow
               leading={<RowIcon name="playlist-import" />}
               title="Import playlist"

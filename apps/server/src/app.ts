@@ -5,6 +5,7 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { compress } from "hono/compress";
 import { cors } from "hono/cors";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import pkg from "../package.json";
@@ -18,6 +19,7 @@ import { Library, toTrack } from "./library";
 import { LyricsService } from "./lyrics";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
+import { serveWeb } from "./web";
 
 export { sanitizeFileName } from "./claim";
 
@@ -120,6 +122,22 @@ function bearerMatches(c: Context, expected: Buffer): boolean {
   return !!m && timingSafeEqual(digest(m[1]!.trim()), expected);
 }
 
+/**
+ * Cookie that carries the listen token for the web app: `<audio>` and `<img>` cannot send an Authorization
+ * header, so the browser presents the token as an HttpOnly cookie instead (set by POST /api/session).
+ */
+export const LISTEN_COOKIE = "blednify_listen";
+
+/** True when the request carries the listen token as a bearer header or as the web app's cookie. */
+function listenMatches(c: Context, expected: Buffer): boolean {
+  if (bearerMatches(c, expected)) return true;
+  const cookie = getCookie(c, LISTEN_COOKIE);
+  return !!cookie && timingSafeEqual(digest(cookie), expected);
+}
+
+/** Behind Cloudflare / a reverse proxy the request reaches us as http; trust the forwarded scheme. */
+const isHttps = (c: Context) => (c.req.header("x-forwarded-proto") ?? new URL(c.req.url).protocol.replace(":", "")) === "https";
+
 /** Keeps the connection open for long-running admin requests (Bun's default idle timeout is 10s). */
 function noIdleTimeout(c: Context): void {
   const server = c.env as { timeout?: (req: Request, seconds: number) => void } | undefined;
@@ -182,7 +200,7 @@ export function createApp(ctx: AppContext): Hono {
       c.header("WWW-Authenticate", 'Bearer realm="blednify"');
       fail(401, "wrong access token");
     }
-    if (!bearerMatches(c, listenDigest)) return c.json({ ...base, authRequired: true });
+    if (!listenMatches(c, listenDigest)) return c.json({ ...base, authRequired: true });
     return c.json({ ...base, authRequired: true, trackCount: lib.trackCount() });
   });
 
@@ -190,13 +208,37 @@ export function createApp(ctx: AppContext): Hono {
   // instead (one Authorization header can carry only one token), and they fail closed without it.
   if (listenDigest) {
     app.use("/api/*", async (c, next) => {
-      if ((c.req.method === "GET" || c.req.method === "HEAD") && !bearerMatches(c, listenDigest)) {
+      if ((c.req.method === "GET" || c.req.method === "HEAD") && !listenMatches(c, listenDigest)) {
         c.header("WWW-Authenticate", 'Bearer realm="blednify"');
         fail(401, "unauthorized");
       }
       await next();
     });
   }
+
+  // ---------- web session ----------
+
+  // The web app trades the listen token (bearer) for an HttpOnly cookie so media elements can authenticate.
+  app.post("/api/session", (c) => {
+    if (!listenDigest) return c.body(null, 204);
+    if (!bearerMatches(c, listenDigest)) {
+      c.header("WWW-Authenticate", 'Bearer realm="blednify"');
+      fail(401, "wrong access token");
+    }
+    const token = /^Bearer\s+(.+)$/i.exec(c.req.header("authorization") ?? "")![1]!.trim();
+    setCookie(c, LISTEN_COOKIE, token, {
+      path: "/api",
+      httpOnly: true,
+      secure: isHttps(c),
+      sameSite: "Strict",
+      maxAge: 400 * 24 * 3600,
+    });
+    return c.body(null, 204);
+  });
+  app.delete("/api/session", (c) => {
+    deleteCookie(c, LISTEN_COOKIE, { path: "/api", secure: isHttps(c) });
+    return c.body(null, 204);
+  });
 
   // ---------- tracks ----------
 
@@ -358,6 +400,16 @@ export function createApp(ctx: AppContext): Hono {
     const { q, limit } = query(c, searchQuery);
     return c.json(lib.search(q, limit));
   });
+
+  // ---------- web app ----------
+
+  if (config.webDir) {
+    const webDir = config.webDir;
+    app.on(["GET", "HEAD"], "*", async (c, next) => {
+      if (c.req.path === "/api" || c.req.path.startsWith("/api/")) return next();
+      return (await serveWeb(c.req.raw, webDir)) ?? next();
+    });
+  }
 
   return app;
 }

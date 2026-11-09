@@ -50,6 +50,21 @@ In the app open **Settings → Server**, enter the server address (for example `
 added if missing) and tap **Test**. To bake in a default, set `EXPO_PUBLIC_API_URL` at build time.
 More in [`apps/mobile/README.md`](apps/mobile/README.md).
 
+## iPhone: the web app
+
+No App Store or developer account needed: the server also hosts the app as a web app. Build it into the
+folder the server serves (`WEB_DIR`, mounted as `./web` by the compose file):
+
+```sh
+tools/web/deploy.sh apps/server/web      # or the web/ folder next to your own compose file
+```
+
+On the iPhone open the server's https address in **Safari**, enter the access token in **Settings**, then
+**Share → Add to Home Screen**. It opens full screen with its own icon, keeps playing with the screen locked,
+and shows lock-screen / Control Center controls. It streams only: importing files from the phone, offline
+downloads, uploads and Android Auto stay in the Android app. iOS needs https for this (the Cloudflare tunnel
+provides it) and iOS 17 or later.
+
 ## CI and downloads
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and pull request:

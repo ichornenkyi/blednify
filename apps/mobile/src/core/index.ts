@@ -120,6 +120,7 @@ export {
 export { APP_ICONS, appIconById, appIconSupported, setAppIcon, useAppIcon, type AppIconId } from './app-icon';
 
 // Images (adds the access token for server URLs)
+export { fileStorageSupported } from './platform';
 export { imageSourceFor, useImageSource, type ImageSource } from './auth';
 
 // Utilities

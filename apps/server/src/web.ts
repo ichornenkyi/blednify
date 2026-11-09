@@ -1,0 +1,66 @@
+import { stat } from "node:fs/promises";
+import { extname, join, normalize, sep } from "node:path";
+import { serveFile } from "./serve-file";
+
+/**
+ * Static hosting for the web app (installable on iOS from Safari: Share → Add to Home Screen).
+ *
+ * Every response is cross-origin isolated (COOP + COEP): expo-sqlite's web build needs SharedArrayBuffer.
+ * Hashed bundles are immutable; index.html and the manifest are revalidated so updates land on next launch.
+ * Unknown paths without an extension fall back to index.html (client-side routes like /album/123).
+ */
+const ISOLATION = {
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "require-corp",
+  "X-Content-Type-Options": "nosniff",
+} as const;
+
+const TYPES: Record<string, string> = {
+  ".webmanifest": "application/manifest+json",
+  ".wasm": "application/wasm",
+  ".js": "text/javascript; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+};
+
+const IMMUTABLE = "public, max-age=31536000, immutable";
+const REVALIDATE = "no-cache";
+
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export async function serveWeb(req: Request, dir: string): Promise<Response | null> {
+  let rel: string;
+  try {
+    rel = decodeURIComponent(new URL(req.url).pathname);
+  } catch {
+    return null;
+  }
+  const root = normalize(dir + sep);
+  const target = normalize(join(root, rel));
+  if (!target.startsWith(root)) return null;
+
+  let path = target;
+  if (rel.endsWith("/") || !(await isFile(path))) {
+    // Missing asset → 404 (falls through); anything route-like → the app shell.
+    if (extname(rel) && !rel.endsWith(".html")) return null;
+    path = join(root, "index.html");
+    if (!(await isFile(path))) return null;
+  }
+
+  const ext = extname(path);
+  const hashed = rel.startsWith("/_expo/") || rel.startsWith("/assets/");
+  const res = await serveFile(req, {
+    path,
+    contentType: TYPES[ext] ?? (Bun.file(path).type || "application/octet-stream"),
+    cacheControl: hashed ? IMMUTABLE : REVALIDATE,
+    etagKey: `web${rel}`,
+  });
+  if (!res) return null;
+  for (const [k, v] of Object.entries(ISOLATION)) res.headers.set(k, v);
+  return res;
+}

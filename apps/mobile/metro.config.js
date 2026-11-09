@@ -1,0 +1,7 @@
+// Web build: expo-sqlite's web worker loads wa-sqlite from a .wasm asset.
+const { getDefaultConfig } = require('expo/metro-config');
+
+const config = getDefaultConfig(__dirname);
+config.resolver.assetExts.push('wasm');
+
+module.exports = config;

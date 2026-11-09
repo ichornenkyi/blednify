@@ -15,6 +15,7 @@ import {
   useSettings,
   type AlbumView,
   type AppTrack,
+  fileStorageSupported,
 } from '@/core';
 import { importMusic } from '@/ui/actions';
 import { Backdrop } from '@/ui/components/Backdrop';
@@ -39,8 +40,12 @@ const FILTERS: { key: LibraryFilter; label: string }[] = [
   { key: 'recents', label: 'Recents' },
   { key: 'albums', label: 'Albums' },
   { key: 'liked', label: 'Liked' },
-  { key: 'downloaded', label: 'Downloaded' },
-  { key: 'device', label: 'On this device' },
+  ...(fileStorageSupported
+    ? ([
+        { key: 'downloaded', label: 'Downloaded' },
+        { key: 'device', label: 'On this device' },
+      ] as const)
+    : []),
 ];
 
 function isFilter(v: unknown): v is LibraryFilter {
@@ -62,7 +67,7 @@ export default function LibraryScreen() {
           Library
         </Text>
         <IconButton icon="add" label="New playlist" size={26} onPress={promptNewPlaylist} />
-        <IconButton icon="folder-open-outline" label="Import music from device" onPress={importMusic} />
+        {fileStorageSupported ? <IconButton icon="folder-open-outline" label="Import music from device" onPress={importMusic} /> : null}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
         {FILTERS.map((f) => (
@@ -152,8 +157,11 @@ function AlbumsGrid() {
       keyExtractor={(a) => `${a.origin}:${a.id}`}
       contentContainerStyle={styles.gridContent}
       ListEmptyComponent={
-        <EmptyState icon="disc-outline" title="No albums yet" message="Import music or connect your server to see albums here.">
-          <PrimaryButton label="Import music" icon="add" variant="surface" onPress={importMusic} />
+        <EmptyState
+          icon="disc-outline"
+          title="No albums yet"
+          message={fileStorageSupported ? 'Import music or connect your server to see albums here.' : 'Connect your server to see albums here.'}>
+          {fileStorageSupported ? <PrimaryButton label="Import music" icon="add" variant="surface" onPress={importMusic} /> : null}
         </EmptyState>
       }
       renderItem={({ item }) => (

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 import { create, useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -26,8 +27,13 @@ type SettingsValues = {
   lyricsOnline: boolean;
 };
 
+/** The web app is served by the Blednify server itself, so its own origin is the server. */
+function defaultWebServer(): string {
+  return Platform.OS === 'web' && typeof location !== 'undefined' && /^https?:$/.test(location.protocol) ? location.origin : '';
+}
+
 export const settingsStore = create<SettingsValues>(() => ({
-  serverUrl: kv.getString(K_SERVER) ?? process.env.EXPO_PUBLIC_API_URL ?? '',
+  serverUrl: kv.getString(K_SERVER) ?? process.env.EXPO_PUBLIC_API_URL ?? defaultWebServer(),
   accessToken: kv.getString(K_TOKEN) ?? '',
   downloadOnWifiOnly: kv.getBoolean(K_WIFI) ?? true,
   adminMode: kv.getBoolean(K_ADMIN) ?? false,

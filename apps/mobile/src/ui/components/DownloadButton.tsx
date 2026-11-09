@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { cancelDownload, downloadTracks, removeDownload, useDownloadState, type AppTrack } from '@/core';
+import { cancelDownload, downloadTracks, removeDownload, useDownloadState, type AppTrack, fileStorageSupported } from '@/core';
 
 import { attempt } from '../actions';
 import { haptics } from '../haptics';
@@ -16,6 +16,7 @@ export function DownloadButton({ track, size = 24 }: { track: AppTrack; size?: n
   const colors = useColors();
   const { status, progress } = useDownloadState(track.key);
 
+  if (!fileStorageSupported) return null;
   if (track.origin === 'local') {
     return <IconButton icon="phone-portrait-outline" label="Stored on this device" size={size} color={colors.textSecondary} disabled />;
   }

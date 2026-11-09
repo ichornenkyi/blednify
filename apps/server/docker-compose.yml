@@ -28,10 +28,14 @@ services:
       # 100-song limit of Spotify's public playlist page and add album names.
       SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      # The web app (install it on an iPhone from Safari: Share → Add to Home Screen). Fill ./web with
+      # tools/web/deploy.sh apps/server/web; without it nothing is served at /.
+      WEB_DIR: /web
     # The image runs as uid/gid 1000 ("bun") and must be able to write the music folder for uploads/deletes.
     # Create it first so Docker does not create it as root: `mkdir -p music && sudo chown 1000:1000 music`.
     volumes:
       - ./music:/music
+      - ./web:/web:ro
       - blednify-data:/data
 
   # Outbound-only tunnel: no open ports or port forwarding on your router. The public hostname for this

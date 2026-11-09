@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover: draw under the notch / home indicator; safe areas come from env(safe-area-inset-*). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>%WEB_TITLE%</title>
+    <!-- Installable from Safari: Share → Add to Home Screen opens it full screen, like an app. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Blednify" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0A0A0C" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        background: #0a0a0c;
+      }
+      body {
+        overflow: hidden;
+        /* App feel: no rubber-band page bounce, tap flashes, text selection or link previews on long-press. */
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-text-size-adjust: 100%;
+      }
+      input,
+      textarea {
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run Blednify.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

@@ -2,8 +2,10 @@ import { resumeDownloads } from './downloads';
 import { resumeImports } from './imports';
 import { loadLibIndex } from './lib-index';
 import { configureAudio, refreshQueueTracks } from './player/engine';
+import { fileStorageSupported } from './platform';
 import { startPruning } from './prune';
 import { settingsStore } from './settings';
+import { syncWebSession } from './web-session';
 
 let ready: Promise<void> | null = null;
 const readyListeners: (() => void)[] = [];
@@ -16,17 +18,21 @@ const readyListeners: (() => void)[] = [];
 export function startCore(): Promise<void> {
   if (ready) return ready;
   void configureAudio();
+  void syncWebSession();
   ready = loadLibIndex()
     .then(() => {
       refreshQueueTracks();
       startPruning();
       void resumeImports().catch((e) => console.warn('[core] imports resume failed', e));
-      void resumeDownloads().catch((e) => console.warn('[core] downloads resume failed', e));
+      if (fileStorageSupported) void resumeDownloads().catch((e) => console.warn('[core] downloads resume failed', e));
     })
     .catch((e) => console.warn('[core] library init failed', e))
     .finally(() => readyListeners.splice(0).forEach((fn) => fn()));
   settingsStore.subscribe((s, prev) => {
-    if (s.serverUrl !== prev.serverUrl || s.accessToken !== prev.accessToken) refreshQueueTracks();
+    if (s.serverUrl !== prev.serverUrl || s.accessToken !== prev.accessToken) {
+      void syncWebSession();
+      refreshQueueTracks();
+    }
   });
   return ready;
 }

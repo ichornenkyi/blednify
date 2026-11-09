@@ -14,6 +14,7 @@ import {
   useSettings,
   type AppTrack,
   type DownloadStatus,
+  fileStorageSupported,
 } from '@/core';
 
 import { attempt, confirmDeleteLocal } from '../actions';
@@ -88,7 +89,7 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
         label={liked ? 'Remove from Liked' : 'Like'}
         onPress={() => void attempt(toggleLike(track), liked ? 'Removed from Liked' : 'Added to Liked')}
       />
-      {track.origin === 'remote' ? <DownloadAction track={track} status={download.status} progress={download.progress} /> : null}
+      {fileStorageSupported && track.origin === 'remote' ? <DownloadAction track={track} status={download.status} progress={download.progress} /> : null}
       {playlist ? (
         <SheetAction
           icon="remove-circle-outline"

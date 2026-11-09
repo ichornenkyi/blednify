@@ -19,7 +19,7 @@ import {
   type AudioMetadata,
   type AudioPlaylist,
   type AudioPlaylistStatus,
-} from 'expo-audio';
+} from './audio';
 import { AppState, Platform } from 'react-native';
 
 import { authHeadersFor } from '../auth';

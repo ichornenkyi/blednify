@@ -165,6 +165,13 @@ await Bun.write('apps/mobile/assets/images/android-icon-monochrome.png', png(svg
 await Bun.write('apps/mobile/assets/images/splash-icon.png', png(svg(main.defs ?? '', main.fg, '232 192 560 640'), 456));
 // iOS 26 icon composer layer: the glyph alone; icon.json supplies the dark fill and the glass effects.
 await Bun.write('apps/mobile/assets/expo.icon/Assets/blednify-glyph.png', png(svg('', silhouette(0.86)), 1024));
+// Web app (Home Screen on iOS, PWA manifest). iOS masks the apple-touch-icon itself; "maskable" keeps the whole
+// adaptive canvas so the note stays inside the manifest's 80% safe circle.
+const WEB = 'apps/mobile/public/icons';
+await Bun.write(`${WEB}/apple-touch-icon.png`, png(composite(main), 180));
+await Bun.write(`${WEB}/icon-192.png`, png(composite(main), 192));
+await Bun.write(`${WEB}/icon-512.png`, png(composite(main), 512));
+await Bun.write(`${WEB}/maskable-512.png`, png(composite(main, '0 0 1024 1024'), 512));
 // The variant list the app and the config plugin read.
 await Bun.write(`${OUT}/variants.json`, JSON.stringify(VARIANTS.map(({ id, name }) => ({ id, name })), null, 2) + '\n');
 await Bun.write(

@@ -78,6 +78,15 @@ export type DownloadStatus = 'none' | 'queued' | 'downloading' | 'done' | 'error
 - `useProgress(): { positionMs: number; durationMs: number }` — ~4 Hz, isolated so only progress UI re-renders
 - Background playback + lock-screen / notification controls with title, artist, artwork are core's job.
 - Queue + position persisted (MMKV) and restored paused on cold start.
+- Audio backend: `core/player/audio.ts` (expo-audio) / `audio.web.ts` (web: ONE reused `<audio>` element + Media
+  Session, so iOS keeps auto-advancing with the screen locked). The engine only talks to that module.
+
+### Web app (iPhone via Safari → Add to Home Screen)
+- Same code base, `expo export -p web`, hosted by the server (`WEB_DIR`). Streams only:
+  `fileStorageSupported` (from `@/core`) is false there and the UI hides import, downloads and upload.
+- Auth: `web-session.ts` trades the listen token for an HttpOnly cookie (`POST /api/session`) because media
+  elements cannot send headers; image sources carry no headers on web.
+- Platform files: `*.web.ts` siblings (`audio`, `lock-art`); `paths.ts` returns a never-matching prefix on web.
 
 ### Downloads (server → device, offline)
 - `downloadTracks(tracks: AppTrack[]): void` (ignores local/already-downloaded), `cancelDownload(key)`, `removeDownload(key): Promise<void>`

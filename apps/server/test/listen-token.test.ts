@@ -62,3 +62,40 @@ describe("listen token", () => {
     }
   });
 });
+
+describe("web session cookie", () => {
+  const cookieFrom = (res: Response) => (res.headers.get("set-cookie") ?? "").split(";")[0]!;
+
+  test("POST /api/session needs the listen token", async () => {
+    expect((await srv.app.request("/api/session", { method: "POST" })).status).toBe(401);
+    expect((await srv.app.request("/api/session", { method: "POST", headers: { Authorization: "Bearer nope" } })).status).toBe(401);
+  });
+
+  test("the cookie authorises reads (media elements cannot send headers)", async () => {
+    const res = await srv.app.request("/api/session", { method: "POST", headers: auth });
+    expect(res.status).toBe(204);
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("SameSite=Strict");
+    expect(setCookie).toContain("Path=/api");
+    expect(setCookie).not.toContain("Secure");
+    const cookie = cookieFrom(res);
+    const id = await trackId();
+    expect((await get(`/api/tracks/${id}/stream`, { Cookie: cookie })).status).toBe(200);
+    expect((await get("/api/tracks", { Cookie: cookie })).status).toBe(200);
+    const health = (await (await get("/api/health", { Cookie: cookie })).json()) as { trackCount?: number };
+    expect(health.trackCount).toBe(1);
+  });
+
+  test("a wrong cookie is refused", async () => {
+    expect((await get("/api/tracks", { Cookie: "blednify_listen=nope" })).status).toBe(401);
+  });
+
+  test("the cookie is Secure behind an https proxy, and DELETE clears it", async () => {
+    const res = await srv.app.request("/api/session", { method: "POST", headers: { ...auth, "X-Forwarded-Proto": "https" } });
+    expect(res.headers.get("set-cookie")).toContain("Secure");
+    const del = await srv.app.request("/api/session", { method: "DELETE" });
+    expect(del.status).toBe(204);
+    expect(del.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+});

@@ -1,5 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { fileStorageSupported } from './platform';
+
 /**
  * Files are stored in the DB relative to the document directory, because the absolute container
  * path can change between app updates (iOS). Resolve with `absUri` at read time.
@@ -10,6 +12,8 @@ let docUriCache: string | null = null;
 
 export function docUri(): string {
   if (docUriCache === null) {
+    // Web has no document directory (and no local files): a prefix that no real URI starts with.
+    if (!fileStorageSupported) return (docUriCache = 'blednify-no-files:/');
     const u = Paths.document.uri;
     docUriCache = u.endsWith('/') ? u : `${u}/`;
   }

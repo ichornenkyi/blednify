@@ -45,6 +45,8 @@ type Lyrics = {
 | Method | Path | Result |
 |---|---|---|
 | GET | `/api/health` | `{ ok: true, name: "blednify", version: string, authRequired: boolean, trackCount?: number }` (count only with a valid token when required) |
+| POST | `/api/session` | `204` + `Set-Cookie: blednify_listen=…; Path=/api; HttpOnly; SameSite=Strict` (`Secure` behind https). Needs `Authorization: Bearer <LISTEN_TOKEN>`; `401` otherwise. The web app uses it because `<audio>`/`<img>` cannot send headers: every read also accepts this cookie. No-op `204` without `LISTEN_TOKEN`. |
+| DELETE | `/api/session` | `204`, clears the cookie |
 | GET | `/api/tracks?q=&limit=50&offset=0&sort=added\|title\|artist` | `Page<Track>` (limit max 500) |
 | GET | `/api/tracks/gone?ids=a,b,…` | `{ gone: string[] }` — the given ids this server deleted (max 500; unknown ids are not "gone") |
 | GET | `/api/tracks/:id` | `Track` |
