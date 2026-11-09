@@ -102,27 +102,7 @@ jobs:
             echo "::notice::No release keystore secret; APK is signed with the template debug key."
             exit 0
           fi
-          echo "$KEYSTORE_B64" | base64 -d > android/app/release.keystore
-          cat >> android/gradle.properties <<EOF
-          BLEDNIFY_STORE_FILE=release.keystore
-          BLEDNIFY_STORE_PASSWORD=$KEYSTORE_PASSWORD
-          BLEDNIFY_KEY_ALIAS=$KEY_ALIAS
-          BLEDNIFY_KEY_PASSWORD=$KEY_PASSWORD
-          EOF
-          python3 - <<'PY'
-          import re, pathlib
-          p = pathlib.Path("android/app/build.gradle")
-          s = p.read_text()
-          s = s.replace("signingConfigs {", """signingConfigs {
-                  release {
-                      storeFile file(BLEDNIFY_STORE_FILE)
-                      storePassword BLEDNIFY_STORE_PASSWORD
-                      keyAlias BLEDNIFY_KEY_ALIAS
-                      keyPassword BLEDNIFY_KEY_PASSWORD
-                  }""", 1)
-          s = re.sub(r"(release \{[^}]*?)signingConfig signingConfigs\.debug", r"\1signingConfig signingConfigs.release", s, count=1, flags=re.S)
-          p.write_text(s)
-          PY
+          ../../tools/android/apply-release-signing.sh
 
       - name: Build release APK
         working-directory: apps/mobile/android
