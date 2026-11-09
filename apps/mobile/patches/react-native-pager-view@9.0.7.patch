@@ -1,0 +1,87 @@
+diff --git a/android/src/main/java/com/reactnativepagerview/ComposePagerView.kt b/android/src/main/java/com/reactnativepagerview/ComposePagerView.kt
+index 5eaa6069324f5a0be08e5adfc24ed5f877929465..caffe6be796ab36aafe5cbc05d81683469f6949f 100644
+--- a/android/src/main/java/com/reactnativepagerview/ComposePagerView.kt
++++ b/android/src/main/java/com/reactnativepagerview/ComposePagerView.kt
+@@ -64,6 +64,9 @@ class ComposePagerView(context: Context) : FrameLayout(context) {
+   private val offscreenPageLimitState = mutableStateOf(DEFAULT_OFFSCREEN_PAGE_LIMIT)
+   private val overScrollModeState = mutableStateOf(OverScrollMode.Auto)
+   private val sameOrientationChildGestureState = mutableStateOf(false)
++  // Blednify patch: true while the touch started on a scroll view inside the current page that
++  // scrolls along the pager's axis (e.g. a horizontal FlatList rail), so that scroller owns the swipe.
++  private val childScrollerGestureState = mutableStateOf(false)
+   private var initialPage = 0
+   private var didEmitInitialPage = false
+   private var currentPage = 0
+@@ -144,17 +147,53 @@ class ComposePagerView(context: Context) : FrameLayout(context) {
+         initialTouchY = event.y
+         didDelegateGestureToAncestor = false
+         updateSameOrientationAncestorsGestureState(true)
++        childScrollerGestureState.value = touchStartsOnChildScroller(event.rawX, event.rawY)
+       }
+       MotionEvent.ACTION_MOVE -> updateSameOrientationAncestorsGestureStateForMove(event)
+       MotionEvent.ACTION_UP,
+       MotionEvent.ACTION_CANCEL -> {
+         didDelegateGestureToAncestor = false
+         updateSameOrientationAncestorsGestureState(false)
++        childScrollerGestureState.value = false
+       }
+     }
+     return super.dispatchTouchEvent(event)
+   }
+ 
++  private fun touchStartsOnChildScroller(rawX: Float, rawY: Float): Boolean {
++    val page = pages.getOrNull(currentPage) ?: return false
++    return findChildScroller(page, rawX.toInt(), rawY.toInt())
++  }
++
++  private fun findChildScroller(view: View, x: Int, y: Int): Boolean {
++    if (view.visibility != View.VISIBLE) {
++      return false
++    }
++    val location = IntArray(2)
++    view.getLocationOnScreen(location)
++    if (x < location[0] || y < location[1] || x >= location[0] + view.width || y >= location[1] + view.height) {
++      return false
++    }
++    if (view !is ComposePagerView) {
++      val scrolls = if (orientationState.value == Orientation.Horizontal) {
++        view.canScrollHorizontally(-1) || view.canScrollHorizontally(1)
++      } else {
++        view.canScrollVertically(-1) || view.canScrollVertically(1)
++      }
++      if (scrolls) {
++        return true
++      }
++    }
++    if (view is ViewGroup) {
++      for (i in view.childCount - 1 downTo 0) {
++        if (findChildScroller(view.getChildAt(i), x, y)) {
++          return true
++        }
++      }
++    }
++    return false
++  }
++
+   override fun canScrollHorizontally(direction: Int): Boolean {
+     if (orientationState.value != Orientation.Horizontal) {
+       return false
+@@ -261,6 +300,7 @@ class ComposePagerView(context: Context) : FrameLayout(context) {
+     lastEmittedPageSelected = null
+     didDelegateGestureToAncestor = false
+     sameOrientationChildGestureState.value = false
++    childScrollerGestureState.value = false
+   }
+ 
+   fun setInitialPage(value: Int) {
+@@ -547,7 +587,9 @@ class ComposePagerView(context: Context) : FrameLayout(context) {
+ 
+     val pageSpacing = pageMarginState.value.dp
+     val beyondViewportPageCount = getBeyondViewportPageCount()
+-    val userScrollEnabled = scrollEnabledState.value && !sameOrientationChildGestureState.value
++    val userScrollEnabled = scrollEnabledState.value &&
++      !sameOrientationChildGestureState.value &&
++      !childScrollerGestureState.value
+     val overscrollConfiguration = if (overScrollModeState.value == OverScrollMode.Never) {
+       null
+     } else {
