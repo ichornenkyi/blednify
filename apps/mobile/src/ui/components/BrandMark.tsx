@@ -1,43 +1,46 @@
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Mask, Rect, Stop } from 'react-native-svg';
 
-// Same geometry as assets/icon.svg (1024 design grid).
-const WAVE_PATH =
-  'M 452 286 C 590 286 658 332 658 398 C 658 458 590 494 452 496 C 600 498 682 540 682 622 C 682 704 600 746 452 746';
+// Same geometry as assets/icon.svg (1024 design grid): a speaker driver seen from the front — square frame
+// with four screw holes, surround ring, stepped cone, dust cap.
+const SCREWS = [
+  [322, 322],
+  [702, 322],
+  [322, 702],
+  [702, 702],
+] as const;
 
-export interface BrandMarkProps {
+export type BrandMarkProps = {
   size?: number;
-  /** Tile background color. When omitted, uses the brand crimson gradient; when passed, uses flat fill. */
+  /** Tile color. Omitted: the brand crimson gradient. */
   color?: string;
-  /** Glyph color (default: '#FFFFFF'). */
+  /** Glyph color (default white). */
   glyphColor?: string;
-}
+};
 
-/** Blednify brand mark: crimson tile with the minimal acoustic pulse soundwave "B". */
+/** Blednify brand mark. */
 export function BrandMark({ size = 56, color, glyphColor = '#FFFFFF' }: BrandMarkProps) {
-  const bgFill = color ?? 'url(#bg)';
-
   return (
     <Svg width={size} height={size} viewBox="0 0 1024 1024" accessibilityLabel="Blednify">
-      {!color && (
-        <Defs>
-          <LinearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
-            <Stop offset="0" stopColor="#F0484B" />
-            <Stop offset="1" stopColor="#B8161B" />
-          </LinearGradient>
-        </Defs>
-      )}
-      <Rect width={1024} height={1024} rx={224} fill={bgFill} />
-      {/* Pillar: Audio playhead column */}
-      <Rect x={294} y={244} width={104} height={504} rx={52} fill={glyphColor} />
-      {/* Harmonic acoustic soundwave */}
-      <Path
-        d={WAVE_PATH}
-        fill="none"
-        stroke={glyphColor}
-        strokeWidth={84}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <Defs>
+        <LinearGradient id="bmTile" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+          <Stop offset="0" stopColor="#F0484B" />
+          <Stop offset="1" stopColor="#B8161B" />
+        </LinearGradient>
+        <Mask id="bmFrame" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+          <Rect x={224} y={224} width={576} height={576} rx={136} fill="#fff" />
+          <Circle cx={512} cy={512} r={244} fill="#000" />
+          {SCREWS.map(([x, y]) => (
+            <Circle key={`${x}-${y}`} cx={x} cy={y} r={24} fill="#000" />
+          ))}
+        </Mask>
+      </Defs>
+      <Rect width={1024} height={1024} rx={224} fill={color ?? 'url(#bmTile)'} />
+      <Rect width={1024} height={1024} fill={glyphColor} mask="url(#bmFrame)" />
+      <Circle cx={512} cy={512} r={212} fill="none" stroke={glyphColor} strokeWidth={30} />
+      <Circle cx={512} cy={512} r={176} fill={glyphColor} fillOpacity={0.28} />
+      <Circle cx={512} cy={512} r={138} fill={glyphColor} fillOpacity={0.28} />
+      <Circle cx={512} cy={512} r={100} fill={glyphColor} fillOpacity={0.32} />
+      <Circle cx={512} cy={512} r={80} fill={glyphColor} />
     </Svg>
   );
 }
