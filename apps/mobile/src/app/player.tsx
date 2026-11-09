@@ -356,13 +356,16 @@ function PulsingArtwork({
     transform: [{ scale: pulse.get() * fit.get() }],
     shadowOpacity: interpolate(pulse.get(), [0.86, 1], [0.25, 0.6]),
   }));
+  // Counter the fit scale so the on-screen corner radius stays radius.lg.
+  const corner = (radius.lg * base) / size;
   return (
-    <Animated.View style={[styles.artShadow, { width: base, height: base }, style]}>
+    <Animated.View
+      style={[styles.artShadow, { width: base, height: base, borderRadius: corner }, style]}>
       <Artwork
         uri={track.artworkUri}
         label={track.album || track.title}
         size={base}
-        radius={radius.lg}
+        radius={corner}
         recyclingKey={track.key}
         priority="high"
       />
