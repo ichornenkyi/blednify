@@ -87,7 +87,7 @@ const nowIso = () => new Date().toISOString();
 // ---------------------------------------------------------------------------------------------
 // Local library (imported files + downloaded remote tracks)
 
-async function fetchLocalLibrary(): Promise<AppTrack[]> {
+export async function fetchLocalLibrary(): Promise<AppTrack[]> {
   const db = await getDb();
   const locals = await db.getAllAsync<LocalRow>(`SELECT ${LOCAL_COLS} FROM local_tracks ORDER BY added_at DESC`);
   const downloads = await db.getAllAsync<{ track: string; completed_at: number }>(
@@ -169,7 +169,7 @@ export async function searchLocal(q: string, limit = 50): Promise<AppTrack[]> {
 // ---------------------------------------------------------------------------------------------
 // Likes
 
-async function fetchLikes(): Promise<AppTrack[]> {
+export async function fetchLikes(): Promise<AppTrack[]> {
   const db = await getDb();
   return parseAll(await db.getAllAsync<{ track: string }>('SELECT track FROM likes ORDER BY liked_at DESC'));
 }
@@ -210,7 +210,7 @@ export async function toggleLike(track: AppTrack): Promise<void> {
 
 const RECENTS_CAP = 200;
 
-async function fetchRecents(limit: number): Promise<AppTrack[]> {
+export async function fetchRecents(limit: number): Promise<AppTrack[]> {
   const db = await getDb();
   return parseAll(
     await db.getAllAsync<{ track: string }>('SELECT track FROM recents ORDER BY played_at DESC LIMIT ?', limit),
@@ -260,7 +260,7 @@ const PLAYLIST_SELECT = `SELECT p.id, p.name, p.created_at, p.updated_at, p.cove
   (SELECT COUNT(*) FROM playlist_tracks t WHERE t.playlist_id = p.id) AS track_count
   FROM playlists p`;
 
-async function fetchPlaylists(): Promise<PlaylistsData> {
+export async function fetchPlaylists(): Promise<PlaylistsData> {
   const db = await getDb();
   const rows = await db.getAllAsync<PlaylistRow>(`${PLAYLIST_SELECT} ORDER BY p.updated_at DESC`);
   const artRows = await db.getAllAsync<{ playlist_id: string; track: string }>(
@@ -311,7 +311,7 @@ export function usePlaylists(): Playlist[] {
   );
 }
 
-async function fetchPlaylist(id: string): Promise<{ row: PlaylistRow | null; tracks: AppTrack[] }> {
+export async function fetchPlaylist(id: string): Promise<{ row: PlaylistRow | null; tracks: AppTrack[] }> {
   const db = await getDb();
   const row = await db.getFirstAsync<PlaylistRow>(`${PLAYLIST_SELECT} WHERE p.id = ?`, id);
   if (!row) return { row: null, tracks: EMPTY_TRACKS };

@@ -1,16 +1,51 @@
 diff --git a/android/src/main/java/expo/modules/audio/AudioModule.kt b/android/src/main/java/expo/modules/audio/AudioModule.kt
-index 6c81fce3dd518d3b82e3280940a001c7be84dd0a..9ad12208debedf31bd8d70feb1a61c41100d7322 100644
+index 6c81fce3dd518d3b82e3280940a001c7be84dd0a..e97b623fe12e88e9a03e0a5e17459d683404298a 100644
 --- a/android/src/main/java/expo/modules/audio/AudioModule.kt
 +++ b/android/src/main/java/expo/modules/audio/AudioModule.kt
-@@ -22,6 +22,7 @@ import androidx.media3.common.Player
+@@ -22,6 +22,8 @@ import androidx.media3.common.Player
  import androidx.media3.common.util.Util
  import androidx.media3.datasource.DataSource
  import androidx.media3.datasource.DefaultDataSource
 +import androidx.media3.datasource.ResolvingDataSource
++import expo.modules.audio.service.AutoLibrary
  import androidx.media3.datasource.okhttp.OkHttpDataSource
  import androidx.media3.exoplayer.dash.DashMediaSource
  import androidx.media3.exoplayer.hls.HlsMediaSource
-@@ -899,16 +900,28 @@ class AudioModule : Module() {
+@@ -395,6 +397,25 @@ class AudioModule : Module() {
+       context.registerReceiver(ringerModeReceiver, IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION))
+     }
+ 
++    // Blednify patch: Android Auto browse tree + play requests (see service/AutoLibrary.kt).
++    Events("onAutoRequest")
++
++    OnStartObserving("onAutoRequest") {
++      AutoLibrary.attachEmitter { sendEvent("onAutoRequest", it) }
++    }
++
++    OnStopObserving("onAutoRequest") {
++      AutoLibrary.attachEmitter(null)
++    }
++
++    Function("setAutoLibrary") { json: String ->
++      AutoLibrary.setTree(context, json)
++    }
++
++    Function("takeAutoRequests") {
++      AutoLibrary.drain()
++    }
++
+     AsyncFunction("setAudioModeAsync") { mode: AudioMode ->
+       val previousInterruptionMode = interruptionMode
+       shouldPlayInBackground = mode.shouldPlayInBackground
+@@ -522,6 +543,7 @@ class AudioModule : Module() {
+ 
+     OnDestroy {
+       context.unregisterReceiver(ringerModeReceiver)
++      AutoLibrary.attachEmitter(null)
+       GlobalScope.launch(Dispatchers.Main) {
+         audioSessionActivityKeepers.clear()
+         releaseAudioFocus()
+@@ -899,16 +921,28 @@ class AudioModule : Module() {
      Class(AudioPlaylist::class) {
        Constructor { sources: List<AudioSource>, updateInterval: Double, loop: LoopMode ->
          runOnMain {
@@ -40,11 +75,170 @@ index 6c81fce3dd518d3b82e3280940a001c7be84dd0a..9ad12208debedf31bd8d70feb1a61c41
                val uri = uriString.toUri()
                when {
                  isRawResource(uri) -> {
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlayer.kt b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+index fb2d0b57fb8718df04e5c073b70837b2658f2c16..fea841352cb878f941672b6c8eb70f1071923f50 100644
+--- a/android/src/main/java/expo/modules/audio/AudioPlayer.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlayer.kt
+@@ -201,7 +201,7 @@ class AudioPlayer(
+   }
+ 
+   override fun assignBasicMediaSession() {
+-    mediaSession.release()
++    releaseUnlessServiceSession(mediaSession)
+     mediaSession = buildBasicMediaSession(context, ref) { requestPlay() }
+   }
+ 
+@@ -258,7 +258,7 @@ class AudioPlayer(
+   }
+ 
+   override fun releasePlayer() {
+-    mediaSession.release()
++    releaseUnlessServiceSession(mediaSession)
+     if (isActiveForLockScreen) {
+       serviceConnection.playbackServiceBinder?.service?.unregisterPlayable()
+     }
+diff --git a/android/src/main/java/expo/modules/audio/AudioPlaylist.kt b/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
+index bf3f9c5e5535ddf5e98484310642aa73bd6ae86c..95a389c7f9afd04bfd1f7ed56d82ae511e0d870d 100644
+--- a/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
++++ b/android/src/main/java/expo/modules/audio/AudioPlaylist.kt
+@@ -197,7 +197,7 @@ class AudioPlaylist(
+   }
+ 
+   override fun assignBasicMediaSession() {
+-    mediaSession.release()
++    releaseUnlessServiceSession(mediaSession)
+     mediaSession = buildBasicMediaSession(appContext?.reactContext ?: return, ref) { requestPlay() }
+   }
+ 
+@@ -249,7 +249,7 @@ class AudioPlaylist(
+ 
+   override fun releasePlayer() {
+     serviceConnection.release()
+-    mediaSession.release()
++    releaseUnlessServiceSession(mediaSession)
+     if (isActiveForLockScreen) {
+       serviceConnection.playbackServiceBinder?.service?.unregisterPlayable()
+     }
+diff --git a/android/src/main/java/expo/modules/audio/AudioUtils.kt b/android/src/main/java/expo/modules/audio/AudioUtils.kt
+index 81819c1d771bdeec093bb35a65a5e1e1af0cf9d7..228797c3ef0ac156463863c7393a54b0286de902 100644
+--- a/android/src/main/java/expo/modules/audio/AudioUtils.kt
++++ b/android/src/main/java/expo/modules/audio/AudioUtils.kt
+@@ -39,3 +39,12 @@ fun buildBasicMediaSession(context: Context, player: Player, onPlay: () -> Unit)
+     .setId("ExpoAudioBasicMediaSession_${player.hashCode()}")
+     .build()
+ }
++
++/**
++ * Blednify patch: the playback service lends its long-lived MediaLibrarySession to the active playable.
++ * The service owns it, so a playable must not release it when it goes back to a basic session or is freed.
++ */
++@OptIn(UnstableApi::class)
++fun releaseUnlessServiceSession(session: MediaSession) {
++  if (session !is androidx.media3.session.MediaLibraryService.MediaLibrarySession) session.release()
++}
 diff --git a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
-index 53c36f7e3c0a0bcb8b4de1f5e6d2d3e214d3fbf2..e1e49651a9c4297f1db657eef3668530e15af667 100644
+index 53c36f7e3c0a0bcb8b4de1f5e6d2d3e214d3fbf2..117fc394cc4085f038cef8b9d9ad0ef520989bc0 100644
 --- a/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
 +++ b/android/src/main/java/expo/modules/audio/service/AudioControlsService.kt
-@@ -291,15 +291,13 @@ class AudioControlsService : MediaSessionService() {
+@@ -13,14 +13,16 @@ import android.graphics.BitmapFactory
+ import android.os.Build
+ import android.os.Bundle
+ import android.os.IBinder
++import android.os.Looper
+ import androidx.annotation.OptIn
+ import androidx.core.app.NotificationCompat
+ import androidx.media3.common.ForwardingPlayer
+ import androidx.media3.common.Player
+ import androidx.media3.common.util.UnstableApi
+ import androidx.media3.session.CommandButton
++import androidx.media3.session.MediaLibraryService
++import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+ import androidx.media3.session.MediaSession
+-import androidx.media3.session.MediaSessionService
+ import androidx.media3.session.MediaStyleNotificationHelper
+ import androidx.media3.session.SessionCommand
+ import expo.modules.audio.AudioLockScreenOptions
+@@ -28,6 +30,7 @@ import expo.modules.audio.LockScreenPlayable
+ import expo.modules.audio.Metadata
+ import expo.modules.audio.PlayRequestingPlayer
+ import expo.modules.audio.getPlaybackServiceErrorMessage
++import expo.modules.audio.releaseUnlessServiceSession
+ import expo.modules.kotlin.AppContext
+ import kotlinx.coroutines.CoroutineScope
+ import kotlinx.coroutines.Dispatchers
+@@ -39,10 +42,17 @@ import java.lang.ref.WeakReference
+ import java.net.URL
+ 
+ @OptIn(UnstableApi::class)
+-class AudioControlsService : MediaSessionService() {
++// Blednify patch: a MediaLibraryService with ONE long-lived MediaLibrarySession whose player is swapped
++// (setPlayer) instead of building a new session per lock-screen activation. Android Auto connects to this
++// session to browse (AutoLibrary) and must not be disconnected every time JS re-attaches the lock screen.
++class AudioControlsService : MediaLibraryService() {
+   private lateinit var audioManager: AudioManager
+   private val binder = AudioPlaybackServiceBinder(this)
++  /** The library session while a playable is attached (notification + controls), else null. */
+   private var mediaSession: MediaSession? = null
++  private lateinit var librarySession: MediaLibrarySession
++  private lateinit var idlePlayer: androidx.media3.common.Player
++  private val mainHandler = android.os.Handler(Looper.getMainLooper())
+   private var sessionMetadataPlayer: MetadataInjectingPlayer? = null
+   private var currentMetadata: Metadata? = null
+   private var currentPlayable: LockScreenPlayable? = null
+@@ -134,6 +144,44 @@ class AudioControlsService : MediaSessionService() {
+     super.onCreate()
+     audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+     createNotificationChannelIfNeeded()
++
++    AutoLibrary.ensureLoaded(this)
++    idlePlayer = AutoRoutingPlayer(IdleSessionPlayer(Looper.getMainLooper()) { AutoLibrary.request(this, "resume") })
++    librarySession = MediaLibrarySession.Builder(this, idlePlayer, AudioMediaSessionCallback(this))
++      .setId("BlednifyLibrarySession")
++      .apply { buildContentIntent()?.let { setSessionActivity(it) } }
++      .build()
++    AutoLibrary.attachSession(librarySession)
++    addSession(librarySession)
++  }
++
++  /** Point the long-lived session at `playable` (see class comment). Main thread. */
++  private fun attachSessionPlayer(playable: LockScreenPlayable, metadata: Metadata?, options: AudioLockScreenOptions?) {
++    val sessionPlayer = MetadataInjectingPlayer(AutoRoutingPlayer(resolveSessionPlayer(playable, options))).apply {
++      updateMetadata(metadata)
++    }
++    val session = librarySession
++    session.player = sessionPlayer
++
++    // Replace the playable's basic media session with the service session (it is never released by the
++    // playable; see releaseUnlessServiceSession).
++    if (playable.mediaSession !== session) {
++      releaseUnlessServiceSession(playable.mediaSession)
++      playable.mediaSession = session
++    }
++    mediaSession = session
++    sessionMetadataPlayer = sessionPlayer
++    AutoLibrary.clearPlayRequest()
++  }
++
++  private fun detachSessionPlayer() {
++    val apply = {
++      if (::librarySession.isInitialized) {
++        librarySession.player = idlePlayer
++        librarySession.setMediaButtonPreferences(emptyList())
++      }
++    }
++    if (Looper.myLooper() == Looper.getMainLooper()) apply() else mainHandler.post { apply() }
+   }
+ 
+   private fun shouldPlayInSilentMode(): Boolean {
+@@ -176,6 +224,7 @@ class AudioControlsService : MediaSessionService() {
+   }
+ 
+   private fun buildNotification(): Notification? {
++    if (currentPlayable == null) return null
+     val session = mediaSession ?: return null
+ 
+     val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+@@ -291,15 +340,13 @@ class AudioControlsService : MediaSessionService() {
  
      val playable = currentPlayable
  
@@ -66,7 +260,7 @@ index 53c36f7e3c0a0bcb8b4de1f5e6d2d3e214d3fbf2..e1e49651a9c4297f1db657eef3668530
      } else if (currentOptions?.showSeekBackward == true) {
        val backwardSeconds = seekIntervalMs(currentOptions?.seekBackwardIntervalSeconds) / 1000.0
        mediaButtons.add(
-@@ -334,14 +332,7 @@ class AudioControlsService : MediaSessionService() {
+@@ -334,14 +381,7 @@ class AudioControlsService : MediaSessionService() {
      )
  
      if (currentOptions?.showNextTrack == true && playable?.supportsNextTrack == true) {
@@ -82,3 +276,564 @@ index 53c36f7e3c0a0bcb8b4de1f5e6d2d3e214d3fbf2..e1e49651a9c4297f1db657eef3668530
      } else if (currentOptions?.showSeekForward == true) {
        val forwardSeconds = seekIntervalMs(currentOptions?.seekForwardIntervalSeconds) / 1000.0
        mediaButtons.add(
+@@ -446,29 +486,9 @@ class AudioControlsService : MediaSessionService() {
+     playable?.isActiveForLockScreen = true
+ 
+     if (playable != null) {
+-      mediaSession?.release()
+-      sessionMetadataPlayer = null
+-
+       appContext?.mainQueue?.launch {
+-        val context = appContext?.reactContext ?: return@launch
+-        val sessionPlayer = MetadataInjectingPlayer(resolveSessionPlayer(playable, options)).apply {
+-          updateMetadata(metadata)
+-        }
+-        // Distinguish this lock-screen session from the basic session built in
+-        // `buildBasicMediaSession` (and from sessions for other players); two
+-        // MediaSession instances with the empty default ID throw on construction.
+-        val session = MediaSession.Builder(context, sessionPlayer)
+-          .setId("ExpoAudioLockScreenSession_${playable.player.hashCode()}")
+-          .setCallback(AudioMediaSessionCallback(this@AudioControlsService))
+-          .build()
+-
+-        // Replace the basic media session with a session connected to our playback service.
+-        playable.mediaSession.release()
+-        playable.mediaSession = session
+-
+-        addSession(session)
+-        mediaSession = session
+-        sessionMetadataPlayer = sessionPlayer
++        if (currentPlayable !== playable) return@launch
++        attachSessionPlayer(playable, metadata, options)
+ 
+         updateSessionCustomLayout(playable.player.isPlaying)
+ 
+@@ -498,7 +518,7 @@ class AudioControlsService : MediaSessionService() {
+     playable?.isActiveForLockScreen = false
+     removePlayerListener()
+     currentMetadata = null
+-    mediaSession?.release()
++    detachSessionPlayer()
+     mediaSession = null
+     sessionMetadataPlayer = null
+     clearArtwork()
+@@ -507,8 +527,8 @@ class AudioControlsService : MediaSessionService() {
+     stopForeground(STOP_FOREGROUND_REMOVE)
+   }
+ 
+-  override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+-    return mediaSession
++  override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
++    return librarySession
+   }
+ 
+   override fun onBind(intent: Intent?): IBinder {
+@@ -530,24 +550,9 @@ class AudioControlsService : MediaSessionService() {
+       currentOptions = options
+       updateArtwork(metadata, postUpdate = false)
+ 
+-      mediaSession?.release()
+-      sessionMetadataPlayer = null
+       appContext?.mainQueue?.launch {
+-        val context = appContext?.reactContext ?: return@launch
+-        val sessionPlayer = MetadataInjectingPlayer(resolveSessionPlayer(playable, options)).apply {
+-          updateMetadata(metadata)
+-        }
+-        val session = MediaSession.Builder(context, sessionPlayer)
+-          .setId("ExpoAudioLockScreenSession_${playable.player.hashCode()}")
+-          .setCallback(AudioMediaSessionCallback(this@AudioControlsService))
+-          .build()
+-
+-        playable.mediaSession.release()
+-        playable.mediaSession = session
+-
+-        addSession(session)
+-        mediaSession = session
+-        sessionMetadataPlayer = sessionPlayer
++        if (currentPlayable !== playable) return@launch
++        attachSessionPlayer(playable, metadata, options)
+ 
+         updateSessionCustomLayout(playable.player.isPlaying)
+         postOrStartForegroundNotification(startInForeground = false)
+@@ -644,12 +649,13 @@ class AudioControlsService : MediaSessionService() {
+   }
+ 
+   override fun onDestroy() {
++    AutoLibrary.attachSession(null)
++    librarySession.release()
+     super.onDestroy()
+ 
+     removePlayerListener()
+     clearArtwork()
+     scope.cancel()
+-    mediaSession?.release()
+     mediaSession = null
+     sessionMetadataPlayer = null
+     currentPlayable = null
+diff --git a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+index ee83be1fa02e01f15d9040e6f5fedb3c7e1ac34a..67a9776b276a208a4eaca98e3a681848fad15d6e 100644
+--- a/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
++++ b/android/src/main/java/expo/modules/audio/service/AudioMediaSessionCallback.kt
+@@ -2,54 +2,40 @@ package expo.modules.audio.service
+ 
+ import android.os.Bundle
+ import androidx.annotation.OptIn
+-import androidx.media3.common.Player
++import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
++import androidx.media3.session.LibraryResult
++import androidx.media3.session.MediaLibraryService
++import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+ import androidx.media3.session.MediaSession
+ import androidx.media3.session.SessionCommand
+ import androidx.media3.session.SessionResult
++import com.google.common.collect.ImmutableList
+ import com.google.common.util.concurrent.Futures
+ import com.google.common.util.concurrent.ListenableFuture
+ 
++// Blednify patch: the service keeps one long-lived MediaLibrarySession (see AudioControlsService), so this
++// callback also serves the Android Auto browse tree (AutoLibrary) and routes play requests to JS.
+ @OptIn(UnstableApi::class)
+ class AudioMediaSessionCallback(
+   private val service: AudioControlsService
+-) : MediaSession.Callback {
++) : MediaLibrarySession.Callback {
+   override fun onConnect(
+     session: MediaSession,
+     controller: MediaSession.ControllerInfo
+   ): MediaSession.ConnectionResult {
+     try {
+-      val availablePlayerCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+-        .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+-        .add(Player.COMMAND_SEEK_FORWARD)
+-        .add(Player.COMMAND_SEEK_BACK)
+-        .apply {
+-          if (service.supportsPreviousTrack()) {
+-            add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+-            add(Player.COMMAND_SEEK_TO_PREVIOUS)
+-          }
+-          if (service.supportsNextTrack()) {
+-            add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+-            add(Player.COMMAND_SEEK_TO_NEXT)
+-          }
+-        }
+-        .build()
+-
+-      val availableSessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
++      // The session outlives players, so commands are not narrowed per player here: the session player's
++      // own available commands (e.g. next only when there is a next item) decide what a controller sees.
++      val availableSessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+         .add(SessionCommand(AudioControlsService.ACTION_SEEK_BACKWARD, Bundle.EMPTY))
+         .add(SessionCommand(AudioControlsService.ACTION_SEEK_FORWARD, Bundle.EMPTY))
+-        .apply {
+-          if (service.supportsPreviousTrack()) {
+-            add(SessionCommand(AudioControlsService.ACTION_PREVIOUS_TRACK, Bundle.EMPTY))
+-          }
+-          if (service.supportsNextTrack()) {
+-            add(SessionCommand(AudioControlsService.ACTION_NEXT_TRACK, Bundle.EMPTY))
+-          }
+-        }
++        .add(SessionCommand(AudioControlsService.ACTION_PREVIOUS_TRACK, Bundle.EMPTY))
++        .add(SessionCommand(AudioControlsService.ACTION_NEXT_TRACK, Bundle.EMPTY))
+         .build()
+ 
+       return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+-        .setAvailablePlayerCommands(availablePlayerCommands)
++        .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
+         .setAvailableSessionCommands(availableSessionCommands)
+         .build()
+     } catch (e: Exception) {
+@@ -83,4 +69,67 @@ class AudioMediaSessionCallback(
+       else -> super.onCustomCommand(session, controller, command, args)
+     }
+   }
++
++  // --- Browsing (Android Auto) -------------------------------------------------------------------
++
++  override fun onGetLibraryRoot(
++    session: MediaLibrarySession,
++    browser: MediaSession.ControllerInfo,
++    params: MediaLibraryService.LibraryParams?
++  ): ListenableFuture<LibraryResult<MediaItem>> {
++    AutoLibrary.ensureLoaded(service)
++    val rootParams = MediaLibraryService.LibraryParams.Builder()
++      .setExtras(AutoLibrary.rootExtras())
++      .build()
++    return Futures.immediateFuture(LibraryResult.ofItem(AutoLibrary.rootItem(), rootParams))
++  }
++
++  override fun onGetItem(
++    session: MediaLibrarySession,
++    browser: MediaSession.ControllerInfo,
++    mediaId: String
++  ): ListenableFuture<LibraryResult<MediaItem>> {
++    AutoLibrary.ensureLoaded(service)
++    val item = AutoLibrary.item(mediaId)
++      ?: return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
++    return Futures.immediateFuture(LibraryResult.ofItem(item, null))
++  }
++
++  override fun onGetChildren(
++    session: MediaLibrarySession,
++    browser: MediaSession.ControllerInfo,
++    parentId: String,
++    page: Int,
++    pageSize: Int,
++    params: MediaLibraryService.LibraryParams?
++  ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
++    AutoLibrary.ensureLoaded(service)
++    val children = AutoLibrary.children(parentId, page, pageSize)
++      ?: return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
++    return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(children), params))
++  }
++
++  /**
++   * A controller asked to play something (a browse item or a voice search). JS builds the queue; the
++   * session player ignores the items it is handed afterwards (AutoRoutingPlayer).
++   */
++  override fun onSetMediaItems(
++    mediaSession: MediaSession,
++    controller: MediaSession.ControllerInfo,
++    mediaItems: MutableList<MediaItem>,
++    startIndex: Int,
++    startPositionMs: Long
++  ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
++    AutoLibrary.ensureLoaded(service)
++    val first = mediaItems.getOrNull(if (startIndex in mediaItems.indices) startIndex else 0)
++      ?: return Futures.immediateFailedFuture(UnsupportedOperationException("No media item"))
++    val query = first.requestMetadata.searchQuery
++    when {
++      query != null -> AutoLibrary.request(service, "search", query)
++      AutoLibrary.isPlayable(first.mediaId) -> AutoLibrary.request(service, "play", first.mediaId)
++      else -> return Futures.immediateFailedFuture(UnsupportedOperationException("Unknown media id"))
++    }
++    val resolved = mediaItems.map { AutoLibrary.item(it.mediaId) ?: it }
++    return Futures.immediateFuture(MediaSession.MediaItemsWithStartPosition(resolved, startIndex, startPositionMs))
++  }
+ }
+diff --git a/android/src/main/java/expo/modules/audio/service/AutoLibrary.kt b/android/src/main/java/expo/modules/audio/service/AutoLibrary.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..b4a84bf64f08d35dd4756a0911db008faf45cb3f
+--- /dev/null
++++ b/android/src/main/java/expo/modules/audio/service/AutoLibrary.kt
+@@ -0,0 +1,230 @@
++package expo.modules.audio.service
++
++import android.content.Context
++import android.os.Bundle
++import android.os.Handler
++import android.os.Looper
++import android.util.Log
++import androidx.annotation.OptIn
++import androidx.media3.common.MediaItem
++import androidx.media3.common.MediaMetadata
++import androidx.media3.common.util.UnstableApi
++import androidx.media3.session.MediaLibraryService.MediaLibrarySession
++import org.json.JSONArray
++import org.json.JSONObject
++import java.io.File
++import java.lang.ref.WeakReference
++
++/**
++ * Blednify patch: browse tree and play requests for Android Auto (and any other MediaBrowser client).
++ *
++ * The app's library lives in JS (SQLite), so JS publishes a snapshot of the tree with `setAutoLibrary`.
++ * It is persisted to a file so the car can browse even when the service starts before JS does.
++ * Choosing an item does not touch the native player: the request goes to JS (`onAutoRequest`), which
++ * builds the queue the same way a tap in the app does. When no JS listener is attached (the car woke
++ * the app up), requests are queued and the React host is started so the JS entry can drain them.
++ */
++@OptIn(UnstableApi::class)
++object AutoLibrary {
++  const val ROOT_ID = "__blednify_root__"
++  private const val TAG = "BlednifyAuto"
++  private const val FILE_NAME = "blednify-auto-library.json"
++
++  /** After a play request, ignore `play()` from the controller until JS has loaded the new queue. */
++  private const val PLAY_REQUEST_GRACE_MS = 4_000L
++
++  private data class Node(
++    val id: String,
++    val title: String,
++    val subtitle: String?,
++    val playable: Boolean,
++    val children: List<String>?
++  )
++
++  private val mainHandler = Handler(Looper.getMainLooper())
++
++  @Volatile private var nodes: Map<String, Node> = mapOf(ROOT_ID to emptyRoot())
++  @Volatile private var loaded = false
++  private var sessionRef: WeakReference<MediaLibrarySession>? = null
++
++  private val pending = ArrayList<Map<String, String>>()
++  private var emitter: ((Map<String, String>) -> Unit)? = null
++  private var reactStartRequested = false
++
++  @Volatile private var playRequestedAt = 0L
++
++  private fun emptyRoot() = Node(ROOT_ID, "Blednify", null, false, emptyList())
++
++  // --- Tree ------------------------------------------------------------------------------------
++
++  fun setTree(context: Context, json: String) {
++    val parsed = try {
++      parse(json)
++    } catch (e: Exception) {
++      Log.w(TAG, "Invalid Android Auto library", e)
++      return
++    }
++    nodes = parsed
++    loaded = true
++    try {
++      File(context.filesDir, FILE_NAME).writeText(json)
++    } catch (e: Exception) {
++      Log.w(TAG, "Could not persist Android Auto library", e)
++    }
++    notifyChanged()
++  }
++
++  fun ensureLoaded(context: Context) {
++    if (loaded) return
++    loaded = true
++    try {
++      val file = File(context.filesDir, FILE_NAME)
++      if (file.exists()) nodes = parse(file.readText())
++    } catch (e: Exception) {
++      Log.w(TAG, "Could not read Android Auto library", e)
++    }
++  }
++
++  /** JSON: an array of top-level nodes `{ id, title, sub?, play?, kids? }`; `kids` makes a node browsable. */
++  private fun parse(json: String): Map<String, Node> {
++    val out = HashMap<String, Node>()
++    fun walk(arr: JSONArray): List<String> {
++      val ids = ArrayList<String>(arr.length())
++      for (i in 0 until arr.length()) {
++        val o: JSONObject = arr.getJSONObject(i)
++        val id = o.getString("id")
++        val kids = o.optJSONArray("kids")?.let { walk(it) }
++        out[id] = Node(
++          id = id,
++          title = o.optString("title"),
++          subtitle = if (o.has("sub")) o.optString("sub") else null,
++          playable = o.optBoolean("play", kids == null),
++          children = kids
++        )
++        ids.add(id)
++      }
++      return ids
++    }
++    val roots = walk(JSONArray(json))
++    out[ROOT_ID] = Node(ROOT_ID, "Blednify", null, false, roots)
++    return out
++  }
++
++  fun attachSession(session: MediaLibrarySession?) {
++    sessionRef = session?.let { WeakReference(it) }
++  }
++
++  private fun notifyChanged() {
++    mainHandler.post {
++      val session = sessionRef?.get() ?: return@post
++      val snapshot = nodes
++      for (node in snapshot.values) {
++        val kids = node.children ?: continue
++        try {
++          session.notifyChildrenChanged(node.id, kids.size, null)
++        } catch (e: Exception) {
++          Log.w(TAG, "notifyChildrenChanged failed", e)
++        }
++      }
++    }
++  }
++
++  private fun toItem(node: Node): MediaItem {
++    val browsable = node.children != null
++    val metadata = MediaMetadata.Builder()
++      .setTitle(node.title)
++      .setDisplayTitle(node.title)
++      .setIsBrowsable(browsable)
++      .setIsPlayable(node.playable)
++      .setMediaType(
++        when {
++          node.id == ROOT_ID -> MediaMetadata.MEDIA_TYPE_FOLDER_MIXED
++          browsable -> MediaMetadata.MEDIA_TYPE_PLAYLIST
++          else -> MediaMetadata.MEDIA_TYPE_MUSIC
++        }
++      )
++      .apply {
++        node.subtitle?.let {
++          setSubtitle(it)
++          if (!browsable) setArtist(it)
++        }
++      }
++      .build()
++    return MediaItem.Builder().setMediaId(node.id).setMediaMetadata(metadata).build()
++  }
++
++  fun rootItem(): MediaItem = toItem(nodes[ROOT_ID] ?: emptyRoot())
++
++  fun item(id: String): MediaItem? = nodes[id]?.let(::toItem)
++
++  fun isPlayable(id: String): Boolean = nodes[id]?.playable == true
++
++  fun children(parentId: String, page: Int, pageSize: Int): List<MediaItem>? {
++    val snapshot = nodes
++    val ids = snapshot[parentId]?.children ?: return null
++    val from = (page.toLong() * pageSize).coerceAtMost(ids.size.toLong()).toInt()
++    val to = (from.toLong() + pageSize).coerceAtMost(ids.size.toLong()).toInt()
++    return ids.subList(from, to).mapNotNull { snapshot[it]?.let(::toItem) }
++  }
++
++  /** Root hints: list rows (not grids) for both folders and tracks. */
++  fun rootExtras(): Bundle = Bundle().apply {
++    putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 1)
++    putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)
++  }
++
++  // --- Requests to JS --------------------------------------------------------------------------
++
++  fun isPlayRequestPending(): Boolean =
++    System.currentTimeMillis() - playRequestedAt < PLAY_REQUEST_GRACE_MS
++
++  /** JS loaded something (the lock-screen player changed); controller play() calls are real again. */
++  fun clearPlayRequest() {
++    playRequestedAt = 0L
++  }
++
++  fun request(context: Context, type: String, value: String = "") {
++    if (type != "resume") playRequestedAt = System.currentTimeMillis()
++    val event = mapOf("type" to type, "value" to value)
++    mainHandler.post {
++      val emit = emitter
++      if (emit != null) {
++        emit(event)
++        return@post
++      }
++      synchronized(pending) { pending.add(event) }
++      startReact(context)
++    }
++  }
++
++  /** Called on the main thread by the audio module when JS starts / stops listening. */
++  fun attachEmitter(emit: ((Map<String, String>) -> Unit)?) {
++    mainHandler.post {
++      emitter = emit
++      if (emit == null) return@post
++      reactStartRequested = false
++      drain().forEach(emit)
++    }
++  }
++
++  fun drain(): List<Map<String, String>> {
++    synchronized(pending) {
++      val queued = ArrayList(pending)
++      pending.clear()
++      return queued
++    }
++  }
++
++  private fun startReact(context: Context) {
++    if (reactStartRequested) return
++    reactStartRequested = true
++    // ReactApplication.getReactHost().start() through reflection: expo-audio does not compile against react-android.
++    try {
++      val app = context.applicationContext
++      val host = app.javaClass.getMethod("getReactHost").invoke(app) ?: return
++      host.javaClass.getMethod("start").invoke(host)
++    } catch (e: Exception) {
++      Log.w(TAG, "Could not start React for an Android Auto request", e)
++    }
++  }
++}
+diff --git a/android/src/main/java/expo/modules/audio/service/AutoPlayers.kt b/android/src/main/java/expo/modules/audio/service/AutoPlayers.kt
+new file mode 100644
+index 0000000000000000000000000000000000000000..d23caa7836581a40f516e83dc8978c03fd7ea3ca
+--- /dev/null
++++ b/android/src/main/java/expo/modules/audio/service/AutoPlayers.kt
+@@ -0,0 +1,84 @@
++package expo.modules.audio.service
++
++import android.os.Looper
++import androidx.media3.common.ForwardingPlayer
++import androidx.media3.common.MediaItem
++import androidx.media3.common.Player
++import androidx.media3.common.SimpleBasePlayer
++import androidx.media3.common.util.UnstableApi
++import com.google.common.util.concurrent.Futures
++import com.google.common.util.concurrent.ListenableFuture
++
++/**
++ * Blednify patch: the session's player while nothing is loaded. Android Auto needs a session to connect
++ * to and browse even before the app played anything; pressing play asks JS to resume the saved queue.
++ */
++@UnstableApi
++internal class IdleSessionPlayer(
++  looper: Looper,
++  private val onPlay: () -> Unit
++) : SimpleBasePlayer(looper) {
++  private val commands = Player.Commands.Builder()
++    .addAll(
++      Player.COMMAND_PLAY_PAUSE,
++      Player.COMMAND_PREPARE,
++      Player.COMMAND_STOP,
++      Player.COMMAND_SET_MEDIA_ITEM,
++      Player.COMMAND_CHANGE_MEDIA_ITEMS,
++      Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
++      Player.COMMAND_GET_TIMELINE,
++      Player.COMMAND_GET_METADATA
++    )
++    .build()
++
++  override fun getState(): State = State.Builder()
++    .setAvailableCommands(commands)
++    .setPlaybackState(Player.STATE_IDLE)
++    .setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
++    .build()
++
++  override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
++    if (playWhenReady) onPlay()
++    return Futures.immediateVoidFuture()
++  }
++
++  override fun handlePrepare(): ListenableFuture<*> = Futures.immediateVoidFuture()
++
++  override fun handleStop(): ListenableFuture<*> = Futures.immediateVoidFuture()
++
++  override fun handleSetMediaItems(
++    mediaItems: MutableList<MediaItem>,
++    startIndex: Int,
++    startPositionMs: Long
++  ): ListenableFuture<*> = Futures.immediateVoidFuture()
++}
++
++/**
++ * Blednify patch: JS owns the queue. Items a controller (Android Auto) asks to play are routed to JS by
++ * the session callback, so the session must not load them into the native player itself, and the
++ * controller's follow-up play() must not resume the old track while JS builds the new queue.
++ */
++@UnstableApi
++internal class AutoRoutingPlayer(player: Player) : ForwardingPlayer(player) {
++  override fun setMediaItem(mediaItem: MediaItem) = Unit
++  override fun setMediaItem(mediaItem: MediaItem, startPositionMs: Long) = Unit
++  override fun setMediaItem(mediaItem: MediaItem, resetPosition: Boolean) = Unit
++  override fun setMediaItems(mediaItems: MutableList<MediaItem>) = Unit
++  override fun setMediaItems(mediaItems: MutableList<MediaItem>, resetPosition: Boolean) = Unit
++  override fun setMediaItems(mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long) = Unit
++  override fun addMediaItem(mediaItem: MediaItem) = Unit
++  override fun addMediaItem(index: Int, mediaItem: MediaItem) = Unit
++  override fun addMediaItems(mediaItems: MutableList<MediaItem>) = Unit
++  override fun addMediaItems(index: Int, mediaItems: MutableList<MediaItem>) = Unit
++  override fun replaceMediaItem(index: Int, mediaItem: MediaItem) = Unit
++  override fun replaceMediaItems(fromIndex: Int, toIndex: Int, mediaItems: MutableList<MediaItem>) = Unit
++
++  override fun play() {
++    if (!AutoLibrary.isPlayRequestPending()) super.play()
++  }
++
++  override fun setPlayWhenReady(playWhenReady: Boolean) {
++    if (playWhenReady && AutoLibrary.isPlayRequestPending()) return
++    super.setPlayWhenReady(playWhenReady)
++  }
++}

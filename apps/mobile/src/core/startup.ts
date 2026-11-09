@@ -1,0 +1,38 @@
+import { resumeDownloads } from './downloads';
+import { resumeImports } from './imports';
+import { loadLibIndex } from './lib-index';
+import { configureAudio, refreshQueueTracks } from './player/engine';
+import { startPruning } from './prune';
+import { settingsStore } from './settings';
+
+let ready: Promise<void> | null = null;
+const readyListeners: (() => void)[] = [];
+
+/**
+ * One-time, non-blocking startup: DB + migrations, library index, audio session, pending downloads.
+ * Runs from the UI (CoreProvider) or headless, when Android Auto wakes the app before any screen exists.
+ * Resolves once the library index is loaded (tracks resolve to downloads / the server from then on).
+ */
+export function startCore(): Promise<void> {
+  if (ready) return ready;
+  void configureAudio();
+  ready = loadLibIndex()
+    .then(() => {
+      refreshQueueTracks();
+      startPruning();
+      void resumeImports().catch((e) => console.warn('[core] imports resume failed', e));
+      void resumeDownloads().catch((e) => console.warn('[core] downloads resume failed', e));
+    })
+    .catch((e) => console.warn('[core] library init failed', e))
+    .finally(() => readyListeners.splice(0).forEach((fn) => fn()));
+  settingsStore.subscribe((s, prev) => {
+    if (s.serverUrl !== prev.serverUrl || s.accessToken !== prev.accessToken) refreshQueueTracks();
+  });
+  return ready;
+}
+
+/** Run `fn` once startup has finished (immediately-ish if it already has). */
+export function whenCoreReady(fn: () => void): void {
+  if (ready) void ready.then(fn);
+  else readyListeners.push(fn);
+}

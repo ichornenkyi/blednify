@@ -1,35 +1,12 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, type ReactNode } from 'react';
 
-import { resumeDownloads } from './downloads';
-import { resumeImports } from './imports';
-import { loadLibIndex } from './lib-index';
-import { configureAudio, refreshQueueTracks } from './player/engine';
-import { startPruning } from './prune';
 import { queryClient } from './query-client';
-import { settingsStore } from './settings';
-
-let started = false;
-
-/** One-time, non-blocking startup: DB + migrations, library index, audio session, pending downloads. */
-function startCore() {
-  if (started) return;
-  started = true;
-  void configureAudio();
-  loadLibIndex()
-    .then(() => {
-      refreshQueueTracks();
-      startPruning();
-      void resumeImports().catch((e) => console.warn('[core] imports resume failed', e));
-      return resumeDownloads();
-    })
-    .catch((e) => console.warn('[core] library init failed', e));
-  settingsStore.subscribe((s, prev) => {
-    if (s.serverUrl !== prev.serverUrl || s.accessToken !== prev.accessToken) refreshQueueTracks();
-  });
-}
+import { startCore } from './startup';
 
 export function CoreProvider({ children }: { children: ReactNode }) {
-  useEffect(startCore, []);
+  useEffect(() => {
+    void startCore();
+  }, []);
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

@@ -67,6 +67,7 @@
           "enableBackgroundRecording": false
         }
       ],
+      "./plugins/with-android-auto",
       [
         "expo-build-properties",
         {

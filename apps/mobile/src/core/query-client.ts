@@ -32,6 +32,15 @@ export const libKeys = {
   search: (q: string) => ['lib', 'search', q] as const,
 };
 
+const invalidateListeners = new Set<(keys: readonly (readonly unknown[])[]) => void>();
+
+/** Hear about library mutations even when no screen holds the query (e.g. the Android Auto tree). */
+export function onInvalidate(fn: (keys: readonly (readonly unknown[])[]) => void): () => void {
+  invalidateListeners.add(fn);
+  return () => invalidateListeners.delete(fn);
+}
+
 export function invalidate(...keys: readonly (readonly unknown[])[]): void {
   for (const queryKey of keys) void queryClient.invalidateQueries({ queryKey });
+  for (const fn of invalidateListeners) fn(keys);
 }
