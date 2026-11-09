@@ -1,4 +1,5 @@
-import type { BottomTabBarProps } from 'expo-router/js-tabs';
+import type { MaterialTopTabBarProps } from 'expo-router/js-top-tabs';
+import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { haptics } from '../haptics';
@@ -13,10 +14,16 @@ const TABS: Record<string, { label: string; icon: IconName; iconActive: IconName
   library: { label: 'Library', icon: 'albums-outline', iconActive: 'albums' },
 };
 
-/** Custom tab bar with the MiniPlayer docked on top. Rendered in-flow so screens never sit under it. */
-export function TabBar({ state, emitter, navigateToTab, insets }: BottomTabBarProps) {
+/** Custom bottom tab bar for the tab pager, with the MiniPlayer docked on top. Rendered in-flow so screens never sit under it. */
+export function TabBar({ state, emitter, navigateToTab, insets }: MaterialTopTabBarProps) {
   const styles = useStyles();
   const colors = useColors();
+  // One tick per tab change, whether it came from a tap or a swipe of the pager.
+  const lastIndex = useRef(state.index);
+  useEffect(() => {
+    if (state.index !== lastIndex.current) haptics.select();
+    lastIndex.current = state.index;
+  }, [state.index]);
   return (
     <View style={[styles.root, { paddingBottom: insets.bottom }]}>
       <MiniPlayer />
@@ -35,10 +42,7 @@ export function TabBar({ state, emitter, navigateToTab, insets }: BottomTabBarPr
               style={styles.tab}
               onPress={() => {
                 const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-                if (!focused && !event.defaultPrevented) {
-                  haptics.select();
-                  navigateToTab(route.key);
-                }
+                if (!focused && !event.defaultPrevented) navigateToTab(route.key);
               }}
               onLongPress={() => emitter.emit({ type: 'tabLongPress', target: route.key })}>
               <Icon name={focused ? tab.iconActive : tab.icon} size={24} color={color} strokeWidth={focused ? 2.6 : 2} />
