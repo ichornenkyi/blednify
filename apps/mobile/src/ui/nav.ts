@@ -20,18 +20,23 @@ export const nav = {
   appIcon: () => router.push('/app-icon'),
   downloads: () => router.push('/downloads'),
   /** Switch tab; from a root-stack screen, pops back to the existing tabs (see `library`). */
-  tab: (name: 'index' | 'search') => {
-    const href = name === 'index' ? '/' : '/search';
-    if (router.canDismiss()) router.dismissTo(href);
-    else router.navigate(href);
-  },
+  tab: (name: 'index' | 'search') => toTabs(name === 'index' ? '/' : '/search'),
   /** From a root-stack screen, pop back to the existing tabs instead of stacking a second tab navigator. */
-  library: (filter?: LibraryFilter) => {
-    const href = { pathname: '/library', params: filter ? { filter } : {} } as const;
-    if (router.canDismiss()) router.dismissTo(href);
-    else router.navigate(href);
-  },
+  library: (filter?: LibraryFilter) => toTabs({ pathname: '/library', params: filter ? { filter } : {} }),
 };
+
+/** Name of the focused root-stack screen, kept by the root layout's `screenListeners`. */
+let rootTop = '(tabs)';
+export function trackRootFocus(name: string) {
+  rootTop = name;
+}
+
+function toTabs(href: Parameters<typeof router.navigate>[0]) {
+  // dismissTo only pops: with the tabs already on top (a page opened by URL, then a tab, so the tabs sit
+  // above it) it is a no-op and the tab never changes. Switch in place then.
+  if (rootTop !== '(tabs)' && router.canDismiss()) router.dismissTo(href);
+  else router.navigate(href);
+}
 
 export type LibraryFilter = 'playlists' | 'recents' | 'albums' | 'liked' | 'downloaded' | 'device';
 

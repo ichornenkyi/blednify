@@ -10,6 +10,7 @@ import { ToastHost } from '@/ui/components/Toast';
 import { DesktopShell } from '@/ui/desktop/DesktopShell';
 import { useWebChrome } from '@/ui/desktop/web-chrome';
 import { useIsWide } from '@/ui/layout';
+import { trackRootFocus } from '@/ui/nav';
 import { makeStyles, navigationThemeFor, useColors } from '@/ui/theme';
 
 export default function RootLayout() {
@@ -21,7 +22,9 @@ export default function RootLayout() {
     void SystemUI.setBackgroundColorAsync(colors.bg);
   }, [colors.bg]);
   const stack = (
-    <Stack screenOptions={{ headerShown: false, contentStyle: styles.content, animation: wide ? 'fade' : 'ios_from_right' }}>
+    <Stack
+      screenOptions={{ headerShown: false, contentStyle: styles.content, animation: wide ? 'fade' : 'ios_from_right' }}
+      screenListeners={({ route }) => ({ focus: () => trackRootFocus(route.name) })}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
         name="player"
