@@ -1,17 +1,19 @@
 import { Image } from 'expo-image';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { colors, radius as radii } from '../theme';
+import { makeStyles, radius as radii } from '../theme';
 import { Artwork } from './Artwork';
 import { useImageSource } from '@/core';
 
 function Cell({ uri }: { uri: string }) {
+  const styles = useStyles();
   const source = useImageSource(uri);
   return <Image source={source} style={styles.cell} contentFit="cover" cachePolicy="memory-disk" recyclingKey={uri} transition={120} />;
 }
 
 /** 2×2 mosaic when a playlist has 4 covers, single cover otherwise, branded fallback when empty. */
 export function PlaylistArtwork({ uris, name, size, radius = radii.sm }: { uris: string[]; name: string; size?: number; radius?: number }) {
+  const styles = useStyles();
   if (uris.length < 4) {
     return <Artwork uri={uris[0]} label={name} size={size} radius={radius} fallbackIcon="musical-notes" />;
   }
@@ -25,8 +27,8 @@ export function PlaylistArtwork({ uris, name, size, radius = radii.sm }: { uris:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   grid: { flexDirection: 'row', flexWrap: 'wrap', overflow: 'hidden', backgroundColor: colors.surface2 },
   fill: { width: '100%', aspectRatio: 1 },
   cell: { width: '50%', height: '50%' },
-});
+}));

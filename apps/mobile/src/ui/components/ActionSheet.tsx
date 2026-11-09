@@ -7,7 +7,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { haptics } from '../haptics';
 import { closeSheet, useOverlay } from '../overlay';
-import { colors, radius, space } from '../theme';
+import { makeStyles, radius, space, useColors } from '../theme';
 import { Artwork } from './Artwork';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
@@ -23,6 +23,7 @@ const SheetGesture = createContext<{ pan: PanGesture; scrollY: SharedValue<numbe
  * Built on Reanimated + Gesture Handler: drag down / tap scrim / back button to dismiss.
  */
 export function ActionSheetHost() {
+  const styles = useStyles();
   const sheet = useOverlay((s) => s.sheet);
   const [rendered, setRendered] = useState(sheet);
   const { height: screenH } = useWindowDimensions();
@@ -163,6 +164,7 @@ export function SheetHeader({
   artworkUri?: string | null;
   artworkLabel?: string;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.header}>
       {artworkUri !== undefined ? <Artwork uri={artworkUri} label={artworkLabel ?? title} size={48} /> : null}
@@ -192,11 +194,13 @@ export type SheetActionProps = {
 };
 
 export function SheetAction({ icon, label, onPress, destructive, iconColor, keepOpen, trailing }: SheetActionProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const color = destructive ? colors.danger : colors.text;
   return (
     <Pressable
       accessibilityRole="button"
-      android_ripple={{ color: 'rgba(255,255,255,0.06)' }}
+      android_ripple={{ color: colors.ripple }}
       style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
       onPress={() => {
         haptics.select();
@@ -212,7 +216,7 @@ export function SheetAction({ icon, label, onPress, destructive, iconColor, keep
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   scrim: { backgroundColor: colors.scrim },
   sheet: {
     position: 'absolute',
@@ -240,6 +244,6 @@ const styles = StyleSheet.create({
   },
   headerMeta: { flex: 1, minWidth: 0, gap: 2 },
   action: { height: 52, flexDirection: 'row', alignItems: 'center', gap: space.lg, paddingHorizontal: space.xl },
-  actionPressed: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  actionPressed: { backgroundColor: colors.pressed },
   actionLabel: { flex: 1 },
-});
+}));

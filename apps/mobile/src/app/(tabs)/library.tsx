@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { ReactElement, ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -17,6 +17,7 @@ import {
   type AppTrack,
 } from '@/core';
 import { importMusic } from '@/ui/actions';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { AlbumCard } from '@/ui/components/AlbumCard';
 import { Chip } from '@/ui/components/Chip';
 import { EmptyState } from '@/ui/components/EmptyState';
@@ -31,7 +32,7 @@ import { onTrackMore } from '@/ui/components/TrackActions';
 import { TrackRow } from '@/ui/components/TrackRow';
 import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
-import { colors, radius, space } from '@/ui/theme';
+import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 const FILTERS: { key: LibraryFilter; label: string }[] = [
   { key: 'playlists', label: 'Playlists' },
@@ -47,6 +48,7 @@ function isFilter(v: unknown): v is LibraryFilter {
 }
 
 export default function LibraryScreen() {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   // The route param is the single source of truth, so shortcuts (Home → Liked) always win over a stale chip.
   const params = useLocalSearchParams<{ filter?: string }>();
@@ -54,6 +56,7 @@ export default function LibraryScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.md }]}>
+      <Backdrop />
       <View style={styles.header}>
         <Text variant="display" style={styles.flex}>
           Library
@@ -77,6 +80,8 @@ export default function LibraryScreen() {
 }
 
 function PlaylistsList() {
+  const styles = useStyles();
+  const colors = useColors();
   const playlists = usePlaylists();
   const { adminMode, adminToken } = useSettings();
   const admin = adminMode && !!adminToken;
@@ -128,6 +133,7 @@ function PlaylistsList() {
 }
 
 function AlbumsGrid() {
+  const styles = useStyles();
   const local = useLocalAlbums();
   const { albums: remote } = useRemoteAlbums();
   const seen = new Set<string>();
@@ -221,6 +227,7 @@ function DeviceList() {
 }
 
 function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactElement; extra?: ReactNode }) {
+  const styles = useStyles();
   const play = (index: number) => {
     haptics.tap();
     player.playTracks(tracks, index);
@@ -248,7 +255,7 @@ function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactE
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.lg, paddingRight: space.sm, marginBottom: space.md },
@@ -269,4 +276,4 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderStyle: 'dashed',
   },
-});
+}));

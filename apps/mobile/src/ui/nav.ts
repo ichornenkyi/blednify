@@ -12,6 +12,7 @@ export const nav = {
   upload: () => router.push('/upload'),
   importPlaylist: () => router.push('/import'),
   settings: () => router.push('/settings'),
+  appearance: () => router.push('/appearance'),
   downloads: () => router.push('/downloads'),
   /** From a root-stack screen, pop back to the existing tabs instead of stacking a second tab navigator. */
   library: (filter?: LibraryFilter) => {

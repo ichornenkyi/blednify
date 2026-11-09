@@ -1,7 +1,7 @@
-import { ActivityIndicator, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native';
 
 import { haptics } from '../haptics';
-import { colors, radius, space } from '../theme';
+import { makeStyles, radius, space, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 import { Text } from './Text';
@@ -20,7 +20,9 @@ export type PrimaryButtonProps = {
 };
 
 export function PrimaryButton({ label, onPress, icon, variant = 'accent', size = 'md', loading, disabled, style }: PrimaryButtonProps) {
-  const fg = variant === 'accent' || variant === 'danger' ? colors.white : colors.text;
+  const styles = useStyles();
+  const colors = useColors();
+  const fg = variant === 'accent' ? colors.onAccent : variant === 'danger' ? colors.white : colors.text;
   const inactive = disabled || loading;
   return (
     <PressableScale
@@ -41,7 +43,7 @@ export function PrimaryButton({ label, onPress, icon, variant = 'accent', size =
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   base: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, borderRadius: radius.pill },
   md: { height: 44, paddingHorizontal: space.lg + 4 },
   lg: { height: 52, paddingHorizontal: space.xl },
@@ -50,4 +52,4 @@ const styles = StyleSheet.create({
   surface: { backgroundColor: colors.surface2 },
   outline: { borderWidth: 1, borderColor: colors.borderStrong },
   disabled: { opacity: 0.4 },
-});
+}));

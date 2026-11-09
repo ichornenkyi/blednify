@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { colors, gradientFor, radius as radii } from '../theme';
+import { gradientFor, makeStyles, radius as radii } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
 import { useImageSource } from '@/core';
@@ -34,6 +34,7 @@ function initials(label: string) {
 
 /** Cover art via expo-image (memory+disk cache) with a branded gradient fallback. */
 export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIcon, recyclingKey, priority, style }: ArtworkProps) {
+  const styles = useStyles();
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const source = useImageSource(uri);
   const showImage = !!uri && uri !== failedUri;
@@ -62,6 +63,7 @@ export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIc
 }
 
 function Fallback({ label, icon, size }: { label: string; icon?: IconName; size?: number }) {
+  const styles = useStyles();
   const [from, to] = gradientFor(label);
   const glyph = size !== undefined ? Math.max(12, Math.round(size * 0.34)) : 40;
   return (
@@ -75,9 +77,9 @@ function Fallback({ label, icon, size }: { label: string; icon?: IconName; size?
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   base: { overflow: 'hidden', backgroundColor: colors.surface2 },
   fill: { width: '100%', aspectRatio: 1 },
   fallback: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   initials: { color: 'rgba(255,255,255,0.92)', fontWeight: '800', letterSpacing: -0.5 },
-});
+}));

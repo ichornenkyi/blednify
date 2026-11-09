@@ -2,7 +2,7 @@ import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { haptics } from '../haptics';
-import { colors, space, TAB_BAR_HEIGHT } from '../theme';
+import { makeStyles, space, TAB_BAR_HEIGHT, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { MiniPlayer } from './MiniPlayer';
 import { Text } from './Text';
@@ -15,6 +15,8 @@ const TABS: Record<string, { label: string; icon: IconName; iconActive: IconName
 
 /** Custom tab bar with the MiniPlayer docked on top. Rendered in-flow so screens never sit under it. */
 export function TabBar({ state, emitter, navigateToTab, insets }: BottomTabBarProps) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={[styles.root, { paddingBottom: insets.bottom }]}>
       <MiniPlayer />
@@ -52,11 +54,11 @@ export function TabBar({ state, emitter, navigateToTab, insets }: BottomTabBarPr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { backgroundColor: colors.bg, paddingTop: space.xs, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   row: { height: TAB_BAR_HEIGHT, flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
   label: { letterSpacing: 0.2, fontWeight: '600' },
   dot: { width: 4, height: 4, borderRadius: 2, marginTop: 2, backgroundColor: 'transparent' },
   dotActive: { backgroundColor: colors.accent },
-});
+}));

@@ -1,9 +1,11 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { colors, space } from '../theme';
+import { makeStyles, space, useColors } from '../theme';
 import { Text } from './Text';
 
 export function SectionHeader({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.row}>
       <Text variant="heading" numberOfLines={1} style={styles.title}>
@@ -20,8 +22,8 @@ export function SectionHeader({ title, actionLabel, onAction }: { title: string;
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   row: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: space.lg, marginBottom: space.md },
   title: { flex: 1 },
   action: { fontWeight: '700' },
-});
+}));

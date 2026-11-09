@@ -1,7 +1,7 @@
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { space } from '../theme';
+import { makeStyles, space } from '../theme';
 import { SectionHeader } from './SectionHeader';
 
 export const RAIL_CARD_WIDTH = 148;
@@ -22,6 +22,7 @@ export function Rail<T>({
   actionLabel?: string;
   onAction?: () => void;
 }) {
+  const styles = useStyles();
   if (data.length === 0) return null;
   return (
     <View style={styles.section}>
@@ -40,11 +41,12 @@ export function Rail<T>({
 }
 
 function Gap() {
+  const styles = useStyles();
   return <View style={styles.gap} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   section: { marginBottom: space.xxl },
   content: { paddingHorizontal: space.lg },
   gap: { width: space.md },
-});
+}));

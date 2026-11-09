@@ -12,9 +12,11 @@ import {
   useDownloads,
   useServerStatus,
   useSettings,
+  useThemePref,
   useUploads,
 } from '@/core';
 import { attempt, errorMessage, importMusic } from '@/ui/actions';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { BrandMark } from '@/ui/components/BrandMark';
 import { Icon, type IconName } from '@/ui/components/Icon';
 import { ListRow } from '@/ui/components/ListRow';
@@ -25,7 +27,7 @@ import { plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import { showToast } from '@/ui/overlay';
-import { colors, radius, space } from '@/ui/theme';
+import { makeStyles, presetById, radius, space, useColors } from '@/ui/theme';
 
 type TestResult = { ok: boolean; message: string } | null;
 
@@ -38,6 +40,8 @@ function normalizeUrl(raw: string): string {
 }
 
 export default function SettingsScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const settings = useSettings();
   const status = useServerStatus();
@@ -79,9 +83,12 @@ export default function SettingsScreen() {
   };
 
   const version = Constants.expoConfig?.version ?? '—';
+  const theme = useThemePref();
+  const themeLabel = presetById(theme.preset).name + (theme.accent || theme.background ? ' · custom colors' : '');
 
   return (
     <View style={styles.root}>
+      <Backdrop />
       <ScreenHeader title="Settings" />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]} keyboardShouldPersistTaps="handled">
         <Section title="Server" icon="server-outline">
@@ -193,6 +200,13 @@ export default function SettingsScreen() {
 
         <View style={styles.card}>
           <ListRow
+            leading={<RowIcon name="color-palette-outline" />}
+            title="Appearance"
+            subtitle={themeLabel}
+            chevron
+            onPress={nav.appearance}
+          />
+          <ListRow
             leading={<RowIcon name="folder-outline" />}
             title="Storage used"
             subtitle={`${formatBytes(bytesUsed)} · ${plural(completedCount, 'download')}`}
@@ -209,7 +223,7 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.about}>
-          <BrandMark size={64} />
+          <BrandMark size={64} color={colors.accent} glyphColor={colors.onAccent} />
           <Text variant="subheading">Blednify</Text>
           <Text variant="caption">Version {version}</Text>
           <Text variant="caption" style={styles.centerText}>
@@ -222,6 +236,8 @@ export default function SettingsScreen() {
 }
 
 function ToggleRow({ title, caption, value, onChange }: { title: string; caption: string; value: boolean; onChange(v: boolean): void }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.toggleRow}>
       <View style={styles.flex}>
@@ -244,6 +260,8 @@ function ToggleRow({ title, caption, value, onChange }: { title: string; caption
 
 /** Admin mode: upload / delete / rescan on the server with its ADMIN_TOKEN. */
 function AdminSection() {
+  const styles = useStyles();
+  const colors = useColors();
   const settings = useSettings();
   const { active } = useUploads();
   const [token, setToken] = useState(settings.adminToken);
@@ -363,6 +381,8 @@ function AdminSection() {
 }
 
 function Section({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.card}>
       <View style={styles.sectionHead}>
@@ -375,6 +395,8 @@ function Section({ title, icon, children }: { title: string; icon: IconName; chi
 }
 
 function RowIcon({ name }: { name: IconName }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.rowIcon}>
       <Icon name={name} size={20} color={colors.text} />
@@ -382,7 +404,7 @@ function RowIcon({ name }: { name: IconName }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   content: { paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.lg },
@@ -412,4 +434,4 @@ const styles = StyleSheet.create({
   rowIcon: { width: 40, height: 40, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2 },
   about: { alignItems: 'center', gap: space.xs, paddingVertical: space.xl },
   centerText: { textAlign: 'center', marginTop: space.sm },
-});
+}));

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radius, space } from '../theme';
+import { makeStyles, radius, space, useColors, withAlpha } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 import { Text } from './Text';
 import { useImageSource } from '@/core';
@@ -40,6 +40,8 @@ export function DetailHeader({
   actions,
   children,
 }: DetailHeaderProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const backdropSource = useImageSource(backdropUri);
   const { width } = useWindowDimensions();
@@ -53,7 +55,11 @@ export function DetailHeader({
           <Image source={backdropSource} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
         ) : null}
         <LinearGradient
-          colors={backdropUri ? ['rgba(10,10,12,0.35)', 'rgba(10,10,12,0.75)', colors.bg] : [colors.accentDeep, 'rgba(10,10,12,0.6)', colors.bg]}
+          colors={
+            backdropUri
+              ? [withAlpha(colors.bg, 0.35), withAlpha(colors.bg, 0.75), colors.bg]
+              : [colors.isLight ? colors.accentSoft : colors.accentDeep, withAlpha(colors.bg, 0.6), colors.bg]
+          }
           locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
         />
@@ -89,7 +95,7 @@ export function DetailHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.lg },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, height: 460, overflow: 'hidden' },
   art: {
@@ -105,4 +111,4 @@ const styles = StyleSheet.create({
   text: { gap: space.xs },
   buttons: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   flex: { flex: 1 },
-});
+}));

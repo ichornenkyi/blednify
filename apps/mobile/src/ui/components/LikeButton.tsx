@@ -4,10 +4,11 @@ import { toggleLike, useIsLiked, type AppTrack } from '@/core';
 
 import { attempt } from '../actions';
 import { haptics } from '../haptics';
-import { colors } from '../theme';
+import { useColors } from '../theme';
 import { IconButton } from './IconButton';
 
 export function LikeButton({ track, size = 24 }: { track: AppTrack; size?: number }) {
+  const colors = useColors();
   const liked = useIsLiked(track.key);
   const pop = useSharedValue(1);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.get() }] }));

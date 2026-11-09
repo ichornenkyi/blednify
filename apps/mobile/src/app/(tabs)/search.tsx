@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDeferredValue, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -20,6 +20,7 @@ import {
   type SearchHistoryEntry,
 } from '@/core';
 import { importMusic } from '@/ui/actions';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { Artwork } from '@/ui/components/Artwork';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Icon, type IconName } from '@/ui/components/Icon';
@@ -32,7 +33,7 @@ import { onTrackMore } from '@/ui/components/TrackActions';
 import { TrackRow } from '@/ui/components/TrackRow';
 import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
-import { colors, radius, space } from '@/ui/theme';
+import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 type Item =
   | { type: 'header'; key: string; title: string }
@@ -43,6 +44,8 @@ type Item =
 const TRACK_LIMIT = 30;
 
 export default function SearchScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
@@ -94,6 +97,7 @@ export default function SearchScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.md }]}>
+      <Backdrop />
       <Text variant="display" style={styles.title}>
         Search
       </Text>
@@ -217,6 +221,8 @@ function RecentHistoryRow({
   onPress: () => void;
   onRemove: () => void;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   let leading: ReactNode;
   let title: string;
   let subtitle: string | undefined;
@@ -278,6 +284,7 @@ const BROWSE: { label: string; icon: IconName; colors: readonly [string, string]
 ];
 
 function BrowseGrid() {
+  const styles = useStyles();
   return (
     <View style={styles.browse}>
       <Text variant="subheading" style={styles.browseTitle}>
@@ -306,7 +313,7 @@ function BrowseGrid() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   title: { paddingHorizontal: space.lg, marginBottom: space.md },
@@ -346,4 +353,4 @@ const styles = StyleSheet.create({
   tileFill: { flex: 1, padding: space.md },
   tileLabel: { maxWidth: '70%' },
   tileIcon: { position: 'absolute', right: -4, bottom: -6, transform: [{ rotate: '-14deg' }] },
-});
+}));

@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatDuration, usePlayer, type AppTrack } from '@/core';
 
-import { colors, space, TRACK_ROW_HEIGHT } from '../theme';
+import { makeStyles, space, TRACK_ROW_HEIGHT, useColors } from '../theme';
 import { Artwork } from './Artwork';
 import { Equalizer } from './Equalizer';
 import { Icon } from './Icon';
@@ -23,6 +23,8 @@ export type TrackRowProps = {
 const ARTWORK = 48;
 
 function TrackRowImpl({ track, index, onPress, onMore, leading = 'artwork', subtitle = 'artist', showDuration }: TrackRowProps) {
+  const styles = useStyles();
+  const colors = useColors();
   // 0 = not current, 1 = current & paused, 2 = current & playing. Primitive selector ⇒ only affected rows re-render.
   const state = usePlayer((s) => (s.current?.key === track.key ? (s.isPlaying ? 2 : 1) : 0));
   const isCurrent = state > 0;
@@ -36,7 +38,7 @@ function TrackRowImpl({ track, index, onPress, onMore, leading = 'artwork', subt
       onPress={() => onPress(index)}
       onLongPress={onMore ? () => onMore(track, index) : undefined}
       delayLongPress={320}
-      android_ripple={RIPPLE}
+      android_ripple={{ color: colors.ripple }}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       {leading === 'artwork' ? (
         <View>
@@ -86,11 +88,10 @@ function TrackRowImpl({ track, index, onPress, onMore, leading = 'artwork', subt
 
 export const TrackRow = memo(TrackRowImpl);
 
-const RIPPLE = { color: 'rgba(255,255,255,0.06)' };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { height: TRACK_ROW_HEIGHT, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, gap: space.md },
-  pressed: { backgroundColor: 'rgba(255,255,255,0.04)' },
+  pressed: { backgroundColor: colors.pressed },
   eqOverlay: {
     ...StyleSheet.absoluteFill,
     borderRadius: 8,
@@ -105,4 +106,4 @@ const styles = StyleSheet.create({
   subText: { flexShrink: 1 },
   duration: { color: colors.textTertiary },
   more: { width: 32, height: 40, alignItems: 'center', justifyContent: 'center' },
-});
+}));

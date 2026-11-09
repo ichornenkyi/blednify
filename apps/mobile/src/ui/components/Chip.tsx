@@ -1,13 +1,15 @@
 import { StyleSheet } from 'react-native';
 
 import { haptics } from '../haptics';
-import { colors, radius, space } from '../theme';
+import { makeStyles, radius, space, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 import { Text } from './Text';
 
 export function Chip({ label, selected, onPress, icon }: { label: string; selected?: boolean; onPress: () => void; icon?: IconName }) {
-  const fg = selected ? colors.white : colors.text;
+  const styles = useStyles();
+  const colors = useColors();
+  const fg = selected ? colors.onAccent : colors.text;
   return (
     <PressableScale
       accessibilityRole="button"
@@ -25,7 +27,7 @@ export function Chip({ label, selected, onPress, icon }: { label: string; select
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -39,4 +41,4 @@ const styles = StyleSheet.create({
   },
   selected: { backgroundColor: colors.accent, borderColor: colors.accent },
   label: { fontWeight: '600' },
-});
+}));

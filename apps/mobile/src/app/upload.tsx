@@ -14,6 +14,7 @@ import {
   type UploadItem,
 } from '@/core';
 import { attempt } from '@/ui/actions';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Icon } from '@/ui/components/Icon';
 import { IconButton } from '@/ui/components/IconButton';
@@ -21,9 +22,11 @@ import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { nav } from '@/ui/nav';
-import { colors, radius, space, TRACK_ROW_HEIGHT } from '@/ui/theme';
+import { makeStyles, radius, space, TRACK_ROW_HEIGHT, useColors } from '@/ui/theme';
 
 export default function UploadScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { adminMode, adminToken, serverUrl } = useSettings();
   const status = useServerStatus();
@@ -33,6 +36,7 @@ export default function UploadScreen() {
 
   return (
     <View style={styles.root}>
+      <Backdrop />
       <ScreenHeader
         title="Upload to server"
         right={finished > 0 ? <IconButton icon="trash-bin-outline" label="Clear finished" onPress={clearUploads} /> : null}
@@ -103,6 +107,8 @@ function statusText(it: UploadItem): string {
 }
 
 function UploadRow({ item }: { item: UploadItem }) {
+  const styles = useStyles();
+  const colors = useColors();
   const failed = item.status === 'error';
   const done = item.status === 'done';
   return (
@@ -136,7 +142,7 @@ function UploadRow({ item }: { item: UploadItem }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   head: { paddingTop: space.sm },
@@ -156,4 +162,4 @@ const styles = StyleSheet.create({
   meta: { flex: 1, minWidth: 0, gap: 3 },
   bar: { height: 3, borderRadius: 2, backgroundColor: colors.surface3, overflow: 'hidden' },
   barFill: { height: '100%', backgroundColor: colors.accent },
-});
+}));

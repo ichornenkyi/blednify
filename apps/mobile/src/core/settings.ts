@@ -92,3 +92,40 @@ export function useSettings(): SettingsValues & {
   const values = useStore(settingsStore, useShallow((s) => s));
   return { ...values, setServerUrl, setDownloadOnWifiOnly, setAdminMode, setAdminToken, setLyricsOnline };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Appearance
+
+const K_THEME = 'settings.theme.v1';
+
+/** A theme preset (see ui/theme.ts) plus optional custom colors layered on top of it. */
+export type ThemePref = {
+  preset: string;
+  /** Custom accent `#RRGGBB`, else the preset's. */
+  accent: string | null;
+  /** Custom background `#RRGGBB` (surfaces and text are derived from it), else the preset's. */
+  background: string | null;
+};
+
+const DEFAULT_THEME: ThemePref = { preset: 'blednify', accent: null, background: null };
+
+function readTheme(): ThemePref {
+  try {
+    const raw = kv.getString(K_THEME);
+    return raw ? { ...DEFAULT_THEME, ...(JSON.parse(raw) as Partial<ThemePref>) } : DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+export const themeStore = create<ThemePref>(readTheme);
+
+export function setThemePref(patch: Partial<ThemePref>): void {
+  const next = { ...themeStore.getState(), ...patch };
+  kv.set(K_THEME, JSON.stringify(next));
+  themeStore.setState(next, true);
+}
+
+export function useThemePref(): ThemePref {
+  return useStore(themeStore, (s) => s);
+}

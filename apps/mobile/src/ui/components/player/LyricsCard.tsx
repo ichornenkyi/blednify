@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { Pressable, ScrollView, View, type ScrollViewInstance } from 'react-native';
 
 import {
   activeLyricIndex,
@@ -12,11 +12,13 @@ import { Icon } from '@/ui/components/Icon';
 import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
-import { colors, gradientFor, radius, space } from '@/ui/theme';
+import { gradientFor, makeStyles, radius, space, useColors } from '@/ui/theme';
 
 const LEAD_MS = 250;
 
 export function LyricsCard({ track, lyrics }: { track: AppTrack; lyrics: Lyrics }) {
+  const styles = useStyles();
+  const colors = useColors();
   const [tint] = gradientFor(track.album || track.title);
   const isSynced = (lyrics.synced?.length ?? 0) > 0;
 
@@ -55,6 +57,7 @@ export function LyricsCard({ track, lyrics }: { track: AppTrack; lyrics: Lyrics 
 }
 
 function SyncedPreview({ lines }: { lines: LyricLine[] }) {
+  const styles = useStyles();
   const { positionMs } = useProgress();
   const scrollRef = useRef<ScrollViewInstance>(null);
   const ys = useRef<number[]>([]);
@@ -108,6 +111,7 @@ function SyncedPreview({ lines }: { lines: LyricLine[] }) {
 }
 
 function PlainPreview({ text }: { text: string }) {
+  const styles = useStyles();
   const lines = text
     .split('\n')
     .map((l) => l.trim())
@@ -125,7 +129,7 @@ function PlainPreview({ text }: { text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: {
     borderRadius: radius.xl,
     padding: space.lg,
@@ -205,4 +209,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     opacity: 0.9,
   },
-});
+}));

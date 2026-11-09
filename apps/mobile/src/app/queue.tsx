@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { player, usePlayer, type AppTrack } from '@/core';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { Artwork } from '@/ui/components/Artwork';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Equalizer } from '@/ui/components/Equalizer';
@@ -24,7 +25,7 @@ import { Icon } from '@/ui/components/Icon';
 import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
-import { colors, space, TRACK_ROW_HEIGHT } from '@/ui/theme';
+import { makeStyles, space, TRACK_ROW_HEIGHT, useColors } from '@/ui/theme';
 
 const ROW_H = TRACK_ROW_HEIGHT;
 
@@ -42,6 +43,8 @@ type DragState = {
 type Item = { track: AppTrack; abs: number; rel: number };
 
 export default function QueueScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const queue = usePlayer((s) => s.queue);
   const index = usePlayer((s) => s.index);
@@ -86,6 +89,7 @@ export default function QueueScreen() {
 
   return (
     <View style={styles.root}>
+      <Backdrop />
       <ScreenHeader title="Queue" backIcon="chevron-down" />
       <Animated.View ref={container} style={styles.flex}>
         <FlashList
@@ -146,6 +150,8 @@ const QueueRow = memo(function QueueRow({
   onDragStart: (rel: number) => void;
   onDragEnd: (rel: number, to: number) => void;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const { track, abs, rel } = item;
   const { width } = useWindowDimensions();
   const tx = useSharedValue(0);
@@ -232,7 +238,7 @@ const QueueRow = memo(function QueueRow({
             onAccessibilityAction={(e) => {
               if (e.nativeEvent.actionName === 'delete') remove();
             }}
-            android_ripple={RIPPLE}
+            android_ripple={{ color: colors.ripple }}
             onPress={() => {
               haptics.tap();
               player.jumpTo(abs);
@@ -251,6 +257,7 @@ const QueueRow = memo(function QueueRow({
 });
 
 function RowBody({ track }: { track: AppTrack }) {
+  const styles = useStyles();
   return (
     <>
       <Artwork uri={track.artworkUri} label={track.album || track.title} size={44} recyclingKey={track.key} />
@@ -267,6 +274,8 @@ function RowBody({ track }: { track: AppTrack }) {
 }
 
 function Ghost({ track, drag }: { track: AppTrack; drag: DragState }) {
+  const styles = useStyles();
+  const colors = useColors();
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: drag.top.get() + drag.dy.get() }] }));
   return (
     <Animated.View pointerEvents="none" style={[styles.ghost, style]}>
@@ -280,9 +289,8 @@ function Ghost({ track, drag }: { track: AppTrack; drag: DragState }) {
   );
 }
 
-const RIPPLE = { color: 'rgba(255,255,255,0.06)' };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   section: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.sm },
@@ -321,4 +329,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 16,
   },
-});
+}));

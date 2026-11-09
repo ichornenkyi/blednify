@@ -1,7 +1,7 @@
 import { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { radius, space } from '../theme';
+import { makeStyles, radius, space } from '../theme';
 import { Artwork } from './Artwork';
 import { PressableScale } from './PressableScale';
 import { Text } from './Text';
@@ -19,6 +19,7 @@ export type AlbumCardProps = {
 };
 
 function AlbumCardImpl({ title, subtitle, artworkUri, width, round, recyclingKey, onPress, onLongPress }: AlbumCardProps) {
+  const styles = useStyles();
   return (
     <PressableScale
       accessibilityRole="button"
@@ -43,10 +44,10 @@ function AlbumCardImpl({ title, subtitle, artworkUri, width, round, recyclingKey
 
 export const AlbumCard = memo(AlbumCardImpl);
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   card: { gap: space.sm },
   flex: { flex: 1 },
   meta: { gap: 2 },
   center: { alignItems: 'center' },
   centerText: { textAlign: 'center' },
-});
+}));

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { closeSheet } from '../overlay';
-import { colors, radius, space } from '../theme';
+import { makeStyles, radius, space, useColors } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 import { Text } from './Text';
 
@@ -19,6 +19,8 @@ export function PromptSheet({
   submitLabel?: string;
   onSubmit: (value: string) => void;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const [value, setValue] = useState(initialValue);
   const trimmed = value.trim();
   const submit = () => {
@@ -51,7 +53,7 @@ export function PromptSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { paddingHorizontal: space.xl, paddingTop: space.sm, paddingBottom: space.md, gap: space.lg },
   input: {
     height: 52,
@@ -64,4 +66,4 @@ const styles = StyleSheet.create({
   },
   buttons: { flexDirection: 'row', gap: space.md },
   flex: { flex: 1 },
-});
+}));

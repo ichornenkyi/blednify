@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -34,7 +35,7 @@ import { PressableScale } from '@/ui/components/PressableScale';
 import { SeekBar } from '@/ui/components/SeekBar';
 import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
-import { colors, gradientFor, radius, space } from '@/ui/theme';
+import { ForceDark, gradientFor, makeStyles, radius, space, useColors } from '@/ui/theme';
 
 /** Highlight slightly early: progress ticks at ~4 Hz, and a line should light up as it starts, not after. */
 const LEAD_MS = 250;
@@ -45,7 +46,19 @@ function close() {
   if (router.canGoBack()) router.back();
 }
 
+/** Immersive screen over artwork: stays dark in light themes. */
 export default function LyricsScreen() {
+  return (
+    <ForceDark>
+      <StatusBar style="light" />
+      <LyricsScreenContent />
+    </ForceDark>
+  );
+}
+
+function LyricsScreenContent() {
+  const styles = useStyles();
+  const colors = useColors();
   const current = usePlayer((s) => s.current);
   const { lyrics, isLoading, isError } = useLyrics(current);
   const insets = useSafeAreaInsets();
@@ -121,6 +134,7 @@ function Backdrop({ track, tint }: { track: AppTrack; tint: string }) {
 // --- Synced ----------------------------------------------------------------------------------
 
 function SyncedLyrics({ lines, source }: { lines: LyricLine[]; source: Lyrics['source'] }) {
+  const styles = useStyles();
   const { positionMs } = useProgress();
   const { height } = useWindowDimensions();
   const scroll = useRef<ScrollViewInstance>(null);
@@ -198,6 +212,7 @@ const SyncedLine = memo(function SyncedLine({
   onPress: (i: number) => void;
   onMeasure: (i: number, y: number) => void;
 }) {
+  const styles = useStyles();
   const o = useSharedValue(OPACITY[state]);
   const s = useSharedValue(state === 'active' ? 1 : 0.97);
   useEffect(() => {
@@ -218,6 +233,7 @@ const SyncedLine = memo(function SyncedLine({
 // --- Plain / none ----------------------------------------------------------------------------
 
 function PlainLyrics({ lyrics }: { lyrics: Lyrics }) {
+  const styles = useStyles();
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.lines} showsVerticalScrollIndicator={false}>
       <View style={styles.notice}>
@@ -233,6 +249,7 @@ function PlainLyrics({ lyrics }: { lyrics: Lyrics }) {
 }
 
 function NoLyrics({ instrumental, failed }: { instrumental: boolean; failed: boolean }) {
+  const styles = useStyles();
   return (
     <View style={[styles.flex, styles.center]}>
       <EmptyState
@@ -251,6 +268,7 @@ function NoLyrics({ instrumental, failed }: { instrumental: boolean; failed: boo
 }
 
 function Credit({ source }: { source: Lyrics['source'] }) {
+  const styles = useStyles();
   if (source !== 'lrclib') return null;
   return (
     <Text variant="caption" color="rgba(255,255,255,0.6)" style={styles.credit}>
@@ -260,6 +278,8 @@ function Credit({ source }: { source: Lyrics['source'] }) {
 }
 
 function MiniTransport() {
+  const styles = useStyles();
+  const colors = useColors();
   const isPlaying = usePlayer((s) => s.isPlaying);
   return (
     <View style={styles.transport}>
@@ -280,7 +300,7 @@ function MiniTransport() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -315,4 +335,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.white,
   },
-});
+}));

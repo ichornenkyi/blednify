@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -7,7 +7,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { formatDuration, player, useProgress } from '@/core';
 
 import { haptics } from '../haptics';
-import { colors, space } from '../theme';
+import { makeStyles, space, useColors } from '../theme';
 import { Text } from './Text';
 
 const TRACK_H = 4;
@@ -23,6 +23,8 @@ function clamp01(v: number) {
  * The only Now Playing component subscribed to progress.
  */
 export function SeekBar({ fallbackDurationMs }: { fallbackDurationMs: number }) {
+  const styles = useStyles();
+  const colors = useColors();
   const { positionMs, durationMs: liveDuration } = useProgress();
   const durationMs = liveDuration > 0 ? liveDuration : fallbackDurationMs;
 
@@ -138,9 +140,9 @@ export function SeekBar({ fallbackDurationMs }: { fallbackDurationMs: number }) 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   hit: { height: 28, justifyContent: 'center' },
-  track: { height: TRACK_H, borderRadius: TRACK_H / 2, backgroundColor: 'rgba(255,255,255,0.16)', overflow: 'hidden' },
+  track: { height: TRACK_H, borderRadius: TRACK_H / 2, backgroundColor: colors.track, overflow: 'hidden' },
   fill: { height: '100%', width: '100%', backgroundColor: colors.text, transformOrigin: 'left' },
   thumb: {
     position: 'absolute',
@@ -156,4 +158,4 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space.xs },
-});
+}));

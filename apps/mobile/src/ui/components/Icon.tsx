@@ -38,6 +38,7 @@ import {
   MicOff,
   Minimize2,
   Pause,
+  Palette,
   Pencil,
   Play,
   Plus,
@@ -53,6 +54,7 @@ import {
   SkipBack,
   SkipForward,
   Smartphone,
+  Sparkles,
   Square,
   Trash,
   TrendingUp,
@@ -66,7 +68,7 @@ import {
 
 import Svg, { Path } from 'react-native-svg';
 
-import { colors } from '../theme';
+import { useColors } from '../theme';
 
 type IconEntry = {
   icon: LucideIcon;
@@ -87,6 +89,8 @@ const ICON_MAP = {
   'checkmark-done-outline': { icon: CheckCheck },
   'remove-circle-outline': { icon: CircleMinus },
   'pencil-outline': { icon: Pencil },
+  'color-palette-outline': { icon: Palette },
+  sparkles: { icon: Sparkles },
   trash: { icon: Trash },
   'trash-outline': { icon: Trash },
   'trash-bin-outline': { icon: Trash },
@@ -190,7 +194,7 @@ export type IconName = keyof typeof ICON_MAP;
 export function Icon({
   name,
   size = 22,
-  color = colors.text,
+  color: colorProp,
   strokeWidth,
 }: {
   name: IconName;
@@ -198,6 +202,8 @@ export function Icon({
   color?: string;
   strokeWidth?: number;
 }) {
+  const text = useColors().text;
+  const color = colorProp ?? text;
   if (name === 'home') return <HomeFilled size={size} color={color} />;
   const entry = ICON_MAP[name];
   if (!entry) return null;

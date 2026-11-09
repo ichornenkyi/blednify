@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { space } from '../theme';
+import { makeStyles, space } from '../theme';
 import { IconButton } from './IconButton';
 import { Text } from './Text';
 
@@ -17,6 +17,7 @@ export function ScreenHeader({
   right?: ReactNode;
   backIcon?: 'chevron-back' | 'chevron-down';
 }) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.bar, { paddingTop: insets.top + space.xs }]}>
@@ -31,6 +32,7 @@ export function ScreenHeader({
 
 /** Floating back button for full-bleed screens (album / artist / playlist). */
 export function FloatingBack() {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.floating, { top: insets.top + space.xs }]} pointerEvents="box-none">
@@ -39,9 +41,9 @@ export function FloatingBack() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, paddingBottom: space.sm, gap: space.xs },
   title: { flex: 1, textAlign: 'center' },
   right: { minWidth: 44, flexDirection: 'row', justifyContent: 'flex-end' },
   floating: { position: 'absolute', left: space.md, zIndex: 10 },
-});
+}));

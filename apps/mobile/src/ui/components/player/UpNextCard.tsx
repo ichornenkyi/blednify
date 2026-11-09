@@ -6,9 +6,11 @@ import { Icon } from '@/ui/components/Icon';
 import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
-import { colors, radius, space } from '@/ui/theme';
+import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 export function UpNextCard() {
+  const styles = useStyles();
+  const colors = useColors();
   const queue = usePlayer((s) => s.queue);
   const index = usePlayer((s) => s.index);
 
@@ -105,7 +107,7 @@ export function UpNextCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
@@ -171,4 +173,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
   },
-});
+}));

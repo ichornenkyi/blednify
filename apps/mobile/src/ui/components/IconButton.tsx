@@ -1,7 +1,7 @@
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { type StyleProp, type ViewStyle } from 'react-native';
 
 import { haptics } from '../haptics';
-import { colors } from '../theme';
+import { makeStyles, useColors, type Palette } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 
@@ -23,12 +23,12 @@ export type IconButtonProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-const BG: Record<Variant, string | undefined> = {
-  plain: undefined,
-  filled: colors.surface2,
-  accent: colors.accent,
-  scrim: 'rgba(10,10,12,0.55)',
-};
+function bgFor(variant: Variant, colors: Palette): string | undefined {
+  if (variant === 'filled') return colors.surface2;
+  if (variant === 'accent') return colors.accent;
+  if (variant === 'scrim') return 'rgba(10,10,12,0.55)';
+  return undefined;
+}
 
 export function IconButton({
   icon,
@@ -44,6 +44,8 @@ export function IconButton({
   strokeWidth,
   style,
 }: IconButtonProps) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <PressableScale
       accessibilityRole="button"
@@ -59,21 +61,21 @@ export function IconButton({
       }}
       style={[
         styles.base,
-        { width: diameter, height: diameter, borderRadius: diameter / 2, backgroundColor: BG[variant] },
+        { width: diameter, height: diameter, borderRadius: diameter / 2, backgroundColor: bgFor(variant, colors) },
         disabled && styles.disabled,
         style,
       ]}>
       <Icon
         name={icon}
         size={size}
-        color={color ?? (variant === 'accent' ? colors.white : colors.text)}
+        color={color ?? (variant === 'accent' ? colors.onAccent : colors.text)}
         strokeWidth={strokeWidth}
       />
     </PressableScale>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   base: { alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.35 },
-});
+}));

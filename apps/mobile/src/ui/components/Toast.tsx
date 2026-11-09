@@ -6,19 +6,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayer } from '@/core';
 
 import { dismissToast, showToast, useOverlay, type ToastKind } from '../overlay';
-import { colors, radius, space } from '../theme';
+import { makeStyles, radius, space, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
 import { TopLayer } from './TopLayer';
 
-const ICONS: Record<Exclude<ToastKind, 'progress'>, { name: IconName; color: string }> = {
-  info: { name: 'information-circle', color: colors.textSecondary },
-  success: { name: 'checkmark-circle', color: colors.success },
-  error: { name: 'alert-circle', color: colors.danger },
+const ICONS: Record<Exclude<ToastKind, 'progress'>, { name: IconName; color: 'textSecondary' | 'success' | 'danger' }> = {
+  info: { name: 'information-circle', color: 'textSecondary' },
+  success: { name: 'checkmark-circle', color: 'success' },
+  error: { name: 'alert-circle', color: 'danger' },
 };
 
 /** Global toast host (mounted once in the root layout). Use `showToast()` to trigger. */
 export function ToastHost() {
+  const styles = useStyles();
+  const colors = useColors();
   const toast = useOverlay((s) => s.toast);
   const insets = useSafeAreaInsets();
   usePlaybackErrorToasts();
@@ -37,7 +39,7 @@ export function ToastHost() {
             {toast.kind === 'progress' ? (
               <ActivityIndicator size="small" color={colors.accent} />
             ) : (
-              <Icon name={ICONS[toast.kind].name} size={20} color={ICONS[toast.kind].color} />
+              <Icon name={ICONS[toast.kind].name} size={20} color={colors[ICONS[toast.kind].color]} />
             )}
             <Text variant="bodyStrong" style={styles.message} numberOfLines={2}>
               {toast.message}
@@ -58,7 +60,7 @@ function usePlaybackErrorToasts() {
   }, [error, errorId]);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   host: { position: 'absolute', left: space.lg, right: space.lg, alignItems: 'center' },
   toast: {
     flexDirection: 'row',
@@ -78,4 +80,4 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   message: { flexShrink: 1 },
-});
+}));

@@ -1,11 +1,11 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { addToPlaylist, createPlaylist, usePlaylists, type AppTrack } from '@/core';
 
 import { attempt } from '../actions';
 import { haptics } from '../haptics';
 import { closeSheet, showSheet } from '../overlay';
-import { colors, space } from '../theme';
+import { makeStyles, space, useColors } from '../theme';
 import { SheetAction, SheetHeader, SheetScrollView } from './ActionSheet';
 import { Icon } from './Icon';
 import { ListRow } from './ListRow';
@@ -15,6 +15,8 @@ import { Text } from './Text';
 
 /** Sheet content: choose (or create) a playlist to add `tracks` to. */
 export function PlaylistPicker({ tracks }: { tracks: AppTrack[] }) {
+  const styles = useStyles();
+  const colors = useColors();
   const playlists = usePlaylists();
   const what = tracks.length === 1 ? tracks[0].title : `${tracks.length} tracks`;
   return (
@@ -66,8 +68,8 @@ async function createAndAdd(name: string, tracks: AppTrack[]) {
   if (id) await attempt(addToPlaylist(id, tracks), `Added to ${name}`);
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   list: { maxHeight: 380 },
   listContent: { paddingBottom: space.sm },
   empty: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.xl, paddingVertical: space.lg },
-});
+}));

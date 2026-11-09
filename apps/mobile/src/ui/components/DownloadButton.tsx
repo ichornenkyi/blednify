@@ -4,7 +4,7 @@ import { cancelDownload, downloadTracks, removeDownload, useDownloadState, type 
 
 import { attempt } from '../actions';
 import { haptics } from '../haptics';
-import { colors } from '../theme';
+import { makeStyles, useColors } from '../theme';
 import { Icon } from './Icon';
 import { confirm } from './ConfirmSheet';
 import { IconButton } from './IconButton';
@@ -12,6 +12,8 @@ import { ProgressRing } from './ProgressRing';
 
 /** Download state toggle for a single remote track. Local (imported) tracks show an "on device" badge. */
 export function DownloadButton({ track, size = 24 }: { track: AppTrack; size?: number }) {
+  const styles = useStyles();
+  const colors = useColors();
   const { status, progress } = useDownloadState(track.key);
 
   if (track.origin === 'local') {
@@ -65,7 +67,7 @@ export function DownloadButton({ track, size = 24 }: { track: AppTrack; size?: n
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   box: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   ring: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-});
+}));

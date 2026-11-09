@@ -1,8 +1,10 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 
-import { colors } from '../theme';
+import { makeStyles, useColors } from '../theme';
 
 export function Loading() {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.root}>
       <ActivityIndicator color={colors.accent} />
@@ -10,6 +12,6 @@ export function Loading() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-});
+}));

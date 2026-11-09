@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { colors, space } from '../theme';
+import { makeStyles, space, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
 
 export function EmptyState({ icon, title, message, children }: { icon: IconName; title: string; message?: string; children?: ReactNode }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.root}>
       <View style={styles.badge}>
@@ -24,7 +26,7 @@ export function EmptyState({ icon, title, message, children }: { icon: IconName;
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { alignItems: 'center', paddingHorizontal: space.xxl, paddingVertical: space.xxxl, gap: space.sm },
   badge: {
     width: 64,
@@ -38,4 +40,4 @@ const styles = StyleSheet.create({
   center: { textAlign: 'center' },
   message: { maxWidth: 300 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.sm, marginTop: space.md },
-});
+}));

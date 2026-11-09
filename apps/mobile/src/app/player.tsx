@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
@@ -47,7 +48,7 @@ import { openTrackActions } from '@/ui/components/TrackActions';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import { showSheet } from '@/ui/overlay';
-import { colors, radius, space } from '@/ui/theme';
+import { ForceDark, makeStyles, radius, space, useColors } from '@/ui/theme';
 
 const DISMISS_DISTANCE = 140;
 
@@ -55,7 +56,18 @@ function dismiss() {
   if (router.canGoBack()) router.back();
 }
 
+/** Immersive screen over artwork: stays dark in light themes. */
 export default function PlayerScreen() {
+  return (
+    <ForceDark>
+      <StatusBar style="light" />
+      <PlayerScreenContent />
+    </ForceDark>
+  );
+}
+
+function PlayerScreenContent() {
+  const styles = useStyles();
   const current = usePlayer((s) => s.current);
   const { height: screenH } = useWindowDimensions();
   const y = useSharedValue(0);
@@ -157,6 +169,8 @@ function NowPlaying({
   pageHeight: number;
   onScrollToLyrics: () => void;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isPlaying = usePlayer((s) => s.isPlaying);
@@ -282,6 +296,7 @@ function NowPlaying({
 }
 
 function Backdrop({ uri }: { uri: string | null }) {
+  const colors = useColors();
   const source = useImageSource(uri);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -299,7 +314,7 @@ function Backdrop({ uri }: { uri: string | null }) {
         colors={
           uri
             ? ['rgba(10,10,12,0.45)', 'rgba(10,10,12,0.78)', 'rgba(10,10,12,0.96)']
-            : [colors.accentDeep, '#2A0A0B', colors.bg]
+            : [colors.accentDeep, colors.bg, colors.bg]
         }
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
@@ -317,6 +332,7 @@ function PulsingArtwork({
   size: number;
   playing: boolean;
 }) {
+  const styles = useStyles();
   const scale = useSharedValue(playing ? 1 : 0.86);
   useEffect(() => {
     scale.set(withSpring(playing ? 1 : 0.86, { damping: 15, stiffness: 140 }));
@@ -346,6 +362,8 @@ const REPEAT_ICON: Record<RepeatMode, { label: string; badge?: string }> = {
 };
 
 function Transport() {
+  const styles = useStyles();
+  const colors = useColors();
   const isPlaying = usePlayer((s) => s.isPlaying);
   const isBuffering = usePlayer((s) => s.isBuffering);
   const shuffle = usePlayer((s) => s.shuffle);
@@ -379,9 +397,9 @@ function Transport() {
         }}
         style={styles.playButton}>
         {isBuffering && !isPlaying ? (
-          <ActivityIndicator color={colors.white} />
+          <ActivityIndicator color={colors.onAccent} />
         ) : (
-          <Icon name={isPlaying ? 'pause' : 'play'} size={34} color={colors.white} />
+          <Icon name={isPlaying ? 'pause' : 'play'} size={34} color={colors.onAccent} />
         )}
       </PressableScale>
       <IconButton
@@ -411,7 +429,7 @@ function Transport() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   sheet: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
   scrollView: { flex: 1 },
   scrollContent: { flexGrow: 1 },
@@ -472,7 +490,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  repeatBadgeText: { color: colors.white, fontSize: 9, lineHeight: 11, fontWeight: '800' },
+  repeatBadgeText: { color: colors.onAccent, fontSize: 9, lineHeight: 11, fontWeight: '800' },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -484,4 +502,4 @@ const styles = StyleSheet.create({
     paddingTop: space.lg,
     gap: space.lg,
   },
-});
+}));

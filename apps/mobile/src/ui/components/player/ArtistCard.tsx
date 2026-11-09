@@ -9,9 +9,11 @@ import { Text } from '@/ui/components/Text';
 import { plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
-import { colors, radius, space } from '@/ui/theme';
+import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 export function ArtistCard({ track }: { track: AppTrack }) {
+  const styles = useStyles();
+  const colors = useColors();
   const { artist } = useArtist(track.artistId, track.origin);
   const imageUri = artist?.artworkUri ?? track.artworkUri;
   const source = useImageSource(imageUri);
@@ -74,7 +76,7 @@ export function ArtistCard({ track }: { track: AppTrack }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: {
     height: 190,
     borderRadius: radius.xl,
@@ -127,4 +129,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

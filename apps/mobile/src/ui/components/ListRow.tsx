@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { colors, space, TRACK_ROW_HEIGHT } from '../theme';
+import { makeStyles, space, TRACK_ROW_HEIGHT, useColors } from '../theme';
 import { Icon } from './Icon';
 import { Text } from './Text';
 
@@ -23,13 +23,15 @@ function ListRowImpl({
   trailing?: ReactNode;
   chevron?: boolean;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={320}
-      android_ripple={RIPPLE}
+      android_ripple={{ color: colors.ripple }}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       {leading}
       <View style={styles.meta}>
@@ -50,9 +52,8 @@ function ListRowImpl({
 
 export const ListRow = memo(ListRowImpl);
 
-const RIPPLE = { color: 'rgba(255,255,255,0.06)' };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: {
     minHeight: TRACK_ROW_HEIGHT,
     flexDirection: 'row',
@@ -61,6 +62,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     gap: space.md,
   },
-  pressed: { backgroundColor: 'rgba(255,255,255,0.04)' },
+  pressed: { backgroundColor: colors.pressed },
   meta: { flex: 1, minWidth: 0, gap: 2 },
-});
+}));

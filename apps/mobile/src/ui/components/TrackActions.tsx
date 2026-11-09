@@ -20,7 +20,7 @@ import { attempt, confirmDeleteLocal } from '../actions';
 import { nav } from '../nav';
 import { showSheet, showToast } from '../overlay';
 import { confirm } from './ConfirmSheet';
-import { colors } from '../theme';
+import { useColors } from '../theme';
 import { SheetAction, SheetHeader } from './ActionSheet';
 import { PlaylistPicker } from './PlaylistPicker';
 import { Text } from './Text';
@@ -46,6 +46,7 @@ export function onTrackMore(track: AppTrack) {
 }
 
 function TrackActions({ track, context }: { track: AppTrack; context: TrackActionContext }) {
+  const colors = useColors();
   const liked = useIsLiked(track.key);
   const { adminMode, adminToken } = useSettings();
   const admin = adminMode && !!adminToken;
@@ -132,6 +133,7 @@ function confirmDeleteFromServer(track: AppTrack) {
 }
 
 function DownloadAction({ track, status, progress }: { track: AppTrack; status: DownloadStatus; progress: number }) {
+  const colors = useColors();
   if (status === 'done') {
     return <SheetAction icon="trash-outline" label="Remove download" onPress={() => void attempt(removeDownload(track.key), 'Download removed')} />;
   }

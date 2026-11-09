@@ -1,8 +1,8 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { haptics } from '../haptics';
 import { closeSheet, showSheet } from '../overlay';
-import { colors, space } from '../theme';
+import { makeStyles, space, useColors } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 import { Text } from './Text';
 
@@ -22,6 +22,8 @@ export function confirm(opts: ConfirmOptions) {
 }
 
 function ConfirmSheet({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', destructive, onConfirm }: ConfirmOptions) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.root} accessibilityRole="alert">
       <View style={styles.copy}>
@@ -44,9 +46,9 @@ function ConfirmSheet({ title, message, confirmLabel = 'Confirm', cancelLabel = 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   root: { paddingHorizontal: space.xl, paddingTop: space.sm, paddingBottom: space.md, gap: space.xl },
   copy: { gap: space.sm },
   buttons: { flexDirection: 'row', gap: space.md },
   flex: { flex: 1 },
-});
+}));

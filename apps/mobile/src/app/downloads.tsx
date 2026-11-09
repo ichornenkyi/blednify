@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cancelDownload, downloadTracks, formatBytes, useDownloads, useSettings, type AppTrack, type DownloadStatus } from '@/core';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { Artwork } from '@/ui/components/Artwork';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Icon } from '@/ui/components/Icon';
@@ -12,7 +13,7 @@ import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { plural } from '@/ui/format';
 import { nav } from '@/ui/nav';
-import { colors, radius, space, TRACK_ROW_HEIGHT } from '@/ui/theme';
+import { makeStyles, radius, space, TRACK_ROW_HEIGHT, useColors } from '@/ui/theme';
 
 type Active = { track: AppTrack; status: DownloadStatus; progress: number };
 
@@ -23,12 +24,15 @@ function statusLabel({ status, progress }: Active) {
 }
 
 export default function DownloadsScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { active, completedCount, bytesUsed } = useDownloads();
   const { downloadOnWifiOnly } = useSettings();
 
   return (
     <View style={styles.root}>
+      <Backdrop />
       <ScreenHeader title="Downloads" />
       <FlashList
         data={active}
@@ -81,6 +85,8 @@ export default function DownloadsScreen() {
 }
 
 function ActiveRow({ item }: { item: Active }) {
+  const styles = useStyles();
+  const colors = useColors();
   const { track, status, progress } = item;
   const failed = status === 'error';
   return (
@@ -106,7 +112,7 @@ function ActiveRow({ item }: { item: Active }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   summary: {
@@ -128,4 +134,4 @@ const styles = StyleSheet.create({
   meta: { flex: 1, minWidth: 0, gap: 3 },
   bar: { height: 3, borderRadius: 2, backgroundColor: colors.surface3, overflow: 'hidden' },
   barFill: { height: '100%', backgroundColor: colors.accent },
-});
+}));

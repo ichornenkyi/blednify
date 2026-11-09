@@ -1,19 +1,21 @@
 import Svg, { Circle } from 'react-native-svg';
 
-import { colors } from '../theme';
+import { useColors } from '../theme';
 
 /** Circular determinate progress (downloads). `progress` in 0..1. */
 export function ProgressRing({
   progress,
   size = 22,
   stroke = 2.5,
-  color = colors.accent,
+  color: colorProp,
 }: {
   progress: number;
   size?: number;
   stroke?: number;
   color?: string;
 }) {
+  const colors = useColors();
+  const color = colorProp ?? colors.accent;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const p = Math.min(1, Math.max(0, progress));

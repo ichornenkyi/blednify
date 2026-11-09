@@ -9,7 +9,7 @@ import { player, usePlayer, useProgress } from '@/core';
 
 import { haptics } from '../haptics';
 import { nav } from '../nav';
-import { colors, MINI_PLAYER_HEIGHT, radius, space } from '../theme';
+import { makeStyles, MINI_PLAYER_HEIGHT, radius, space, useColors } from '../theme';
 import { Artwork } from './Artwork';
 import { IconButton } from './IconButton';
 import { Text } from './Text';
@@ -24,6 +24,8 @@ function skip(dir: 1 | -1) {
 
 /** Docked mini player (above the tab bar). Tap → Now Playing, swipe ←/→ for next/previous. */
 export function MiniPlayer() {
+  const styles = useStyles();
+  const colors = useColors();
   const current = usePlayer((s) => s.current);
   const isPlaying = usePlayer((s) => s.isPlaying);
   const isBuffering = usePlayer((s) => s.isBuffering);
@@ -89,6 +91,7 @@ export function MiniPlayer() {
 
 /** MiniPlayer for full-screen stack routes (album / artist / playlist) that sit above the tab bar. */
 export function DockedMiniPlayer() {
+  const styles = useStyles();
   const hasTrack = usePlayer((s) => s.current !== null);
   const insets = useSafeAreaInsets();
   if (!hasTrack) return null;
@@ -101,6 +104,7 @@ export function DockedMiniPlayer() {
 
 /** Isolated so only this line re-renders on progress ticks. */
 function MiniProgress() {
+  const styles = useStyles();
   const { positionMs, durationMs } = useProgress();
   const ratio = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
   const p = useSharedValue(ratio);
@@ -116,7 +120,7 @@ function MiniProgress() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrap: { paddingHorizontal: space.sm, paddingBottom: space.xs },
   docked: { paddingTop: space.xs, backgroundColor: colors.bg },
   card: {
@@ -141,8 +145,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 2,
     borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.track,
     overflow: 'hidden',
   },
   fill: { height: '100%', width: '100%', backgroundColor: colors.accent, transformOrigin: 'left' },
-});
+}));

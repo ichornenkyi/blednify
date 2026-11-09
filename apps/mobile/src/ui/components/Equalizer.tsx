@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -11,7 +11,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import { colors } from '../theme';
+import { makeStyles, useColors } from '../theme';
 
 const BARS = [
   { min: 0.25, max: 1, duration: 420, rest: 0.45 },
@@ -20,7 +20,10 @@ const BARS = [
 ] as const;
 
 /** Animated "now playing" bars. Runs fully on the UI thread; freezes when paused. */
-export function Equalizer({ playing, size = 14, color = colors.accent }: { playing: boolean; size?: number; color?: string }) {
+export function Equalizer({ playing, size = 14, color: colorProp }: { playing: boolean; size?: number; color?: string }) {
+  const styles = useStyles();
+  const accent = useColors().accent;
+  const color = colorProp ?? accent;
   return (
     <View style={[styles.row, { height: size, width: size }]} accessibilityLabel={playing ? 'Playing' : 'Paused'}>
       {BARS.map((bar, i) => (
@@ -52,11 +55,12 @@ function Bar({ bar, playing, color }: { bar: (typeof BARS)[number]; playing: boo
 }
 
 function BarView({ h, color }: { h: SharedValue<number>; color: string }) {
+  const styles = useStyles();
   const style = useAnimatedStyle(() => ({ transform: [{ scaleY: h.get() }] }));
   return <Animated.View style={[styles.bar, { backgroundColor: color }, style]} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   row: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   bar: { width: '24%', height: '100%', borderRadius: 1.5, transformOrigin: 'bottom' },
-});
+}));

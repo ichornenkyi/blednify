@@ -1,9 +1,10 @@
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { downloadTracks, player, usePlaylist, type AppTrack } from '@/core';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { DetailHeader } from '@/ui/components/DetailHeader';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { IconButton } from '@/ui/components/IconButton';
@@ -19,9 +20,10 @@ import { humanDuration, plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { showToast } from '@/ui/overlay';
 import { useAfter } from '@/ui/useAfter';
-import { colors, radius, space } from '@/ui/theme';
+import { makeStyles, radius, space } from '@/ui/theme';
 
 export default function PlaylistScreen() {
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { playlist, tracks } = usePlaylist(id);
@@ -30,6 +32,7 @@ export default function PlaylistScreen() {
   if (!playlist) {
     return (
       <View style={styles.root}>
+        <Backdrop />
         {settled ? (
           <View style={[styles.root, styles.center]}>
             <EmptyState icon="list-outline" title="Playlist not found" message="It may have been deleted.">
@@ -55,6 +58,7 @@ export default function PlaylistScreen() {
 
   return (
     <View style={styles.root}>
+      <Backdrop />
       <FlashList
         data={tracks}
         keyExtractor={(t, i) => `${i}:${t.key}`}
@@ -103,7 +107,7 @@ export default function PlaylistScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   center: { justifyContent: 'center' },
-});
+}));

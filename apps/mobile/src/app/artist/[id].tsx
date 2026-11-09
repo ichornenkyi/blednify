@@ -1,9 +1,10 @@
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { player, useArtist, type AlbumView, type AppTrack } from '@/core';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { AlbumCard } from '@/ui/components/AlbumCard';
 import { Artwork } from '@/ui/components/Artwork';
 import { DetailHeader } from '@/ui/components/DetailHeader';
@@ -19,12 +20,13 @@ import { TrackRow } from '@/ui/components/TrackRow';
 import { plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { nav, parseOrigin } from '@/ui/nav';
-import { colors, space } from '@/ui/theme';
+import { makeStyles, space } from '@/ui/theme';
 
 const onMore = (track: AppTrack) => openTrackActions(track, { hideArtist: true });
 const albumKey = (a: AlbumView) => `${a.origin}:${a.id}`;
 
 export default function ArtistScreen() {
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id: string; origin?: string }>();
   const origin = parseOrigin(params.origin);
   const insets = useSafeAreaInsets();
@@ -33,6 +35,7 @@ export default function ArtistScreen() {
   if (!artist) {
     return (
       <View style={styles.root}>
+        <Backdrop />
         {isLoading ? (
           <Loading />
         ) : (
@@ -55,6 +58,7 @@ export default function ArtistScreen() {
 
   return (
     <View style={styles.root}>
+      <Backdrop />
       <FlashList
         data={tracks}
         keyExtractor={(t) => t.key}
@@ -97,7 +101,7 @@ export default function ArtistScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   center: { justifyContent: 'center' },
-});
+}));

@@ -105,7 +105,15 @@ export {
 export { useAdminInfo } from './admin';
 
 // Settings
-export { saveConnection, useServerBase, useSettings } from './settings';
+export {
+  saveConnection,
+  setThemePref,
+  themeStore,
+  useServerBase,
+  useSettings,
+  useThemePref,
+  type ThemePref,
+} from './settings';
 
 // Images (adds the access token for server URLs)
 export { imageSourceFor, useImageSource, type ImageSource } from './auth';

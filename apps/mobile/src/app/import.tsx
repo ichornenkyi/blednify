@@ -18,6 +18,7 @@ import {
   type ImportJob,
 } from '@/core';
 import { attempt, errorMessage } from '@/ui/actions';
+import { Backdrop } from '@/ui/components/Backdrop';
 import { Icon } from '@/ui/components/Icon';
 import { IconButton } from '@/ui/components/IconButton';
 import { PlaylistArtwork } from '@/ui/components/PlaylistArtwork';
@@ -26,11 +27,13 @@ import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { nav } from '@/ui/nav';
-import { colors, radius, space } from '@/ui/theme';
+import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 const SOURCE_LABEL = { spotify: 'Spotify', soundcloud: 'SoundCloud', youtube: 'YouTube' } as const;
 
 export default function ImportScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const insets = useSafeAreaInsets();
   const { adminMode, adminToken, serverUrl } = useSettings();
   const status = useServerStatus();
@@ -61,6 +64,7 @@ export default function ImportScreen() {
 
   return (
     <View style={styles.root}>
+      <Backdrop />
       <ScreenHeader title="Import playlist" />
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
@@ -120,6 +124,8 @@ export default function ImportScreen() {
 }
 
 function Warn({ text, danger }: { text: string; danger?: boolean }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.warn}>
       <Icon name={danger ? 'alert-circle' : 'information-circle-outline'} size={16} color={danger ? colors.danger : colors.textSecondary} />
@@ -148,6 +154,8 @@ function summary(job: ImportJob): string {
 }
 
 function ImportCard({ entry }: { entry: ImportEntry }) {
+  const styles = useStyles();
+  const colors = useColors();
   const { job, playlistId } = entry;
   const [open, setOpen] = useState(false);
   const active = isImportActive(job.state);
@@ -214,6 +222,8 @@ function ImportCard({ entry }: { entry: ImportEntry }) {
 }
 
 function CurrentSongs({ job }: { job: ImportJob }) {
+  const styles = useStyles();
+  const colors = useColors();
   const now = job.items.filter((i) => i.state === 'downloading').slice(0, 3);
   if (!now.length) return null;
   return (
@@ -239,7 +249,7 @@ function JobArtwork({ job }: { job: ImportJob }) {
   return <PlaylistArtwork uris={uri ? [uri] : []} name={job.name ?? ''} size={56} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   card: {
@@ -277,4 +287,4 @@ const styles = StyleSheet.create({
   bar: { height: 3, borderRadius: 2, backgroundColor: colors.surface3, overflow: 'hidden' },
   barFill: { height: '100%', backgroundColor: colors.accent },
   now: { gap: 2 },
-});
+}));
