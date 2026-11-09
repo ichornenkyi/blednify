@@ -15,6 +15,7 @@ import { IconButton } from './IconButton';
 import { Text } from './Text';
 
 const SWIPE_THRESHOLD = 72;
+const OPEN_THRESHOLD = 36;
 
 function skip(dir: 1 | -1) {
   haptics.tap();
@@ -22,7 +23,7 @@ function skip(dir: 1 | -1) {
   else player.previous();
 }
 
-/** Docked mini player (above the tab bar). Tap → Now Playing, swipe ←/→ for next/previous. */
+/** Docked mini player (above the tab bar). Tap or swipe ↑ → Now Playing, swipe ←/→ for next/previous. */
 export function MiniPlayer() {
   const styles = useStyles();
   const colors = useColors();
@@ -30,21 +31,34 @@ export function MiniPlayer() {
   const isPlaying = usePlayer((s) => s.isPlaying);
   const isBuffering = usePlayer((s) => s.isBuffering);
   const x = useSharedValue(0);
+  const y = useSharedValue(0);
+  /** Axis the drag locked to on activation: 0 horizontal (skip), 1 vertical (open player). */
+  const axis = useSharedValue(0);
 
   const pan = usePanGesture({
     activeOffsetX: [-14, 14],
-    failOffsetY: [-12, 12],
+    activeOffsetY: -14,
+    onActivate: (e) => {
+      'worklet';
+      axis.set(Math.abs(e.translationY) > Math.abs(e.translationX) ? 1 : 0);
+    },
     onUpdate: (e) => {
       'worklet';
-      x.set(e.translationX);
+      if (axis.get() === 1) y.set(Math.min(0, e.translationY));
+      else x.set(e.translationX);
     },
     onDeactivate: (e) => {
       'worklet';
-      const fling = Math.abs(e.velocityX) > 700;
-      if (Math.abs(e.translationX) > SWIPE_THRESHOLD || fling) {
-        scheduleOnRN(skip, e.translationX < 0 ? 1 : -1);
+      if (axis.get() === 1) {
+        if (e.translationY < -OPEN_THRESHOLD || e.velocityY < -600) scheduleOnRN(nav.player);
+      } else {
+        const fling = Math.abs(e.velocityX) > 700;
+        if (Math.abs(e.translationX) > SWIPE_THRESHOLD || fling) {
+          scheduleOnRN(skip, e.translationX < 0 ? 1 : -1);
+        }
       }
       x.set(withSpring(0, { damping: 20, stiffness: 240 }));
+      y.set(withSpring(0, { damping: 20, stiffness: 240 }));
     },
   });
 
@@ -52,11 +66,14 @@ export function MiniPlayer() {
     transform: [{ translateX: x.get() * 0.6 }],
     opacity: interpolate(Math.abs(x.get()), [0, 160], [1, 0.4], 'clamp'),
   }));
+  const liftStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: Math.max(y.get() * 0.4, -24) }],
+  }));
 
   if (!current) return null;
 
   return (
-    <View style={styles.wrap}>
+    <Animated.View style={[styles.wrap, liftStyle]}>
       <GestureDetector gesture={pan}>
         <Pressable
           accessibilityRole="button"
@@ -85,7 +102,7 @@ export function MiniPlayer() {
           <MiniProgress />
         </Pressable>
       </GestureDetector>
-    </View>
+    </Animated.View>
   );
 }
 
