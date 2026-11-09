@@ -299,7 +299,7 @@ function syncWindow() {
   if (!nat || !natReady) return;
   // Native may have advanced before its event reached JS; catch up first.
   const live = nat.currentIndex;
-  if (live !== natCur && live >= 0 && live < natUids.length && nat.trackCount === natUids.length) onNativeIndex(live);
+  if (!advancingTo && live !== natCur && live >= 0 && live < natUids.length && nat.trackCount === natUids.length) onNativeIndex(live);
   const want = desiredTail().flatMap((e) => {
     const src = sourceOf(e.track);
     return src ? [{ uid: e.uid, src }] : [];
@@ -384,6 +384,8 @@ function load(idx: number, play: boolean, positionMs = 0) {
     natUris.push(srcKey(s2));
   }
   n.skipTo(natCur);
+  // The rebuilt window starts on the previous song's slot; ignore native until it lands on ours.
+  advancingTo = { ci: natCur, until: Date.now() + 2_000 };
   natReady = true;
   windowDirty = false;
 
