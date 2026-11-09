@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Pressable } from '../desktop/web';
@@ -53,7 +53,7 @@ export function DetailHeader({
   const disabled = !onPlay;
 
   const backdrop = (
-    <View style={styles.backdrop} pointerEvents="none">
+    <View style={[styles.backdrop, colors.backdrop !== 'none' && fadeOut]} pointerEvents="none">
       {backdropUri ? (
         <Image source={backdropSource} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
       ) : null}
@@ -146,6 +146,18 @@ export function DetailHeader({
     </View>
   );
 }
+
+/**
+ * Themes with a backdrop (glow, stars) draw it behind the whole screen. The cover backdrop ends in solid `bg`,
+ * so where it stops the theme backdrop reappears with a hard edge. On web, fade the layer out instead.
+ */
+const fadeOut =
+  Platform.OS === 'web'
+    ? ({
+        maskImage: 'linear-gradient(to bottom, #000 55%, transparent)',
+        WebkitMaskImage: 'linear-gradient(to bottom, #000 55%, transparent)',
+      } as unknown as ViewStyle)
+    : null;
 
 const useStyles = makeStyles((colors) => ({
   root: { paddingHorizontal: space.lg, paddingBottom: space.lg, gap: space.lg },
