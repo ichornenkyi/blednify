@@ -174,13 +174,17 @@ function NowPlaying({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isPlaying = usePlayer((s) => s.isPlaying);
-  const { lyrics } = useLyrics(track);
+  const { lyrics, isLoading: lyricsLoading } = useLyrics(track);
   const withLyrics = hasLyrics(lyrics);
+  // Keep the previous layout while the next track's lyrics load, so the cover doesn't
+  // flash at the larger no-lyrics size on every skip.
+  const [layoutLyrics, setLayoutLyrics] = useState(withLyrics);
+  if (!lyricsLoading && layoutLyrics !== withLyrics) setLayoutLyrics(withLyrics);
 
   const isSmallScreen = height <= 740;
   const art = Math.min(
     width - space.xl * 2,
-    height * (withLyrics ? (isSmallScreen ? 0.3 : 0.33) : isSmallScreen ? 0.36 : 0.4),
+    height * (layoutLyrics ? (isSmallScreen ? 0.3 : 0.33) : isSmallScreen ? 0.36 : 0.4),
   );
 
   const goArtist = () => {
@@ -334,19 +338,26 @@ function PulsingArtwork({
 }) {
   const styles = useStyles();
   const scale = useSharedValue(playing ? 1 : 0.86);
+  const side = useSharedValue(size);
   useEffect(() => {
     scale.set(withSpring(playing ? 1 : 0.86, { damping: 15, stiffness: 140 }));
   }, [playing, scale]);
+  useEffect(() => {
+    side.set(withTiming(size, { duration: 220, easing: Easing.out(Easing.quad) }));
+  }, [size, side]);
   const style = useAnimatedStyle(() => ({
+    width: side.get(),
+    height: side.get(),
     transform: [{ scale: scale.get() }],
     shadowOpacity: interpolate(scale.get(), [0.86, 1], [0.25, 0.6]),
   }));
   return (
-    <Animated.View style={[styles.artShadow, { width: size, height: size }, style]}>
+    <Animated.View style={[styles.artShadow, style]}>
       <Artwork
         uri={track.artworkUri}
         label={track.album || track.title}
         size={size}
+        style={styles.artFill}
         radius={radius.lg}
         recyclingKey={track.key}
         priority="high"
@@ -450,6 +461,7 @@ const useStyles = makeStyles((colors) => ({
     shadowOffset: { width: 0, height: 18 },
     elevation: 20,
   },
+  artFill: { width: '100%', height: '100%' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   titleText: { flex: 1, minWidth: 0, gap: 2 },
   artist: { fontSize: 17, lineHeight: 22 },
