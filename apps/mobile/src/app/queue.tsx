@@ -24,6 +24,7 @@ import { Equalizer } from '@/ui/components/Equalizer';
 import { Icon } from '@/ui/components/Icon';
 import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
+import { useWideRedirect } from '@/ui/desktop/redirect';
 import { haptics } from '@/ui/haptics';
 import { makeStyles, space, TRACK_ROW_HEIGHT, useColors } from '@/ui/theme';
 
@@ -43,6 +44,10 @@ type DragState = {
 type Item = { track: AppTrack; abs: number; rel: number };
 
 export default function QueueScreen() {
+  return useWideRedirect('queue') ? null : <QueueScreenContent />;
+}
+
+function QueueScreenContent() {
   const styles = useStyles();
   const colors = useColors();
   const insets = useSafeAreaInsets();

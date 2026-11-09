@@ -33,6 +33,7 @@ import { plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import { showToast } from '@/ui/overlay';
+import { useReadableColumn } from '@/ui/layout';
 import { makeStyles, presetById, radius, space, useColors } from '@/ui/theme';
 
 type TestResult = { ok: boolean; message: string } | null;
@@ -49,6 +50,7 @@ export default function SettingsScreen() {
   const styles = useStyles();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const readable = useReadableColumn();
   const settings = useSettings();
   const status = useServerStatus();
   const { bytesUsed, completedCount } = useDownloads();
@@ -103,7 +105,7 @@ export default function SettingsScreen() {
     <View style={styles.root}>
       <Backdrop />
       <ScreenHeader title="Settings" />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + space.xxl }]} keyboardShouldPersistTaps="handled">
         <Section title="Server" icon="server-outline">
           <Text variant="caption">Address of your self-hosted Blednify server. Leave empty to use only music on this phone.</Text>
           <TextInput

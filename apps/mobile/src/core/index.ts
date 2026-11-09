@@ -63,7 +63,8 @@ export {
 
 // Player
 export { player } from './player/engine';
-export { onProgress, usePlayer, useProgress, useProgressSeconds } from './player/store';
+export { onProgress, progressStore, usePlayer, useProgress, useProgressSeconds } from './player/store';
+export { setVolume, toggleMute, volumeStore, volumeSupported, type VolumeState } from './player/volume';
 
 // Downloads
 export { cancelDownload, downloadTracks, removeDownload, useDownloadState, useDownloads } from './downloads';

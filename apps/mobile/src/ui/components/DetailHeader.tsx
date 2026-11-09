@@ -1,9 +1,11 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Pressable } from '../desktop/web';
+import { useGutter, useIsWide } from '../layout';
 import { makeStyles, radius, space, useColors, withAlpha } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 import { Text } from './Text';
@@ -45,25 +47,75 @@ export function DetailHeader({
   const insets = useSafeAreaInsets();
   const backdropSource = useImageSource(backdropUri);
   const { width } = useWindowDimensions();
-  const art = Math.min(240, Math.round(width * 0.6));
+  const wide = useIsWide();
+  const gutter = useGutter();
+  const art = wide ? 232 : Math.min(240, Math.round(width * 0.6));
   const disabled = !onPlay;
+
+  const backdrop = (
+    <View style={styles.backdrop} pointerEvents="none">
+      {backdropUri ? (
+        <Image source={backdropSource} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
+      ) : null}
+      <LinearGradient
+        colors={
+          backdropUri
+            ? [withAlpha(colors.bg, 0.35), withAlpha(colors.bg, 0.75), colors.bg]
+            : [colors.isLight ? colors.accentSoft : colors.accentDeep, withAlpha(colors.bg, 0.6), colors.bg]
+        }
+        locations={[0, 0.55, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+    </View>
+  );
+
+  if (wide) {
+    // Wide layout: cover beside the titles, buttons sized to their labels.
+    return (
+      <View style={[styles.root, { paddingTop: space.xxxl + space.xl, paddingHorizontal: gutter, gap: space.xl }, !!children && styles.rootWithTable]}>
+        {backdrop}
+        <View style={styles.wideRow}>
+          <View style={[styles.art, styles.wideArt, { width: art, height: art }]}>{renderArtwork(art)}</View>
+          <View style={styles.wideText}>
+            <Text variant="micro" color={colors.accent}>
+              {eyebrow.toUpperCase()}
+            </Text>
+            <Text variant="display" numberOfLines={2} style={styles.wideTitle}>
+              {title}
+            </Text>
+            <View style={styles.wideMeta}>
+              {subtitle ? (
+                <Pressable disabled={!onSubtitlePress} onPress={onSubtitlePress}>
+                  {({ hovered }) => (
+                    <Text variant="bodyStrong" color={colors.text} numberOfLines={1} style={hovered && onSubtitlePress ? styles.underline : undefined}>
+                      {subtitle}
+                    </Text>
+                  )}
+                </Pressable>
+              ) : null}
+              {subtitle && meta ? <Text variant="caption">·</Text> : null}
+              {meta ? (
+                <Text variant="caption" numberOfLines={1}>
+                  {meta}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+        <View style={styles.buttons}>
+          <PrimaryButton label="Play" icon="play" onPress={() => onPlay?.()} disabled={disabled} style={styles.wideButton} />
+          <PrimaryButton label="Shuffle" icon="shuffle" variant="surface" onPress={() => onShuffle?.()} disabled={!onShuffle} style={styles.wideButton} />
+          {actions}
+        </View>
+        {/* Full-bleed children (track table header) line up with the list rows, not the padded titles. */}
+        {children ? <View style={{ marginHorizontal: -gutter }}>{children}</View> : null}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + space.xxxl }]}>
-      <View style={styles.backdrop} pointerEvents="none">
-        {backdropUri ? (
-          <Image source={backdropSource} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
-        ) : null}
-        <LinearGradient
-          colors={
-            backdropUri
-              ? [withAlpha(colors.bg, 0.35), withAlpha(colors.bg, 0.75), colors.bg]
-              : [colors.isLight ? colors.accentSoft : colors.accentDeep, withAlpha(colors.bg, 0.6), colors.bg]
-          }
-          locations={[0, 0.55, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-      </View>
+      {backdrop}
       <View style={[styles.art, { width: art, height: art }]}>{renderArtwork(art)}</View>
       <View style={styles.text}>
         <Text variant="micro" color={colors.accent}>
@@ -111,4 +163,12 @@ const useStyles = makeStyles((colors) => ({
   text: { gap: space.xs },
   buttons: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   flex: { flex: 1 },
+  rootWithTable: { paddingBottom: 0 },
+  wideRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.xl },
+  wideArt: { alignSelf: 'auto' },
+  wideText: { flex: 1, minWidth: 0, gap: space.sm, paddingBottom: space.xs },
+  wideTitle: { fontSize: 52, lineHeight: 58, letterSpacing: -1.8 },
+  wideMeta: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
+  wideButton: { minWidth: 132, paddingHorizontal: space.xl },
+  underline: { textDecorationLine: 'underline' },
 }));

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useIsWide } from '../layout';
 import { makeStyles, space } from '../theme';
 import { IconButton } from './IconButton';
 import { Text } from './Text';
@@ -34,8 +35,9 @@ export function ScreenHeader({
 export function FloatingBack() {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
+  const wide = useIsWide();
   return (
-    <View style={[styles.floating, { top: insets.top + space.xs }]} pointerEvents="box-none">
+    <View style={[styles.floating, wide && styles.floatingWide, { top: insets.top + (wide ? space.lg : space.xs) }]} pointerEvents="box-none">
       <IconButton icon="chevron-back" label="Back" variant="scrim" size={24} diameter={40} onPress={() => router.back()} />
     </View>
   );
@@ -46,4 +48,5 @@ const useStyles = makeStyles(() => ({
   title: { flex: 1, textAlign: 'center' },
   right: { minWidth: 44, flexDirection: 'row', justifyContent: 'flex-end' },
   floating: { position: 'absolute', left: space.md, zIndex: 10 },
+  floatingWide: { left: space.lg },
 }));

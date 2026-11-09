@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useDeferredValue, useState, type ReactNode } from 'react';
+import { useDeferredValue, useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,6 +34,8 @@ import { onTrackMore } from '@/ui/components/TrackActions';
 import { TrackRow } from '@/ui/components/TrackRow';
 import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
+import { useDesk } from '@/ui/desktop/store';
+import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 type Item =
@@ -50,6 +52,20 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const wide = useIsWide();
+  const gutter = useGutter();
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  // Wide layout: Ctrl+K, "/" and the sidebar's Search item focus the field.
+  const focusTick = useDesk((s) => s.searchFocus);
+  useEffect(() => {
+    if (!focusTick) return;
+    // After the tab switch has painted, so the field is visible and focusable.
+    const t = setTimeout(() => {
+      input.current?.focus();
+      (input.current as unknown as HTMLInputElement | null)?.select?.();
+    }, 30);
+    return () => clearTimeout(t);
+  }, [focusTick]);
   const deferred = useDeferredValue(query.trim());
   const history = useSearchHistory();
   const { tracks, albums, artists, isLoading } = useSearch(deferred);
@@ -97,14 +113,15 @@ export default function SearchScreen() {
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + space.md }]}>
+    <View style={[styles.root, { paddingTop: insets.top + (wide ? space.xxl : space.md) }]}>
       <Backdrop />
-      <Text variant="display" style={styles.title}>
+      <Text variant="display" style={[styles.title, { paddingHorizontal: gutter }]}>
         Search
       </Text>
-      <View style={styles.field}>
+      <View style={[styles.field, { marginHorizontal: gutter }, wide && styles.fieldWide]}>
         <Icon name="search" size={18} color={colors.textSecondary} />
         <TextInput
+          ref={input}
           value={query}
           onChangeText={setQuery}
           onFocus={() => setIsFocused(true)}
@@ -113,7 +130,7 @@ export default function SearchScreen() {
             const q = query.trim();
             if (q) pushSearchQuery(q);
           }}
-          placeholder="Songs, artists, albums"
+          placeholder={wide ? 'Songs, artists, albums  ·  Ctrl K' : 'Songs, artists, albums'}
           placeholderTextColor={colors.textTertiary}
           selectionColor={colors.accent}
           cursorColor={colors.accent}
@@ -173,7 +190,7 @@ export default function SearchScreen() {
             switch (item.type) {
               case 'header':
                 return (
-                  <Text variant="subheading" style={styles.section}>
+                  <Text variant="subheading" style={[styles.section, { paddingHorizontal: gutter }]}>
                     {item.title}
                   </Text>
                 );
@@ -289,8 +306,10 @@ const BROWSE = fileStorageSupported ? BROWSE_ALL : BROWSE_ALL.filter((b) => !FIL
 
 function BrowseGrid() {
   const styles = useStyles();
+  const wide = useIsWide();
+  const gutter = useGutter();
   return (
-    <View style={styles.browse}>
+    <View style={[styles.browse, { paddingHorizontal: gutter }]}>
       <Text variant="subheading" style={styles.browseTitle}>
         Browse your library
       </Text>
@@ -300,7 +319,7 @@ function BrowseGrid() {
             key={b.label}
             accessibilityRole="button"
             accessibilityLabel={b.label}
-            style={styles.tile}
+            style={[styles.tile, wide && styles.tileWide]}
             onPress={() => (b.action ? b.action() : nav.library(b.filter))}>
             <LinearGradient colors={b.colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.tileFill}>
               <Text variant="subheading" numberOfLines={2} style={styles.tileLabel}>
@@ -320,22 +339,22 @@ function BrowseGrid() {
 const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  title: { paddingHorizontal: space.lg, marginBottom: space.md },
+  title: { marginBottom: space.md },
   field: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
     height: 48,
-    marginHorizontal: space.lg,
     marginBottom: space.md,
     paddingHorizontal: space.md + 2,
     borderRadius: radius.md,
     backgroundColor: colors.surface2,
   },
-  input: { flex: 1, height: '100%', color: colors.text, fontSize: 16, fontWeight: '500' },
+  fieldWide: { maxWidth: 560, marginBottom: space.lg },
+  input: { flex: 1, height: '100%', color: colors.text, fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as object,
   listContent: { paddingBottom: space.xl },
   scrollContent: { paddingBottom: space.xxl },
-  section: { paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.sm },
+  section: { paddingTop: space.lg, paddingBottom: space.sm },
   recentSection: { paddingBottom: space.md },
   recentHeader: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
   queryIconContainer: {
@@ -350,10 +369,11 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.lg,
     paddingTop: space.md,
   },
-  browse: { paddingHorizontal: space.lg, paddingTop: space.md },
+  browse: { paddingTop: space.md },
   browseTitle: { marginBottom: space.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
   tile: { width: '47.5%', flexGrow: 1, height: 96, borderRadius: radius.md, overflow: 'hidden' },
+  tileWide: { width: '23%', flexGrow: 0, height: 120 },
   tileFill: { flex: 1, padding: space.md },
   tileLabel: { maxWidth: '70%' },
   tileIcon: { position: 'absolute', right: -4, bottom: -6, transform: [{ rotate: '-14deg' }] },

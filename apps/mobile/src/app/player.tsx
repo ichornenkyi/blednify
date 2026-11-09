@@ -46,7 +46,9 @@ import { PressableScale } from '@/ui/components/PressableScale';
 import { SeekBar } from '@/ui/components/SeekBar';
 import { Text } from '@/ui/components/Text';
 import { openTrackActions } from '@/ui/components/TrackActions';
+import { DesktopNowPlaying } from '@/ui/desktop/NowPlaying';
 import { haptics } from '@/ui/haptics';
+import { useIsWide } from '@/ui/layout';
 import { nav } from '@/ui/nav';
 import { showSheet } from '@/ui/overlay';
 import { ForceDark, makeStyles, radius, space, useColors } from '@/ui/theme';
@@ -59,10 +61,11 @@ function dismiss() {
 
 /** Immersive screen over artwork: stays dark in light themes. */
 export default function PlayerScreen() {
+  const wide = useIsWide();
   return (
     <ForceDark>
       <StatusBar style="light" />
-      <PlayerScreenContent />
+      {wide ? <DesktopNowPlaying /> : <PlayerScreenContent />}
     </ForceDark>
   );
 }

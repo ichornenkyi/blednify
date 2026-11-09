@@ -24,11 +24,14 @@ import { Icon } from '@/ui/components/Icon';
 import { IconButton } from '@/ui/components/IconButton';
 import { PressableScale } from '@/ui/components/PressableScale';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
-import { Rail, RAIL_CARD_WIDTH } from '@/ui/components/Rail';
+import { Rail, useRailCardWidth } from '@/ui/components/Rail';
 import { Text } from '@/ui/components/Text';
 import { openTrackActions } from '@/ui/components/TrackActions';
+import { contextMenu } from '@/ui/desktop/web';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
+import type { SheetAnchor } from '@/ui/overlay';
+import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 function greeting(date = new Date()) {
@@ -60,6 +63,9 @@ export default function HomeScreen() {
   const styles = useStyles();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const wide = useIsWide();
+  const gutter = useGutter();
+  const cardW = useRailCardWidth();
   const server = useServerStatus();
   const recent = useRecentlyPlayed(20);
   // The grid already lists recent tracks; the rail shows the albums they came from.
@@ -91,7 +97,7 @@ export default function HomeScreen() {
       <Backdrop />
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={{ paddingTop: insets.top + space.md, paddingBottom: space.xxl }}
+        contentContainerStyle={{ paddingTop: insets.top + (wide ? space.xxl : space.md), paddingBottom: space.xxl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           hasServer ? (
@@ -104,7 +110,7 @@ export default function HomeScreen() {
             />
           ) : undefined
         }>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingLeft: gutter, paddingRight: wide ? gutter : space.sm }]}>
           <View style={styles.headerText}>
             <Text variant="display" numberOfLines={1} adjustsFontSizeToFit>
               {greeting()}
@@ -118,7 +124,8 @@ export default function HomeScreen() {
             />
           </View>
           {fileStorageSupported ? <IconButton icon="arrow-down-circle-outline" label="Downloads" onPress={nav.downloads} /> : null}
-          <IconButton icon="settings-outline" label="Settings" onPress={nav.settings} />
+          {/* The wide layout's sidebar has Settings. */}
+          {wide ? null : <IconButton icon="settings-outline" label="Settings" onPress={nav.settings} />}
         </View>
 
         {showWelcome ? (
@@ -138,11 +145,13 @@ export default function HomeScreen() {
             <QuickGrid recent={recent} likedCount={liked.length} />
 
             {showOffline ? (
-              <View style={styles.notice}>
+              <View style={[styles.notice, { marginHorizontal: gutter }]}>
                 <Icon name="cloud-offline-outline" size={22} color={colors.textSecondary} />
                 <View style={styles.noticeText}>
                   <Text variant="bodyStrong">Server unreachable</Text>
-                  <Text variant="caption">Playing from your phone. Check the address in Settings.</Text>
+                  <Text variant="caption">
+                    {fileStorageSupported ? 'Playing from your phone. Check the address in Settings.' : 'Check the server address in Settings.'}
+                  </Text>
                 </View>
                 <IconButton icon="chevron-forward" label="Open settings" onPress={nav.settings} />
               </View>
@@ -155,7 +164,7 @@ export default function HomeScreen() {
                 keyExtractor={(a) => a.key}
                 renderItem={({ item }) => (
                   <AlbumCard
-                    width={RAIL_CARD_WIDTH}
+                    width={cardW}
                     title={item.track.album}
                     subtitle={item.track.artist}
                     artworkUri={item.track.artworkUri}
@@ -174,7 +183,7 @@ export default function HomeScreen() {
               keyExtractor={trackKey}
               renderItem={({ item, index }) => (
                 <AlbumCard
-                  width={RAIL_CARD_WIDTH}
+                  width={cardW}
                   title={item.title}
                   subtitle={item.artist}
                   artworkUri={item.artworkUri}
@@ -183,7 +192,7 @@ export default function HomeScreen() {
                     haptics.tap();
                     player.playTracks(fresh, index);
                   }}
-                  onLongPress={() => openTrackActions(item)}
+                  onLongPress={(anchor) => openTrackActions(item, { anchor })}
                 />
               )}
             />
@@ -193,7 +202,7 @@ export default function HomeScreen() {
               keyExtractor={albumKey}
               renderItem={({ item }) => (
                 <AlbumCard
-                  width={RAIL_CARD_WIDTH}
+                  width={cardW}
                   title={item.title}
                   subtitle={item.artist}
                   artworkUri={item.artworkUri}
@@ -210,7 +219,7 @@ export default function HomeScreen() {
               keyExtractor={albumKey}
               renderItem={({ item }) => (
                 <AlbumCard
-                  width={RAIL_CARD_WIDTH}
+                  width={cardW}
                   title={item.title}
                   subtitle={item.artist}
                   artworkUri={item.artworkUri}
@@ -256,16 +265,19 @@ function ServerPill({
 /** Two-column quick-access tiles: Liked songs + recently played (up to 4 rows = 8 tiles). */
 function QuickGrid({ recent, likedCount }: { recent: AppTrack[]; likedCount: number }) {
   const styles = useStyles();
+  const wide = useIsWide();
+  const gutter = useGutter();
   const hasLiked = likedCount > 0;
   const gridRecents = recent.slice(0, hasLiked ? 7 : 8);
   if (gridRecents.length === 0 && !hasLiked) return null;
   return (
-    <View style={styles.grid}>
+    <View style={[styles.grid, { paddingHorizontal: gutter }, wide && styles.gridWide]}>
       {hasLiked ? (
         <QuickTile
           title="Liked songs"
           subtitle={`${likedCount} ${likedCount === 1 ? 'track' : 'tracks'}`}
-          art={<Artwork uri={null} label="Liked" size={56} radius={0} fallbackIcon="heart" />}
+          wide={wide}
+          art={<Artwork uri={null} label="Liked" size={wide ? 64 : 56} radius={0} fallbackIcon="heart" />}
           onPress={() => nav.library('liked')}
         />
       ) : null}
@@ -274,12 +286,13 @@ function QuickGrid({ recent, likedCount }: { recent: AppTrack[]; likedCount: num
           key={t.key}
           title={t.title}
           subtitle={t.artist}
-          art={<Artwork uri={t.artworkUri} label={t.album || t.title} size={56} radius={0} recyclingKey={t.key} />}
+          wide={wide}
+          art={<Artwork uri={t.artworkUri} label={t.album || t.title} size={wide ? 64 : 56} radius={0} recyclingKey={t.key} />}
           onPress={() => {
             haptics.tap();
             player.playTracks(recent, i);
           }}
-          onLongPress={() => openTrackActions(t)}
+          onLongPress={(anchor) => openTrackActions(t, { anchor })}
         />
       ))}
     </View>
@@ -290,18 +303,29 @@ function QuickTile({
   title,
   subtitle,
   art,
+  wide,
   onPress,
   onLongPress,
 }: {
+  wide: boolean;
   title: string;
   subtitle: string;
   art: ReactNode;
   onPress: () => void;
-  onLongPress?: () => void;
+  onLongPress?: (anchor?: SheetAnchor) => void;
 }) {
   const styles = useStyles();
+  const [hovered, setHovered] = useState(false);
   return (
-    <PressableScale accessibilityRole="button" accessibilityLabel={title} onPress={onPress} onLongPress={onLongPress} style={styles.tile}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onPress={onPress}
+      onLongPress={onLongPress ? () => onLongPress() : undefined}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      {...contextMenu(onLongPress)}
+      style={[styles.tile, wide && styles.tileWide, hovered && styles.tileHover]}>
       {art}
       <View style={styles.tileText}>
         <Text variant="bodyStrong" numberOfLines={1} style={styles.tileTitle}>
@@ -318,11 +342,11 @@ function QuickTile({
 const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   fill: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.lg, paddingRight: space.sm, marginBottom: space.xl },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: space.xl },
   headerText: { flex: 1, gap: space.xs },
   pill: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   pillDot: { width: 7, height: 7, borderRadius: 4 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: space.lg, gap: space.sm, marginBottom: space.xxl },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginBottom: space.xxl },
   tile: {
     width: '48.6%',
     flexGrow: 1,
@@ -333,6 +357,9 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surface2,
     overflow: 'hidden',
   },
+  gridWide: { gap: space.md },
+  tileWide: { width: '23.5%', flexGrow: 0, height: 64 },
+  tileHover: { backgroundColor: colors.surface3 },
   tileText: { flex: 1, minWidth: 0, paddingHorizontal: space.sm + 2 },
   tileTitle: { fontSize: 13, lineHeight: 17 },
   tileSub: { fontSize: 11, lineHeight: 14 },
@@ -340,7 +367,6 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    marginHorizontal: space.lg,
     marginBottom: space.xxl,
     padding: space.md,
     paddingLeft: space.lg,

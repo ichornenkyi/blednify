@@ -5,7 +5,10 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { DesktopSheetHost } from '../desktop/DesktopSheetHost';
+import { Pressable as WebPressable } from '../desktop/web';
 import { haptics } from '../haptics';
+import { useIsWide } from '../layout';
 import { closeSheet, useOverlay } from '../overlay';
 import { makeStyles, radius, space, useColors } from '../theme';
 import { Artwork } from './Artwork';
@@ -20,9 +23,14 @@ const SheetGesture = createContext<{ pan: PanGesture; scrollY: SharedValue<numbe
 
 /**
  * Global bottom sheet host (mounted once in the root layout). Content is pushed with `showSheet(<…/>)`.
- * Built on Reanimated + Gesture Handler: drag down / tap scrim / back button to dismiss.
+ * The wide layout shows the same content as a context menu or a dialog instead (`DesktopSheetHost`).
  */
 export function ActionSheetHost() {
+  return useIsWide() ? <DesktopSheetHost /> : <BottomSheetHost />;
+}
+
+/** Built on Reanimated + Gesture Handler: drag down / tap scrim / back button to dismiss. */
+function BottomSheetHost() {
   const styles = useStyles();
   const sheet = useOverlay((s) => s.sheet);
   const [rendered, setRendered] = useState(sheet);
@@ -196,23 +204,28 @@ export type SheetActionProps = {
 export function SheetAction({ icon, label, onPress, destructive, iconColor, keepOpen, trailing }: SheetActionProps) {
   const styles = useStyles();
   const colors = useColors();
+  const wide = useIsWide();
   const color = destructive ? colors.danger : colors.text;
   return (
-    <Pressable
+    <WebPressable
       accessibilityRole="button"
       android_ripple={{ color: colors.ripple }}
-      style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+      style={({ pressed, hovered, focused }) => [
+        styles.action,
+        wide && styles.actionWide,
+        (pressed || hovered || focused) && styles.actionPressed,
+      ]}
       onPress={() => {
         haptics.select();
         if (!keepOpen) closeSheet();
         onPress();
       }}>
-      <Icon name={icon} size={22} color={destructive ? colors.danger : (iconColor ?? colors.textSecondary)} />
-      <Text variant="body" color={color} style={styles.actionLabel} numberOfLines={1}>
+      <Icon name={icon} size={wide ? 18 : 22} color={destructive ? colors.danger : (iconColor ?? colors.textSecondary)} />
+      <Text variant="body" color={color} style={[styles.actionLabel, wide && styles.actionLabelWide]} numberOfLines={1}>
         {label}
       </Text>
       {trailing}
-    </Pressable>
+    </WebPressable>
   );
 }
 
@@ -244,6 +257,8 @@ const useStyles = makeStyles((colors) => ({
   },
   headerMeta: { flex: 1, minWidth: 0, gap: 2 },
   action: { height: 52, flexDirection: 'row', alignItems: 'center', gap: space.lg, paddingHorizontal: space.xl },
+  actionWide: { height: 38, gap: space.md, paddingHorizontal: space.md, marginHorizontal: space.xs, borderRadius: radius.sm },
   actionPressed: { backgroundColor: colors.pressed },
+  actionLabelWide: { fontSize: 14 },
   actionLabel: { flex: 1 },
 }));

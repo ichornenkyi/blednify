@@ -4,8 +4,11 @@ import { create } from 'zustand';
 export type ToastKind = 'info' | 'success' | 'error' | 'progress';
 export type ToastData = { id: number; message: string; kind: ToastKind };
 
+/** Screen point a sheet opens from in the wide layout (a right-click), shown there as a menu. */
+export type SheetAnchor = { x: number; y: number };
+
 type OverlayState = {
-  sheet: { id: number; content: ReactNode } | null;
+  sheet: { id: number; content: ReactNode; anchor?: SheetAnchor } | null;
   toast: ToastData | null;
 };
 
@@ -14,9 +17,12 @@ export const useOverlay = create<OverlayState>(() => ({ sheet: null, toast: null
 let seq = 0;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Present arbitrary content in the global bottom sheet. Replaces any open sheet. */
-export function showSheet(content: ReactNode) {
-  useOverlay.setState({ sheet: { id: ++seq, content } });
+/**
+ * Present arbitrary content in the global bottom sheet. Replaces any open sheet. The wide layout shows it as
+ * a dialog, or as a context menu at `anchor`.
+ */
+export function showSheet(content: ReactNode, opts: { anchor?: SheetAnchor } = {}) {
+  useOverlay.setState({ sheet: { id: ++seq, content, anchor: opts.anchor } });
 }
 
 export function closeSheet() {

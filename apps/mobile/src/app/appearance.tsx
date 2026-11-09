@@ -12,6 +12,7 @@ import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
 import { showSheet } from '@/ui/overlay';
+import { useReadableColumn } from '@/ui/layout';
 import {
   ACCENT_SWATCHES,
   BACKGROUND_SWATCHES,
@@ -30,6 +31,7 @@ export default function AppearanceScreen() {
   const styles = useStyles();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const readable = useReadableColumn();
   const pref = useThemePref();
   const preset = presetById(pref.preset);
   const customized = pref.accent !== null || pref.background !== null;
@@ -57,7 +59,7 @@ export default function AppearanceScreen() {
     <View style={styles.root}>
       <Backdrop />
       <ScreenHeader title="Appearance" />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + space.xxl }]}>
+      <ScrollView contentContainerStyle={[styles.content, readable, { paddingBottom: insets.bottom + space.xxl }]}>
         <Preview colors={colors} />
 
         <Text variant="micro" style={styles.label}>

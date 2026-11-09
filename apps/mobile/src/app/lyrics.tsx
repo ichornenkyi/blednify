@@ -34,6 +34,7 @@ import { IconButton } from '@/ui/components/IconButton';
 import { PressableScale } from '@/ui/components/PressableScale';
 import { SeekBar } from '@/ui/components/SeekBar';
 import { Text } from '@/ui/components/Text';
+import { useWideRedirect } from '@/ui/desktop/redirect';
 import { haptics } from '@/ui/haptics';
 import { ForceDark, gradientFor, makeStyles, radius, space, useColors } from '@/ui/theme';
 
@@ -46,6 +47,7 @@ function close() {
 
 /** Immersive screen over artwork: stays dark in light themes. */
 export default function LyricsScreen() {
+  if (useWideRedirect('lyrics')) return null;
   return (
     <ForceDark>
       <StatusBar style="light" />

@@ -15,10 +15,10 @@ import { PlaylistArtwork } from '@/ui/components/PlaylistArtwork';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { FloatingBack } from '@/ui/components/ScreenHeader';
 import { openTrackActions } from '@/ui/components/TrackActions';
-import { TrackRow } from '@/ui/components/TrackRow';
+import { TrackRow, TrackTableHeader } from '@/ui/components/TrackRow';
 import { humanDuration, plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
-import { showToast } from '@/ui/overlay';
+import { showToast, type SheetAnchor } from '@/ui/overlay';
 import { useAfter } from '@/ui/useAfter';
 import { makeStyles, radius, space } from '@/ui/theme';
 
@@ -51,7 +51,8 @@ export default function PlaylistScreen() {
     haptics.tap();
     player.playTracks(tracks, index);
   };
-  const onMore = (track: AppTrack, index: number) => openTrackActions(track, { playlist: { id: playlist.id, index } });
+  const onMore = (track: AppTrack, index: number, anchor?: SheetAnchor) =>
+    openTrackActions(track, { playlist: { id: playlist.id, index }, anchor });
   const totalMs = tracks.reduce((sum, t) => sum + t.durationMs, 0);
   const remoteMissing = tracks.filter((t) => t.origin === 'remote' && !t.localUri);
   const cover = playlist.artworkUris;
@@ -93,8 +94,9 @@ export default function PlaylistScreen() {
                   onPress={() => openPlaylistActions(playlist, { onDeleted: () => router.back() })}
                 />
               </>
-            }
-          />
+            }>
+            {tracks.length ? <TrackTableHeader album /> : null}
+          </DetailHeader>
         }
         ListEmptyComponent={
           <EmptyState icon="musical-notes-outline" title="No songs yet" message="Long-press any song and choose “Add to playlist”." />

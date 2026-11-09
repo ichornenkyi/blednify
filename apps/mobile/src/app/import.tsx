@@ -27,6 +27,7 @@ import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { nav } from '@/ui/nav';
+import { useReadableColumn } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 const SOURCE_LABEL = { spotify: 'Spotify', soundcloud: 'SoundCloud', youtube: 'YouTube' } as const;
@@ -35,6 +36,7 @@ export default function ImportScreen() {
   const styles = useStyles();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const readable = useReadableColumn();
   const { adminMode, adminToken, serverUrl } = useSettings();
   const status = useServerStatus();
   const info = useAdminInfo();
@@ -66,7 +68,7 @@ export default function ImportScreen() {
     <View style={styles.root}>
       <Backdrop />
       <ScreenHeader title="Import playlist" />
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[readable, { paddingBottom: insets.bottom + space.xl }]} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <Text variant="bodyStrong">Paste a playlist link</Text>
           <Text variant="caption">

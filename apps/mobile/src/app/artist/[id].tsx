@@ -12,7 +12,7 @@ import { EmptyState } from '@/ui/components/EmptyState';
 import { Loading } from '@/ui/components/Loading';
 import { DockedMiniPlayer } from '@/ui/components/MiniPlayer';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
-import { Rail, RAIL_CARD_WIDTH } from '@/ui/components/Rail';
+import { Rail, useRailCardWidth } from '@/ui/components/Rail';
 import { FloatingBack } from '@/ui/components/ScreenHeader';
 import { SectionHeader } from '@/ui/components/SectionHeader';
 import { openTrackActions } from '@/ui/components/TrackActions';
@@ -20,9 +20,10 @@ import { TrackRow } from '@/ui/components/TrackRow';
 import { plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { nav, parseOrigin } from '@/ui/nav';
+import type { SheetAnchor } from '@/ui/overlay';
 import { makeStyles, space } from '@/ui/theme';
 
-const onMore = (track: AppTrack) => openTrackActions(track, { hideArtist: true });
+const onMore = (track: AppTrack, _i: number, anchor?: SheetAnchor) => openTrackActions(track, { hideArtist: true, anchor });
 const albumKey = (a: AlbumView) => `${a.origin}:${a.id}`;
 
 export default function ArtistScreen() {
@@ -30,6 +31,7 @@ export default function ArtistScreen() {
   const params = useLocalSearchParams<{ id: string; origin?: string }>();
   const origin = parseOrigin(params.origin);
   const insets = useSafeAreaInsets();
+  const cardW = useRailCardWidth();
   const { artist, albums, tracks, isLoading } = useArtist(params.id, origin);
 
   if (!artist) {
@@ -80,7 +82,7 @@ export default function ArtistScreen() {
               keyExtractor={albumKey}
               renderItem={({ item }) => (
                 <AlbumCard
-                  width={RAIL_CARD_WIDTH}
+                  width={cardW}
                   title={item.title}
                   subtitle={item.year ? String(item.year) : `${item.trackCount} tracks`}
                   artworkUri={item.artworkUri}

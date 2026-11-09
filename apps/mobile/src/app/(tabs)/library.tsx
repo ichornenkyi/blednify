@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
-import type { ReactElement, ReactNode } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -30,9 +30,10 @@ import { openPlaylistActions, promptNewPlaylist } from '@/ui/components/Playlist
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { Text } from '@/ui/components/Text';
 import { onTrackMore } from '@/ui/components/TrackActions';
-import { TrackRow } from '@/ui/components/TrackRow';
+import { TrackRow, TrackTableHeader } from '@/ui/components/TrackRow';
 import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
+import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
 const FILTERS: { key: LibraryFilter; label: string }[] = [
@@ -58,18 +59,24 @@ export default function LibraryScreen() {
   // The route param is the single source of truth, so shortcuts (Home → Liked) always win over a stale chip.
   const params = useLocalSearchParams<{ filter?: string }>();
   const filter: LibraryFilter = isFilter(params.filter) ? params.filter : 'playlists';
+  const wide = useIsWide();
+  const gutter = useGutter();
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + space.md }]}>
+    <View style={[styles.root, { paddingTop: insets.top + (wide ? space.xxl : space.md) }]}>
       <Backdrop />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingLeft: gutter, paddingRight: wide ? gutter : space.sm }]}>
         <Text variant="display" style={styles.flex}>
           Library
         </Text>
         <IconButton icon="add" label="New playlist" size={26} onPress={promptNewPlaylist} />
         {fileStorageSupported ? <IconButton icon="folder-open-outline" label="Import music from device" onPress={importMusic} /> : null}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chips}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={[styles.chips, { paddingHorizontal: gutter }]}>
         {FILTERS.map((f) => (
           <Chip key={f.key} label={f.label} selected={filter === f.key} onPress={() => router.setParams({ filter: f.key })} />
         ))}
@@ -131,6 +138,7 @@ function PlaylistsList() {
             haptics.press();
             openPlaylistActions(item);
           }}
+          onContextMenu={(anchor) => openPlaylistActions(item, { anchor })}
         />
       )}
     />
@@ -139,6 +147,10 @@ function PlaylistsList() {
 
 function AlbumsGrid() {
   const styles = useStyles();
+  const wide = useIsWide();
+  // Wide layout: as many ~190px columns as the page column fits.
+  const [pageW, setPageW] = useState(0);
+  const columns = wide && pageW > 0 ? Math.max(3, Math.floor((pageW - 48) / 190)) : 2;
   const local = useLocalAlbums();
   const { albums: remote } = useRemoteAlbums();
   const seen = new Set<string>();
@@ -151,11 +163,14 @@ function AlbumsGrid() {
     }
   }
   return (
+    // Measured outside the list: its own scrollbar must not change the column count (that looped).
+    <View style={styles.flex} onLayout={(e) => setPageW(e.nativeEvent.layout.width)}>
     <FlashList
+      key={columns}
       data={albums}
-      numColumns={2}
+      numColumns={columns}
       keyExtractor={(a) => `${a.origin}:${a.id}`}
-      contentContainerStyle={styles.gridContent}
+      contentContainerStyle={wide ? styles.gridContentWide : styles.gridContent}
       ListEmptyComponent={
         <EmptyState
           icon="disc-outline"
@@ -176,6 +191,7 @@ function AlbumsGrid() {
         </View>
       )}
     />
+    </View>
   );
 }
 
@@ -236,6 +252,8 @@ function DeviceList() {
 
 function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactElement; extra?: ReactNode }) {
   const styles = useStyles();
+  const wide = useIsWide();
+  const gutter = useGutter();
   const play = (index: number) => {
     haptics.tap();
     player.playTracks(tracks, index);
@@ -248,7 +266,8 @@ function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactE
       ListEmptyComponent={empty}
       ListHeaderComponent={
         tracks.length > 0 ? (
-          <View style={styles.playRow}>
+          <>
+          <View style={[styles.playRow, wide && { paddingHorizontal: gutter }]}>
             <Text variant="caption" style={styles.flex}>
               {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
             </Text>
@@ -256,6 +275,8 @@ function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactE
             <IconButton icon="shuffle" label="Shuffle" variant="filled" haptic onPress={() => player.playTracks(tracks, undefined, { shuffle: true })} />
             <IconButton icon="play" label="Play all" variant="accent" haptic size={22} diameter={48} onPress={() => player.playTracks(tracks, 0)} />
           </View>
+          <TrackTableHeader album />
+          </>
         ) : null
       }
       renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onTrackMore} subtitle="artist-album" />}
@@ -266,11 +287,12 @@ function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactE
 const useStyles = makeStyles((colors) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.lg, paddingRight: space.sm, marginBottom: space.md },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: space.md },
   chipsScroll: { flexGrow: 0 },
-  chips: { paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.md },
+  chips: { gap: space.sm, paddingBottom: space.md },
   listContent: { paddingBottom: space.xl },
   gridContent: { paddingHorizontal: space.md, paddingBottom: space.xl },
+  gridContentWide: { paddingHorizontal: space.xl, paddingBottom: space.xl },
   gridCell: { flex: 1, paddingHorizontal: space.xs + 2, paddingBottom: space.lg },
   playRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.lg, paddingRight: space.md, paddingVertical: space.sm },
   newTile: {

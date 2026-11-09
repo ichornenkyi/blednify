@@ -19,7 +19,7 @@ import {
 
 import { attempt, confirmDeleteLocal } from '../actions';
 import { nav } from '../nav';
-import { showSheet, showToast } from '../overlay';
+import { showSheet, showToast, type SheetAnchor } from '../overlay';
 import { confirm } from './ConfirmSheet';
 import { useColors } from '../theme';
 import { SheetAction, SheetHeader } from './ActionSheet';
@@ -34,16 +34,18 @@ export type TrackActionContext = {
   hideArtist?: boolean;
   /** Called before navigating away (e.g. to dismiss a modal). */
   beforeNavigate?: () => void;
+  /** Wide layout: open as a context menu at this point (right-click). */
+  anchor?: SheetAnchor;
 };
 
 /** Open the long-press / "more" action sheet for a track. */
 export function openTrackActions(track: AppTrack, context: TrackActionContext = {}) {
-  showSheet(<TrackActions track={track} context={context} />);
+  showSheet(<TrackActions track={track} context={context} />, { anchor: context.anchor });
 }
 
 /** Stable `onMore` handler for TrackRow when no extra context is needed. */
-export function onTrackMore(track: AppTrack) {
-  openTrackActions(track);
+export function onTrackMore(track: AppTrack, _index?: number, anchor?: SheetAnchor) {
+  openTrackActions(track, { anchor });
 }
 
 function TrackActions({ track, context }: { track: AppTrack; context: TrackActionContext }) {

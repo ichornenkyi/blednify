@@ -15,14 +15,14 @@ import { PlaylistPicker } from '@/ui/components/PlaylistPicker';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { FloatingBack } from '@/ui/components/ScreenHeader';
 import { openTrackActions } from '@/ui/components/TrackActions';
-import { TrackRow } from '@/ui/components/TrackRow';
+import { TrackRow, TrackTableHeader } from '@/ui/components/TrackRow';
 import { humanDuration, plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { nav, parseOrigin } from '@/ui/nav';
-import { showSheet, showToast } from '@/ui/overlay';
+import { showSheet, showToast, type SheetAnchor } from '@/ui/overlay';
 import { makeStyles, radius, space } from '@/ui/theme';
 
-const onMore = (track: AppTrack) => openTrackActions(track, { hideAlbum: true });
+const onMore = (track: AppTrack, _i: number, anchor?: SheetAnchor) => openTrackActions(track, { hideAlbum: true, anchor });
 
 export default function AlbumScreen() {
   const styles = useStyles();
@@ -98,8 +98,9 @@ export default function AlbumScreen() {
                   onPress={() => showSheet(<PlaylistPicker tracks={tracks} />)}
                 />
               </>
-            }
-          />
+            }>
+            {tracks.length ? <TrackTableHeader /> : null}
+          </DetailHeader>
         }
         ListEmptyComponent={isLoading ? <Loading /> : null}
         renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onMore} leading="number" showDuration />}

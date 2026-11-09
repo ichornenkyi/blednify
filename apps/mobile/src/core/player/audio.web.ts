@@ -26,7 +26,7 @@ const RESTART_THRESHOLD_S = 3;
 let sharedEl: HTMLAudioElement | null = null;
 
 /** The one audio element for the page's lifetime (see header). */
-function audioElement(): HTMLAudioElement {
+export function audioElement(): HTMLAudioElement {
   if (!sharedEl) {
     sharedEl = document.createElement('audio');
     sharedEl.preload = 'auto';

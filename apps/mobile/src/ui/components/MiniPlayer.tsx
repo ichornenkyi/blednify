@@ -8,6 +8,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { onProgress, player, usePlayer } from '@/core';
 
 import { haptics } from '../haptics';
+import { useIsWide } from '../layout';
 import { nav } from '../nav';
 import { makeStyles, MINI_PLAYER_HEIGHT, radius, space, useColors } from '../theme';
 import { Artwork } from './Artwork';
@@ -111,7 +112,9 @@ export function DockedMiniPlayer() {
   const styles = useStyles();
   const hasTrack = usePlayer((s) => s.current !== null);
   const insets = useSafeAreaInsets();
-  if (!hasTrack) return null;
+  // The wide layout has a player bar under every page.
+  const wide = useIsWide();
+  if (!hasTrack || wide) return null;
   return (
     <View style={[styles.docked, { paddingBottom: insets.bottom }]}>
       <MiniPlayer />

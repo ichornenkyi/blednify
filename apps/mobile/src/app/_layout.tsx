@@ -7,33 +7,41 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { CoreProvider } from '@/core';
 import { ActionSheetHost } from '@/ui/components/ActionSheet';
 import { ToastHost } from '@/ui/components/Toast';
+import { DesktopShell } from '@/ui/desktop/DesktopShell';
+import { useWebChrome } from '@/ui/desktop/web-chrome';
+import { useIsWide } from '@/ui/layout';
 import { makeStyles, navigationThemeFor, useColors } from '@/ui/theme';
 
 export default function RootLayout() {
   const styles = useStyles();
   const colors = useColors();
+  const wide = useIsWide();
+  useWebChrome();
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.bg);
   }, [colors.bg]);
+  const stack = (
+    <Stack screenOptions={{ headerShown: false, contentStyle: styles.content, animation: wide ? 'fade' : 'ios_from_right' }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="player"
+        options={{
+          presentation: 'transparentModal',
+          animation: wide ? 'fade' : 'slide_from_bottom',
+          gestureEnabled: false,
+          contentStyle: styles.transparent,
+        }}
+      />
+      <Stack.Screen name="queue" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="lyrics" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+    </Stack>
+  );
   return (
     <GestureHandlerRootView style={styles.root}>
       <CoreProvider>
         <ThemeProvider value={navigationThemeFor(colors)}>
           <StatusBar style={colors.isLight ? 'dark' : 'light'} />
-          <Stack screenOptions={{ headerShown: false, contentStyle: styles.content, animation: 'ios_from_right' }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="player"
-              options={{
-                presentation: 'transparentModal',
-                animation: 'slide_from_bottom',
-                gestureEnabled: false,
-                contentStyle: styles.transparent,
-              }}
-            />
-            <Stack.Screen name="queue" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="lyrics" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
-          </Stack>
+          {wide ? <DesktopShell>{stack}</DesktopShell> : stack}
           <ActionSheetHost />
           <ToastHost />
         </ThemeProvider>

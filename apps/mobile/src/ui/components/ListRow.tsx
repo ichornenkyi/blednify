@@ -1,6 +1,9 @@
 import { memo, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
+import { contextMenu, Pressable } from '../desktop/web';
+import { useIsWide } from '../layout';
+import type { SheetAnchor } from '../overlay';
 import { makeStyles, space, TRACK_ROW_HEIGHT, useColors } from '../theme';
 import { Icon } from './Icon';
 import { Text } from './Text';
@@ -14,7 +17,10 @@ function ListRowImpl({
   onLongPress,
   trailing,
   chevron,
+  onContextMenu,
 }: {
+  /** Wide layout: right-click menu at the cursor. */
+  onContextMenu?: (anchor: SheetAnchor) => void;
   leading?: ReactNode;
   title: string;
   subtitle?: string;
@@ -25,6 +31,7 @@ function ListRowImpl({
 }) {
   const styles = useStyles();
   const colors = useColors();
+  const wide = useIsWide();
   return (
     <Pressable
       accessibilityRole="button"
@@ -32,7 +39,8 @@ function ListRowImpl({
       onLongPress={onLongPress}
       delayLongPress={320}
       android_ripple={{ color: colors.ripple }}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+      {...contextMenu(onContextMenu)}
+      style={({ pressed, hovered }) => [styles.row, wide && styles.rowWide, (pressed || hovered) && styles.pressed]}>
       {leading}
       <View style={styles.meta}>
         <Text variant="bodyStrong" numberOfLines={1}>
@@ -62,6 +70,7 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: space.sm,
     gap: space.md,
   },
+  rowWide: { marginHorizontal: space.xl, paddingHorizontal: space.sm, borderRadius: 8, minHeight: 64 },
   pressed: { backgroundColor: colors.pressed },
   meta: { flex: 1, minWidth: 0, gap: 2 },
 }));

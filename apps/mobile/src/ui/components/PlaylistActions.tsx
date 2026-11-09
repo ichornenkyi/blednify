@@ -4,7 +4,7 @@ import { createPlaylist, deletePlaylist, renamePlaylist, type Playlist } from '@
 
 import { attempt } from '../actions';
 import { nav } from '../nav';
-import { showSheet } from '../overlay';
+import { showSheet, type SheetAnchor } from '../overlay';
 import { confirm } from './ConfirmSheet';
 import { SheetAction, SheetHeader } from './ActionSheet';
 import { PromptSheet } from './PromptSheet';
@@ -24,7 +24,7 @@ export function promptNewPlaylist() {
   );
 }
 
-export function openPlaylistActions(p: Playlist, opts: { onDeleted?: () => void } = {}) {
+export function openPlaylistActions(p: Playlist, opts: { onDeleted?: () => void; anchor?: SheetAnchor } = {}) {
   showSheet(
     <View>
       <SheetHeader title={p.name} subtitle={`${p.trackCount} ${p.trackCount === 1 ? 'track' : 'tracks'}`} />
@@ -63,5 +63,6 @@ export function openPlaylistActions(p: Playlist, opts: { onDeleted?: () => void 
         }
       />
     </View>,
+    { anchor: opts.anchor },
   );
 }

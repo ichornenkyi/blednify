@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, FadeOutDown, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayer } from '@/core';
 
+import { PLAYER_BAR_HEIGHT, useIsWide } from '../layout';
 import { dismissToast, showToast, useOverlay, type ToastKind } from '../overlay';
 import { makeStyles, radius, space, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
@@ -23,15 +24,17 @@ export function ToastHost() {
   const colors = useColors();
   const toast = useOverlay((s) => s.toast);
   const insets = useSafeAreaInsets();
+  // Wide layout: toasts rise from above the player bar, out of the way of page headers.
+  const wide = useIsWide();
   usePlaybackErrorToasts();
   return (
     <TopLayer>
-      <View pointerEvents="box-none" style={[styles.host, { top: insets.top + space.sm }]}>
+      <View pointerEvents="box-none" style={[styles.host, wide ? { bottom: PLAYER_BAR_HEIGHT + space.lg } : { top: insets.top + space.sm }]}>
         {toast ? (
           <Animated.View
             key={toast.id}
-            entering={FadeInUp.duration(220)}
-            exiting={FadeOutUp.duration(180)}
+            entering={(wide ? FadeInDown : FadeInUp).duration(220)}
+            exiting={(wide ? FadeOutDown : FadeOutUp).duration(180)}
             style={styles.toast}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
