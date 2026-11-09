@@ -327,6 +327,11 @@ function Backdrop({ uri }: { uri: string | null }) {
   );
 }
 
+/**
+ * The cover is laid out once at the largest size it can take on this screen and only ever
+ * scaled with a transform. Animating width/height resized the native image view every frame,
+ * which made expo-image re-decode (and blank) the cover while the player opened or skipped.
+ */
 function PulsingArtwork({
   track,
   size,
@@ -337,27 +342,26 @@ function PulsingArtwork({
   playing: boolean;
 }) {
   const styles = useStyles();
-  const scale = useSharedValue(playing ? 1 : 0.86);
-  const side = useSharedValue(size);
+  const { width, height } = useWindowDimensions();
+  const base = Math.round(Math.max(size, Math.min(width - space.xl * 2, height * 0.4)));
+  const pulse = useSharedValue(playing ? 1 : 0.86);
+  const fit = useSharedValue(size / base);
   useEffect(() => {
-    scale.set(withSpring(playing ? 1 : 0.86, { damping: 15, stiffness: 140 }));
-  }, [playing, scale]);
+    pulse.set(withSpring(playing ? 1 : 0.86, { damping: 15, stiffness: 140 }));
+  }, [playing, pulse]);
   useEffect(() => {
-    side.set(withTiming(size, { duration: 220, easing: Easing.out(Easing.quad) }));
-  }, [size, side]);
+    fit.set(withTiming(size / base, { duration: 220, easing: Easing.out(Easing.quad) }));
+  }, [size, base, fit]);
   const style = useAnimatedStyle(() => ({
-    width: side.get(),
-    height: side.get(),
-    transform: [{ scale: scale.get() }],
-    shadowOpacity: interpolate(scale.get(), [0.86, 1], [0.25, 0.6]),
+    transform: [{ scale: pulse.get() * fit.get() }],
+    shadowOpacity: interpolate(pulse.get(), [0.86, 1], [0.25, 0.6]),
   }));
   return (
-    <Animated.View style={[styles.artShadow, style]}>
+    <Animated.View style={[styles.artShadow, { width: base, height: base }, style]}>
       <Artwork
         uri={track.artworkUri}
         label={track.album || track.title}
-        size={size}
-        style={styles.artFill}
+        size={base}
         radius={radius.lg}
         recyclingKey={track.key}
         priority="high"
@@ -452,8 +456,10 @@ const useStyles = makeStyles((colors) => ({
   topBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: -space.md },
   topCenter: { flex: 1, alignItems: 'center', gap: 2 },
   bold: { fontWeight: '700' },
-  artArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // overflow visible: the art's layout box is its max size, scaled down to fit.
+  artArea: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
   artShadow: {
+    position: 'absolute',
     borderRadius: radius.lg,
     backgroundColor: colors.surface2,
     shadowColor: colors.black,
@@ -461,7 +467,6 @@ const useStyles = makeStyles((colors) => ({
     shadowOffset: { width: 0, height: 18 },
     elevation: 20,
   },
-  artFill: { width: '100%', height: '100%' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   titleText: { flex: 1, minWidth: 0, gap: 2 },
   artist: { fontSize: 17, lineHeight: 22 },
