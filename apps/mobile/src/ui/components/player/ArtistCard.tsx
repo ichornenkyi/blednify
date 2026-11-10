@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { useArtist, useImageSource, type AppTrack } from '@/core';
 import { Icon } from '@/ui/components/Icon';
@@ -18,7 +18,8 @@ export function ArtistCard({ track }: { track: AppTrack }) {
   const colors = useColors();
   const { artist } = useArtist(track.artistId, track.origin);
   const imageUri = artist?.artworkUri ?? track.artworkUri;
-  const source = useImageSource(imageUri);
+  // The card spans the screen.
+  const source = useImageSource(imageUri, useWindowDimensions().width);
 
   const handlePress = () => {
     haptics.tap();

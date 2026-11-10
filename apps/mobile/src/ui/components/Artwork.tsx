@@ -8,6 +8,9 @@ import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
 import { useImageSource } from '@/core';
 
+/** Assumed width, in points, of artwork that fills its parent: a column of the albums grid. */
+const FILL_WIDTH = 170;
+
 export type ArtworkProps = {
   uri: string | null | undefined;
   /** Text used for the fallback tile initials and gradient seed (album / artist / track title). */
@@ -36,7 +39,7 @@ function initials(label: string) {
 export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIcon, recyclingKey, priority, style }: ArtworkProps) {
   const styles = useStyles();
   const [failedUri, setFailedUri] = useState<string | null>(null);
-  const source = useImageSource(uri);
+  const source = useImageSource(uri, size ?? FILL_WIDTH);
   const showImage = !!uri && uri !== failedUri;
   const borderRadius = round ? 9999 : radius;
   const box = size !== undefined ? { width: size, height: size } : styles.fill;

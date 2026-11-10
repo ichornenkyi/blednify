@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Platform } from 'react-native';
+import { PixelRatio, Platform } from 'react-native';
 import { useStore } from 'zustand';
 
+import { sizedArtworkUrl } from './api';
 import { normalizeServerUrl, settingsStore } from './settings';
 
 export type ImageSource = { uri: string; headers?: Record<string, string> };
@@ -26,10 +27,23 @@ export function imageSourceFor(uri: string): ImageSource {
   return headers ? { uri, headers } : { uri };
 }
 
-/** Hook form: re-renders when the server or token changes, so cached image sources pick up new credentials. */
-export function useImageSource(uri: string | null | undefined): ImageSource | null {
+/**
+ * Web: the URL of a cover sized for a slot `width` points wide. Browsers decode an image at its full size, so a
+ * thumbnail showing a 3000px original holds ~36 MB each; the server keeps scaled copies. Native image views
+ * downsample on their own and keep the original URL (one cache entry per cover).
+ */
+export function imageUriForWidth(uri: string, width: number | undefined): string {
+  if (Platform.OS !== 'web' || !width) return uri;
+  return sizedArtworkUrl(uri, Math.ceil(width * Math.min(PixelRatio.get(), 3)));
+}
+
+/**
+ * Hook form: re-renders when the server or token changes, so cached image sources pick up new credentials.
+ * `width` is the width the image is shown at, in points (see `imageUriForWidth`).
+ */
+export function useImageSource(uri: string | null | undefined, width?: number): ImageSource | null {
   const serverUrl = useStore(settingsStore, (s) => s.serverUrl);
   const accessToken = useStore(settingsStore, (s) => s.accessToken);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- credentials are read from the store; deps mark when to rebuild
-  return useMemo(() => (uri ? imageSourceFor(uri) : null), [uri, serverUrl, accessToken]);
+  return useMemo(() => (uri ? imageSourceFor(imageUriForWidth(uri, width)) : null), [uri, width, serverUrl, accessToken]);
 }

@@ -5,9 +5,12 @@ import { makeStyles, radius as radii } from '../theme';
 import { Artwork } from './Artwork';
 import { useImageSource } from '@/core';
 
-function Cell({ uri }: { uri: string }) {
+/** Assumed width, in points, of a mosaic that fills its parent. */
+const FILL_WIDTH = 170;
+
+function Cell({ uri, size }: { uri: string; size?: number }) {
   const styles = useStyles();
-  const source = useImageSource(uri);
+  const source = useImageSource(uri, (size ?? FILL_WIDTH) / 2);
   return <Image source={source} style={styles.cell} contentFit="cover" cachePolicy="memory-disk" recyclingKey={uri} transition={120} />;
 }
 
@@ -21,7 +24,7 @@ export function PlaylistArtwork({ uris, name, size, radius = radii.sm }: { uris:
   return (
     <View style={[styles.grid, box, { borderRadius: radius }]}>
       {uris.slice(0, 4).map((uri, i) => (
-        <Cell key={i} uri={uri} />
+        <Cell key={i} uri={uri} size={size} />
       ))}
     </View>
   );
