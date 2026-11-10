@@ -35,6 +35,7 @@ import { nav } from '@/ui/nav';
 import { showToast } from '@/ui/overlay';
 import { useReadableColumn } from '@/ui/layout';
 import { makeStyles, presetById, radius, space, useColors } from '@/ui/theme';
+import { useGlassSurface } from '@/ui/chrome';
 
 type TestResult = { ok: boolean; message: string } | null;
 
@@ -48,6 +49,7 @@ function normalizeUrl(raw: string): string {
 
 export default function SettingsScreen() {
   const styles = useStyles();
+  const glass = useGlassSurface();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const readable = useReadableColumn();
@@ -215,7 +217,7 @@ export default function SettingsScreen() {
 
         <AdminSection />
 
-        <View style={styles.card}>
+        <View style={[styles.card, glass]}>
           <ListRow
             leading={<RowIcon name="color-palette-outline" />}
             title="Appearance"
@@ -414,9 +416,10 @@ function AdminSection() {
 
 function Section({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
   const styles = useStyles();
+  const glass = useGlassSurface();
   const colors = useColors();
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, glass]}>
       <View style={styles.sectionHead}>
         <Icon name={icon} size={18} color={colors.accent} />
         <Text variant="micro">{title.toUpperCase()}</Text>

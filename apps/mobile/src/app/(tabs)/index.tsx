@@ -31,7 +31,7 @@ import { contextMenu } from '@/ui/desktop/web';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import type { SheetAnchor } from '@/ui/overlay';
-import { useChromeInset } from '@/ui/chrome';
+import { useChromeInset , useGlassSurface } from '@/ui/chrome';
 import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
@@ -62,6 +62,7 @@ function recentAlbumsOf(tracks: readonly AppTrack[]): { key: string; track: AppT
 
 export default function HomeScreen() {
   const styles = useStyles();
+  const glass = useGlassSurface();
   const chromeInset = useChromeInset('tabs');
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -147,7 +148,7 @@ export default function HomeScreen() {
             <QuickGrid recent={recent} likedCount={liked.length} />
 
             {showOffline ? (
-              <View style={[styles.notice, { marginHorizontal: gutter }]}>
+              <View style={[styles.notice, glass, { marginHorizontal: gutter }]}>
                 <Icon name="cloud-offline-outline" size={22} color={colors.textSecondary} />
                 <View style={styles.noticeText}>
                   <Text variant="bodyStrong">Server unreachable</Text>
@@ -317,6 +318,7 @@ function QuickTile({
   onLongPress?: (anchor?: SheetAnchor) => void;
 }) {
   const styles = useStyles();
+  const glass = useGlassSurface();
   const [hovered, setHovered] = useState(false);
   return (
     <PressableScale
@@ -327,7 +329,7 @@ function QuickTile({
       onHoverIn={() => setHovered(true)}
       onHoverOut={() => setHovered(false)}
       {...contextMenu(onLongPress)}
-      style={[styles.tile, wide && styles.tileWide, hovered && styles.tileHover]}>
+      style={[styles.tile, glass, wide && styles.tileWide, hovered && styles.tileHover]}>
       {art}
       <View style={styles.tileText}>
         <Text variant="bodyStrong" numberOfLines={1} style={styles.tileTitle}>

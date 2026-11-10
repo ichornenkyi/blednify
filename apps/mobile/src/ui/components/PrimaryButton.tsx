@@ -1,6 +1,7 @@
 import { ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native';
 
 import { haptics } from '../haptics';
+import { useGlassSurface } from '../chrome';
 import { makeStyles, radius, space, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
@@ -22,6 +23,7 @@ export type PrimaryButtonProps = {
 export function PrimaryButton({ label, onPress, icon, variant = 'accent', size = 'md', loading, disabled, style }: PrimaryButtonProps) {
   const styles = useStyles();
   const colors = useColors();
+  const glass = useGlassSurface();
   const fg = variant === 'accent' ? colors.onAccent : variant === 'danger' ? colors.white : colors.text;
   const inactive = disabled || loading;
   return (
@@ -34,7 +36,7 @@ export function PrimaryButton({ label, onPress, icon, variant = 'accent', size =
         haptics.press();
         onPress();
       }}
-      style={[styles.base, size === 'lg' ? styles.lg : styles.md, styles[variant], disabled && styles.disabled, style]}>
+      style={[styles.base, size === 'lg' ? styles.lg : styles.md, styles[variant], variant === 'surface' && glass, disabled && styles.disabled, style]}>
       {loading ? <ActivityIndicator size="small" color={fg} /> : icon ? <Icon name={icon} size={size === 'lg' ? 20 : 18} color={fg} /> : null}
       <Text variant="bodyStrong" color={fg} numberOfLines={1}>
         {label}

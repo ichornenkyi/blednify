@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 
 import { haptics } from '../haptics';
+import { useGlassSurface } from '../chrome';
 import { makeStyles, radius, space, useColors } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
@@ -9,6 +10,7 @@ import { Text } from './Text';
 export function Chip({ label, selected, onPress, icon }: { label: string; selected?: boolean; onPress: () => void; icon?: IconName }) {
   const styles = useStyles();
   const colors = useColors();
+  const glass = useGlassSurface();
   const fg = selected ? colors.onAccent : colors.text;
   return (
     <PressableScale
@@ -18,7 +20,7 @@ export function Chip({ label, selected, onPress, icon }: { label: string; select
         haptics.select();
         onPress();
       }}
-      style={[styles.chip, selected && styles.selected]}>
+      style={[styles.chip, glass, selected && styles.selected]}>
       {icon ? <Icon name={icon} size={14} color={fg} /> : null}
       <Text variant="caption" color={fg} style={styles.label}>
         {label}

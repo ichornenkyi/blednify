@@ -10,9 +10,11 @@ import { plural } from '@/ui/format';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
+import { useGlassSurface } from '../../chrome';
 
 export function ArtistCard({ track }: { track: AppTrack }) {
   const styles = useStyles();
+  const glass = useGlassSurface();
   const colors = useColors();
   const { artist } = useArtist(track.artistId, track.origin);
   const imageUri = artist?.artworkUri ?? track.artworkUri;
@@ -33,7 +35,7 @@ export function ArtistCard({ track }: { track: AppTrack }) {
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={`About ${track.artist}, tap to view artist`}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.card, glass, pressed && styles.pressed]}>
       {imageUri ? (
         <Image
           source={source}

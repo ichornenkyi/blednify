@@ -1,6 +1,7 @@
 import { type StyleProp, type ViewStyle } from 'react-native';
 
 import { haptics } from '../haptics';
+import { useGlassSurface } from '../chrome';
 import { makeStyles, useColors, type Palette } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
@@ -46,6 +47,7 @@ export function IconButton({
 }: IconButtonProps) {
   const styles = useStyles();
   const colors = useColors();
+  const glass = useGlassSurface();
   return (
     <PressableScale
       accessibilityRole="button"
@@ -62,6 +64,7 @@ export function IconButton({
       style={[
         styles.base,
         { width: diameter, height: diameter, borderRadius: diameter / 2, backgroundColor: bgFor(variant, colors) },
+        variant === 'filled' && glass,
         disabled && styles.disabled,
         style,
       ]}>

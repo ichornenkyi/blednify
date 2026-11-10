@@ -7,9 +7,11 @@ import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
+import { useGlassSurface } from '../../chrome';
 
 export function UpNextCard() {
   const styles = useStyles();
+  const glass = useGlassSurface();
   const colors = useColors();
   const queue = usePlayer((s) => s.queue);
   const index = usePlayer((s) => s.index);
@@ -28,7 +30,7 @@ export function UpNextCard() {
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, glass]}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text variant="subheading" style={styles.title}>

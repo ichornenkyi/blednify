@@ -36,7 +36,7 @@ import { TrackRow } from '@/ui/components/TrackRow';
 import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
 import { useDesk } from '@/ui/desktop/store';
-import { useChromeInset } from '@/ui/chrome';
+import { useChromeInset , useGlassSurface } from '@/ui/chrome';
 import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
@@ -50,6 +50,7 @@ const TRACK_LIMIT = 30;
 
 export default function SearchScreen() {
   const styles = useStyles();
+  const glass = useGlassSurface();
   const chromeInset = useChromeInset('tabs');
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -126,7 +127,7 @@ export default function SearchScreen() {
       <Text variant="display" style={[styles.title, { paddingHorizontal: gutter }]}>
         Search
       </Text>
-      <View style={[styles.field, { marginHorizontal: gutter }, wide && styles.fieldWide]}>
+      <View style={[styles.field, glass, { marginHorizontal: gutter }, wide && styles.fieldWide]}>
         <Icon name="search" size={18} color={colors.textSecondary} />
         <TextInput
           ref={input}

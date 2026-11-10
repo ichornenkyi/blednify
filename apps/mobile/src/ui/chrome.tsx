@@ -134,8 +134,25 @@ export function ChromeSurface({ radius, style, children }: { radius: number; sty
   );
 }
 
+/**
+ * Glass for surfaces inside the content (tiles, cards, chips, buttons): translucent fill and a light edge,
+ * plus a real blur on web. Inside scrolling content Android gets no blur: one native blur pass per tile
+ * while scrolling costs too much, and these surfaces mostly sit on a flat background. Null unless Glass
+ * is the chosen style, so callers can spread it after their own surface style.
+ */
+export function useGlassSurface(): ViewStyle | null {
+  const styles = useStyles();
+  return useChromeStyle() === 'glass' ? styles.surfaceGlass : null;
+}
+
 const useStyles = makeStyles((colors) => ({
   fill: { flex: 1 },
+  surfaceGlass: {
+    backgroundColor: colors.isLight ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.isLight ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.16)',
+    ...(NATIVE_BLUR ? null : WEB_BLUR),
+  },
   content: { flex: 1, backgroundColor: colors.bg },
   dock: {
     position: 'absolute',
