@@ -25,6 +25,7 @@ import { attempt, errorMessage, importMusic } from '@/ui/actions';
 import { Backdrop } from '@/ui/components/Backdrop';
 import { BrandMark } from '@/ui/components/BrandMark';
 import { Icon, type IconName } from '@/ui/components/Icon';
+import { LibraryBackupRows } from '@/ui/components/LibraryBackup';
 import { ListRow } from '@/ui/components/ListRow';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { ScreenHeader } from '@/ui/components/ScreenHeader';
@@ -216,6 +217,10 @@ export default function SettingsScreen() {
         </Section>
 
         <AdminSection />
+
+        <View style={[styles.card, glass]}>
+          <LibraryBackupRows icon={(name) => <RowIcon name={name} />} />
+        </View>
 
         <View style={[styles.card, glass]}>
           <ListRow

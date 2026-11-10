@@ -188,14 +188,18 @@ export async function toggleLike(track: AppTrack): Promise<void> {
   setLiked(track.key, !wasLiked);
   try {
     await writeTx(async (db) => {
-      if (wasLiked) await db.runAsync('DELETE FROM likes WHERE key = ?', track.key);
-      else
+      if (wasLiked) {
+        await db.runAsync('DELETE FROM likes WHERE key = ?', track.key);
+        await addTombstone(db, 'like', track.key);
+      } else {
         await db.runAsync(
           'INSERT OR REPLACE INTO likes (key, track, liked_at) VALUES (?, ?, ?)',
           track.key,
           serializeTrack(track),
           Date.now(),
         );
+        await clearTombstone(db, 'like', track.key);
+      }
     });
   } catch (e) {
     setLiked(track.key, wasLiked);
@@ -336,6 +340,12 @@ export function usePlaylist(id: string): { playlist: Playlist | null; tracks: Ap
   return { playlist, tracks };
 }
 
+/** Records a deletion so the library backup removes it too instead of restoring it (see library-sync). */
+export const addTombstone = (db: SQLiteDatabase, kind: 'playlist' | 'like', id: string) =>
+  db.runAsync('INSERT OR REPLACE INTO sync_tombstones (kind, id, at) VALUES (?, ?, ?)', kind, id, Date.now());
+const clearTombstone = (db: SQLiteDatabase, kind: 'playlist' | 'like', id: string) =>
+  db.runAsync('DELETE FROM sync_tombstones WHERE kind = ? AND id = ?', kind, id);
+
 const touch = (db: SQLiteDatabase, id: string) =>
   db.runAsync('UPDATE playlists SET updated_at = ? WHERE id = ?', nowIso(), id);
 
@@ -418,6 +428,7 @@ export async function deletePlaylist(id: string): Promise<void> {
   await writeTx(async (db) => {
     await db.runAsync('DELETE FROM playlist_tracks WHERE playlist_id = ?', id);
     await db.runAsync('DELETE FROM playlists WHERE id = ?', id);
+    await addTombstone(db, 'playlist', id);
   });
   invalidatePlaylist(id);
 }
@@ -493,7 +504,8 @@ export async function reorderPlaylist(id: string, from: number, to: number): Pro
 /** Remove every library reference (likes, recents, playlist entries) to the given track keys. */
 export async function removeTrackReferences(db: SQLiteDatabase, keys: readonly string[]): Promise<void> {
   for (const key of keys) {
-    await db.runAsync('DELETE FROM likes WHERE key = ?', key);
+    const unliked = await db.runAsync('DELETE FROM likes WHERE key = ?', key);
+    if (unliked.changes) await addTombstone(db, 'like', key);
     await db.runAsync('DELETE FROM recents WHERE key = ?', key);
     const affected = await db.getAllAsync<{ playlist_id: string }>(
       'SELECT DISTINCT playlist_id FROM playlist_tracks WHERE key = ?',
@@ -509,6 +521,7 @@ export async function removeTrackReferences(db: SQLiteDatabase, keys: readonly s
          ) WHERE playlist_id = ?`,
         playlist_id,
       );
+      await touch(db, playlist_id);
     }
   }
   for (const key of keys) setLiked(key, false);

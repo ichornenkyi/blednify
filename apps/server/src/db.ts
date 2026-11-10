@@ -7,6 +7,16 @@ export type Db = { sql: Database; fts: boolean };
 const SCHEMA_VERSION = 1;
 
 const SCHEMA = /* sql */ `
+-- Per-install backup of the app's playlists and likes. id is the sha256 of the install's secret key (the raw
+-- key is never stored); data is an opaque JSON object the server never interprets.
+CREATE TABLE IF NOT EXISTS libraries (
+  id         TEXT PRIMARY KEY,
+  version    INTEGER NOT NULL,
+  data       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tracks (
   id              TEXT PRIMARY KEY,
   path            TEXT NOT NULL UNIQUE,

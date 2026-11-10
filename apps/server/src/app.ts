@@ -16,6 +16,7 @@ import { openDb, type Db } from "./db";
 import { audioMime } from "./ids";
 import { Importer, LinkError } from "./imports/importer";
 import { Library, toTrack } from "./library";
+import { userLibraryRoutes } from "./user-library";
 import { LyricsService } from "./lyrics";
 import { InvalidAudioError, Scanner } from "./scanner";
 import { serveFile } from "./serve-file";
@@ -171,8 +172,8 @@ export function createApp(ctx: AppContext): Hono {
   app.use(
     cors({
       origin: "*",
-      allowMethods: ["GET", "HEAD", "POST", "DELETE", "OPTIONS"],
-      allowHeaders: ["Authorization", "Content-Type", "Range", "If-None-Match", "If-Range"],
+      allowMethods: ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowHeaders: ["Authorization", "Content-Type", "X-Library-Key", "Range", "If-None-Match", "If-Range"],
       exposeHeaders: ["Content-Length", "Content-Range", "Accept-Ranges", "ETag"],
       maxAge: 86400,
     }),
@@ -215,6 +216,10 @@ export function createApp(ctx: AppContext): Hono {
       await next();
     });
   }
+
+  // ---------- user library backup ----------
+  // User data, not catalog writes: ADMIN_TOKEN / ALLOW_OPEN_WRITES do not apply; the listen token does.
+  app.route("/api/library", userLibraryRoutes(ctx.db, listenDigest ? (c) => listenMatches(c, listenDigest) : null, fail));
 
   // ---------- web session ----------
 
