@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -458,7 +458,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surface2,
     paddingHorizontal: space.lg,
     color: colors.text,
-    fontSize: 15,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     fontWeight: '500',
   },
   result: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

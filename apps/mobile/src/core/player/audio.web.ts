@@ -14,14 +14,15 @@
  */
 import type { AudioMetadata, AudioPlaylist, AudioPlaylistStatus } from 'expo-audio';
 
+// The engine owns repeat-all and the full queue; read it only when a media button is pressed.
+import { player } from './engine';
+
 export type { AudioMetadata, AudioPlaylist, AudioPlaylistStatus } from 'expo-audio';
 
 type Source = { uri: string; name?: string; headers?: Record<string, string> };
 type Status = AudioPlaylistStatus & { error?: string };
 type Listener = (s: Status) => void;
 type LoopMode = 'none' | 'single' | 'all';
-
-const RESTART_THRESHOLD_S = 3;
 
 let sharedEl: HTMLAudioElement | null = null;
 
@@ -220,11 +221,8 @@ class WebPlaylist {
     handle('play', () => this.play());
     handle('pause', () => this.pause());
     handle('stop', () => this.pause());
-    handle('nexttrack', () => this.next());
-    handle('previoustrack', () => {
-      if (this.el.currentTime > RESTART_THRESHOLD_S || this.index === 0) void this.seekTo(0);
-      else this.previous();
-    });
+    handle('nexttrack', () => player.next());
+    handle('previoustrack', () => player.previous());
     handle('seekto', (d) => {
       if (d.seekTime != null) void this.seekTo(d.seekTime);
     });

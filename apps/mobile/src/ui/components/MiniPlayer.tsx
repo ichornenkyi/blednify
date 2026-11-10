@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -147,8 +147,8 @@ function MiniProgress({ inset }: { inset: number }) {
     () =>
       onProgress(({ positionMs, durationMs }) => {
         const ratio = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
-        // Animate between ~4 Hz ticks for a smooth line; snap on big jumps (seek / track change).
-        p.set(Math.abs(p.get() - ratio) > 0.05 ? ratio : withTiming(ratio, { duration: 260, easing: Easing.linear }));
+        // Native eases between ticks; web avoids a JS animation running throughout playback.
+        p.set(Platform.OS === 'web' || Math.abs(p.get() - ratio) > 0.05 ? ratio : withTiming(ratio, { duration: 260, easing: Easing.linear }));
       }),
     [p],
   );

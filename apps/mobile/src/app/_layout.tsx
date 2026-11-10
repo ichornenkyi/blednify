@@ -1,8 +1,10 @@
 import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
-import { useEffect } from 'react';
+import { Fragment, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CoreProvider } from '@/core';
 import { ActionSheetHost } from '@/ui/components/ActionSheet';
@@ -12,6 +14,9 @@ import { useWebChrome } from '@/ui/desktop/web-chrome';
 import { useIsWide } from '@/ui/layout';
 import { trackRootFocus } from '@/ui/nav';
 import { makeStyles, navigationThemeFor, useColors } from '@/ui/theme';
+
+// Expo Router supplies zero insets on web. Measure CSS env(safe-area-inset-*) for the existing screen padding.
+const SafeArea = Platform.OS === 'web' ? SafeAreaProvider : Fragment;
 
 export default function RootLayout() {
   const styles = useStyles();
@@ -40,16 +45,18 @@ export default function RootLayout() {
     </Stack>
   );
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <CoreProvider>
-        <ThemeProvider value={navigationThemeFor(colors)}>
-          <StatusBar style={colors.isLight ? 'dark' : 'light'} />
-          {wide ? <DesktopShell>{stack}</DesktopShell> : stack}
-          <ActionSheetHost />
-          <ToastHost />
-        </ThemeProvider>
-      </CoreProvider>
-    </GestureHandlerRootView>
+    <SafeArea>
+      <GestureHandlerRootView style={styles.root}>
+        <CoreProvider>
+          <ThemeProvider value={navigationThemeFor(colors)}>
+            <StatusBar style={colors.isLight ? 'dark' : 'light'} />
+            {wide ? <DesktopShell>{stack}</DesktopShell> : stack}
+            <ActionSheetHost />
+            <ToastHost />
+          </ThemeProvider>
+        </CoreProvider>
+      </GestureHandlerRootView>
+    </SafeArea>
   );
 }
 

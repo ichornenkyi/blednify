@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -47,7 +47,8 @@ export function SeekBar({ fallbackDurationMs }: { fallbackDurationMs: number }) 
     if (scrubMs !== null) return;
     return onProgress((p) => {
       const r = durationMs > 0 ? clamp01(p.positionMs / durationMs) : 0;
-      ratio.set(Math.abs(ratio.get() - r) > 0.02 ? r : withTiming(r, { duration: 260, easing: Easing.linear }));
+      // Web worklets run on JS: update on the playback tick instead of keeping a frame loop alive.
+      ratio.set(Platform.OS === 'web' || Math.abs(ratio.get() - r) > 0.02 ? r : withTiming(r, { duration: 260, easing: Easing.linear }));
     });
   }, [durationMs, scrubMs, ratio]);
 

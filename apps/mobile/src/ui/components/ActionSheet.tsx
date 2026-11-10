@@ -10,7 +10,7 @@ import { Pressable as WebPressable } from '../desktop/web';
 import { haptics } from '../haptics';
 import { useIsWide } from '../layout';
 import { closeSheet, useOverlay } from '../overlay';
-import { makeStyles, radius, space, useColors } from '../theme';
+import { makeStyles, radius, space, useColors, webLayer } from '../theme';
 import { Artwork } from './Artwork';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
@@ -232,6 +232,7 @@ export function SheetAction({ icon, label, onPress, destructive, iconColor, keep
 const useStyles = makeStyles((colors) => ({
   scrim: { backgroundColor: colors.scrim },
   sheet: {
+    ...webLayer,
     position: 'absolute',
     left: 0,
     right: 0,
