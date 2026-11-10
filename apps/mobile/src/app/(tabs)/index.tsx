@@ -31,6 +31,7 @@ import { contextMenu } from '@/ui/desktop/web';
 import { haptics } from '@/ui/haptics';
 import { nav } from '@/ui/nav';
 import type { SheetAnchor } from '@/ui/overlay';
+import { useChromeInset } from '@/ui/chrome';
 import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
@@ -61,6 +62,7 @@ function recentAlbumsOf(tracks: readonly AppTrack[]): { key: string; track: AppT
 
 export default function HomeScreen() {
   const styles = useStyles();
+  const chromeInset = useChromeInset('tabs');
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const wide = useIsWide();
@@ -97,7 +99,7 @@ export default function HomeScreen() {
       <Backdrop />
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={{ paddingTop: insets.top + (wide ? space.xxl : space.md), paddingBottom: space.xxl }}
+        contentContainerStyle={{ paddingTop: insets.top + (wide ? space.xxl : space.md), paddingBottom: space.xxl + chromeInset }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           hasServer ? (

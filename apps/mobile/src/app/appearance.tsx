@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { setThemePref, useThemePref } from '@/core';
+import { setNavStyle, setThemePref, useNavStyle, useThemePref, type NavStyle } from '@/core';
 import { Backdrop } from '@/ui/components/Backdrop';
 import { ColorPickerSheet } from '@/ui/components/ColorPickerSheet';
 import { Icon } from '@/ui/components/Icon';
@@ -12,7 +12,7 @@ import { ScreenHeader } from '@/ui/components/ScreenHeader';
 import { Text } from '@/ui/components/Text';
 import { haptics } from '@/ui/haptics';
 import { showSheet } from '@/ui/overlay';
-import { useReadableColumn } from '@/ui/layout';
+import { useIsWide, useReadableColumn } from '@/ui/layout';
 import {
   ACCENT_SWATCHES,
   BACKGROUND_SWATCHES,
@@ -35,6 +35,9 @@ export default function AppearanceScreen() {
   const pref = useThemePref();
   const preset = presetById(pref.preset);
   const customized = pref.accent !== null || pref.background !== null;
+  const navStyle = useNavStyle();
+  // The wide layout navigates from a sidebar; these styles only change the phone layout.
+  const wide = useIsWide();
 
   const choosePreset = (p: ThemePreset) => {
     haptics.select();
@@ -115,6 +118,28 @@ export default function AppearanceScreen() {
             }}
           />
         ) : null}
+
+        {wide ? null : (
+          <>
+            <Text variant="micro" style={styles.label}>
+              NAVIGATION
+            </Text>
+            <View style={styles.navRow} accessibilityRole="radiogroup">
+              {NAV_STYLES.map((n) => (
+                <NavStyleCard
+                  key={n.id}
+                  option={n}
+                  selected={n.id === navStyle}
+                  onPress={() => {
+                    haptics.select();
+                    setNavStyle(n.id);
+                  }}
+                />
+              ))}
+            </View>
+            <Text variant="caption">{NAV_STYLES.find((n) => n.id === navStyle)?.hint}</Text>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -166,6 +191,51 @@ function Preview({ colors }: { colors: Palette }) {
         </View>
       </View>
     </View>
+  );
+}
+
+const NAV_STYLES: readonly { id: NavStyle; name: string; hint: string }[] = [
+  { id: 'classic', name: 'Classic', hint: 'A docked bar with labels. Lists end above it.' },
+  { id: 'floating', name: 'Floating', hint: 'Pills that float over your music as it scrolls underneath.' },
+  { id: 'glass', name: 'Glass', hint: 'Translucent pills that blur whatever is behind them.' },
+];
+
+/** A navigation style, drawn as the bottom edge of a phone showing it. */
+function NavStyleCard({ option, selected, onPress }: { option: (typeof NAV_STYLES)[number]; selected: boolean; onPress(): void }) {
+  const styles = useStyles();
+  const colors = useColors();
+  const glass = option.id === 'glass';
+  const dots = (
+    <>
+      <View style={[styles.navDot, styles.navDotActive]} />
+      <View style={styles.navDot} />
+      <View style={styles.navDot} />
+    </>
+  );
+  return (
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${option.name} navigation`}
+      style={[styles.navCard, selected && { borderColor: colors.accent }]}>
+      <View style={styles.navArt}>
+        {glass ? <LinearGradient colors={[colors.accent, colors.accentDeep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.navArtwork} /> : null}
+        <View style={[styles.navLine, { width: '62%' }]} />
+        <View style={[styles.navLine, { width: '44%' }]} />
+        {option.id === 'classic' ? (
+          <View style={styles.navDocked}>{dots}</View>
+        ) : (
+          <View style={[styles.navPill, glass && styles.navPillGlass]}>{dots}</View>
+        )}
+      </View>
+      <View style={styles.presetFoot}>
+        <Text variant="bodyStrong" numberOfLines={1} style={styles.flex}>
+          {option.name}
+        </Text>
+        {selected ? <Icon name="checkmark-circle" size={18} color={colors.accent} /> : null}
+      </View>
+    </PressableScale>
   );
 }
 
@@ -290,6 +360,51 @@ const useStyles = makeStyles((colors) => ({
   presetBar: { height: 8, borderRadius: 4 },
   presetDot: { position: 'absolute', right: space.md, top: space.md, width: 16, height: 16, borderRadius: 8 },
   presetFoot: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: space.md, paddingVertical: space.sm },
+  navRow: { flexDirection: 'row', gap: space.sm },
+  navCard: {
+    flex: 1,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  navArt: { height: 84, paddingTop: space.md, paddingHorizontal: space.md, gap: 6, backgroundColor: colors.bg },
+  navArtwork: { position: 'absolute', right: -14, bottom: 6, width: 56, height: 56, borderRadius: radius.sm, opacity: 0.9 },
+  navLine: { height: 6, borderRadius: 3, backgroundColor: colors.surface3 },
+  navDocked: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: colors.surface2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderStrong,
+  },
+  navPill: {
+    position: 'absolute',
+    left: space.sm,
+    right: space.sm,
+    bottom: space.sm,
+    height: 24,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: colors.surface3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  navPillGlass: {
+    backgroundColor: colors.isLight ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.16)',
+    borderColor: colors.isLight ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.28)',
+  },
+  navDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textTertiary },
+  navDotActive: { width: 16, backgroundColor: colors.text },
   swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   swatchRing: { padding: 3, borderRadius: SWATCH, borderWidth: 2, borderColor: 'transparent' },
   swatch: {

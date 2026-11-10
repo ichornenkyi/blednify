@@ -10,6 +10,7 @@ import { DetailHeader } from '@/ui/components/DetailHeader';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { IconButton } from '@/ui/components/IconButton';
 import { Loading } from '@/ui/components/Loading';
+import { ChromeHost, useChromeInset } from '@/ui/chrome';
 import { DockedMiniPlayer } from '@/ui/components/MiniPlayer';
 import { PlaylistPicker } from '@/ui/components/PlaylistPicker';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
@@ -29,6 +30,7 @@ export default function AlbumScreen() {
   const params = useLocalSearchParams<{ id: string; origin?: string }>();
   const origin = parseOrigin(params.origin);
   const insets = useSafeAreaInsets();
+  const chromeInset = useChromeInset('detail');
   const { album, tracks, isLoading } = useAlbum(params.id, origin);
 
   if (!album) {
@@ -59,12 +61,12 @@ export default function AlbumScreen() {
     .join(' · ');
 
   return (
-    <View style={styles.root}>
+    <ChromeHost overlay={<DockedMiniPlayer />}>
       <Backdrop />
       <FlashList
         data={tracks}
         keyExtractor={(t) => t.key}
-        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl + chromeInset }}
         ListHeaderComponent={
           <DetailHeader
             renderArtwork={(size) => <Artwork uri={album.artworkUri} label={album.title} size={size} radius={radius.lg} priority="high" />}
@@ -106,8 +108,7 @@ export default function AlbumScreen() {
         renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onMore} leading="number" showDuration />}
       />
       <FloatingBack />
-      <DockedMiniPlayer />
-    </View>
+    </ChromeHost>
   );
 }
 

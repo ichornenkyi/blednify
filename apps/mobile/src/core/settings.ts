@@ -135,3 +135,32 @@ export function setThemePref(patch: Partial<ThemePref>): void {
 export function useThemePref(): ThemePref {
   return useStore(themeStore, (s) => s);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Navigation style
+
+const K_NAV_STYLE = 'settings.navStyle.v1';
+
+/**
+ * How the phone layout draws its bottom navigation and mini player: `classic` docks a bar under the
+ * content, `floating` and `glass` float pills over it (see ui/chrome).
+ */
+export type NavStyle = 'classic' | 'floating' | 'glass';
+
+const NAV_STYLES: readonly NavStyle[] = ['classic', 'floating', 'glass'];
+
+function readNavStyle(): NavStyle {
+  const raw = kv.getString(K_NAV_STYLE);
+  return NAV_STYLES.includes(raw as NavStyle) ? (raw as NavStyle) : 'classic';
+}
+
+export const navStyleStore = create<{ style: NavStyle }>(() => ({ style: readNavStyle() }));
+
+export function setNavStyle(style: NavStyle): void {
+  kv.set(K_NAV_STYLE, style);
+  navStyleStore.setState({ style });
+}
+
+export function useNavStyle(): NavStyle {
+  return useStore(navStyleStore, (s) => s.style);
+}

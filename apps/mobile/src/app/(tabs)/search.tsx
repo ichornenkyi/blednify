@@ -36,6 +36,7 @@ import { TrackRow } from '@/ui/components/TrackRow';
 import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
 import { useDesk } from '@/ui/desktop/store';
+import { useChromeInset } from '@/ui/chrome';
 import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
@@ -49,6 +50,7 @@ const TRACK_LIMIT = 30;
 
 export default function SearchScreen() {
   const styles = useStyles();
+  const chromeInset = useChromeInset('tabs');
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
@@ -160,7 +162,7 @@ export default function SearchScreen() {
       {!deferred ? (
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={{ paddingBottom: space.xxl + chromeInset }}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled">
           {history.length > 0 ? (
@@ -194,7 +196,7 @@ export default function SearchScreen() {
           getItemType={(item) => item.type}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={{ paddingBottom: space.xl + chromeInset }}
           renderItem={({ item }) => {
             switch (item.type) {
               case 'header':
@@ -361,8 +363,6 @@ const useStyles = makeStyles((colors) => ({
   },
   fieldWide: { maxWidth: 560, marginBottom: space.lg },
   input: { flex: 1, height: '100%', color: colors.text, fontSize: 16, fontWeight: '500', outlineStyle: 'none' } as object,
-  listContent: { paddingBottom: space.xl },
-  scrollContent: { paddingBottom: space.xxl },
   section: { paddingTop: space.lg, paddingBottom: space.sm },
   recentSection: { paddingBottom: space.md },
   recentHeader: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },

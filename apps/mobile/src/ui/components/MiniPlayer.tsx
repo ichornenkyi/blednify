@@ -7,6 +7,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { onProgress, player, usePlayer } from '@/core';
 
+import { ChromeDock, ChromeSurface, useChromeStyle } from '../chrome';
 import { haptics } from '../haptics';
 import { useIsWide } from '../layout';
 import { nav } from '../nav';
@@ -15,6 +16,7 @@ import { Artwork } from './Artwork';
 import { IconButton } from './IconButton';
 import { Text } from './Text';
 
+const PILL_RADIUS = MINI_PLAYER_HEIGHT / 2;
 const SWIPE_THRESHOLD = 72;
 const OPEN_THRESHOLD = 36;
 
@@ -24,13 +26,17 @@ function skip(dir: 1 | -1) {
   else player.previous();
 }
 
-/** Docked mini player (above the tab bar). Tap or swipe ↑ → Now Playing, swipe ←/→ for next/previous. */
+/**
+ * Mini player above the tab bar: a docked card, or a pill with the floating navigation styles.
+ * Tap or swipe ↑ → Now Playing, swipe ←/→ for next/previous.
+ */
 export function MiniPlayer() {
   const styles = useStyles();
   const colors = useColors();
   const current = usePlayer((s) => s.current);
   const isPlaying = usePlayer((s) => s.isPlaying);
   const isBuffering = usePlayer((s) => s.isBuffering);
+  const floating = useChromeStyle() !== 'classic';
   const x = useSharedValue(0);
   const y = useSharedValue(0);
   /** Axis the drag locked to on activation: 0 horizontal (skip), 1 vertical (open player). */
@@ -73,16 +79,15 @@ export function MiniPlayer() {
 
   if (!current) return null;
 
-  return (
-    <Animated.View style={[styles.wrap, liftStyle]}>
+  const card = (
       <GestureDetector gesture={pan}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Now playing: ${current.title} by ${current.artist}. Open player`}
           onPress={nav.player}
-          style={styles.card}>
+          style={floating ? styles.pill : styles.card}>
           <Animated.View style={[styles.content, contentStyle]}>
-            <Artwork uri={current.artworkUri} label={current.album || current.title} size={44} recyclingKey={current.key} priority="high" />
+            <Artwork uri={current.artworkUri} label={current.album || current.title} size={44} round={floating} recyclingKey={current.key} priority="high" />
             <View style={styles.meta}>
               <Text variant="bodyStrong" numberOfLines={1}>
                 {current.title}
@@ -100,9 +105,13 @@ export function MiniPlayer() {
             <IconButton icon={isPlaying ? 'pause' : 'play'} label={isPlaying ? 'Pause' : 'Play'} size={26} haptic onPress={player.togglePlay} />
           )}
           <IconButton icon="play-skip-forward" label="Next track" size={22} haptic onPress={player.next} />
-          <MiniProgress />
+          <MiniProgress inset={floating ? PILL_RADIUS : space.sm} />
         </Pressable>
       </GestureDetector>
+  );
+  return (
+    <Animated.View style={[floating ? null : styles.wrap, liftStyle]}>
+      {floating ? <ChromeSurface radius={PILL_RADIUS}>{card}</ChromeSurface> : card}
     </Animated.View>
   );
 }
@@ -112,9 +121,17 @@ export function DockedMiniPlayer() {
   const styles = useStyles();
   const hasTrack = usePlayer((s) => s.current !== null);
   const insets = useSafeAreaInsets();
+  const chrome = useChromeStyle();
   // The wide layout has a player bar under every page.
   const wide = useIsWide();
   if (!hasTrack || wide) return null;
+  if (chrome !== 'classic') {
+    return (
+      <ChromeDock>
+        <MiniPlayer />
+      </ChromeDock>
+    );
+  }
   return (
     <View style={[styles.docked, { paddingBottom: insets.bottom }]}>
       <MiniPlayer />
@@ -123,7 +140,7 @@ export function DockedMiniPlayer() {
 }
 
 /** Follows progress through a store subscription, so ticks never re-render React. */
-function MiniProgress() {
+function MiniProgress({ inset }: { inset: number }) {
   const styles = useStyles();
   const p = useSharedValue(0);
   useEffect(
@@ -137,7 +154,7 @@ function MiniProgress() {
   );
   const style = useAnimatedStyle(() => ({ transform: [{ scaleX: p.get() }] }));
   return (
-    <View style={styles.track} pointerEvents="none">
+    <View style={[styles.track, { left: inset, right: inset }]} pointerEvents="none">
       <Animated.View style={[styles.fill, style]} />
     </View>
   );
@@ -158,13 +175,20 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.borderStrong,
     overflow: 'hidden',
   },
+  pill: {
+    height: MINI_PLAYER_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: space.sm,
+    paddingRight: space.sm,
+    borderRadius: PILL_RADIUS,
+    overflow: 'hidden',
+  },
   content: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minWidth: 0 },
   meta: { flex: 1, minWidth: 0 },
   spinner: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   track: {
     position: 'absolute',
-    left: space.sm,
-    right: space.sm,
     bottom: 0,
     height: 2,
     borderRadius: 1,

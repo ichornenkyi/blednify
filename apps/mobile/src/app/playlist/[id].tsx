@@ -9,6 +9,7 @@ import { DetailHeader } from '@/ui/components/DetailHeader';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { IconButton } from '@/ui/components/IconButton';
 import { Loading } from '@/ui/components/Loading';
+import { ChromeHost, useChromeInset } from '@/ui/chrome';
 import { DockedMiniPlayer } from '@/ui/components/MiniPlayer';
 import { openPlaylistActions } from '@/ui/components/PlaylistActions';
 import { PlaylistArtwork } from '@/ui/components/PlaylistArtwork';
@@ -26,6 +27,7 @@ export default function PlaylistScreen() {
   const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const chromeInset = useChromeInset('detail');
   const { playlist, tracks } = usePlaylist(id);
   const settled = useAfter(500);
 
@@ -58,12 +60,12 @@ export default function PlaylistScreen() {
   const cover = playlist.artworkUris;
 
   return (
-    <View style={styles.root}>
+    <ChromeHost overlay={<DockedMiniPlayer />}>
       <Backdrop />
       <FlashList
         data={tracks}
         keyExtractor={(t, i) => `${i}:${t.key}`}
-        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl + chromeInset }}
         ListHeaderComponent={
           <DetailHeader
             renderArtwork={(size) => <PlaylistArtwork uris={cover} name={playlist.name} size={size} radius={radius.lg} />}
@@ -104,8 +106,7 @@ export default function PlaylistScreen() {
         renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onMore} subtitle="artist-album" />}
       />
       <FloatingBack />
-      <DockedMiniPlayer />
-    </View>
+    </ChromeHost>
   );
 }
 

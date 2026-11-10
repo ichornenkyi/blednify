@@ -10,6 +10,7 @@ import { Artwork } from '@/ui/components/Artwork';
 import { DetailHeader } from '@/ui/components/DetailHeader';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Loading } from '@/ui/components/Loading';
+import { ChromeHost, useChromeInset } from '@/ui/chrome';
 import { DockedMiniPlayer } from '@/ui/components/MiniPlayer';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { Rail, useRailCardWidth } from '@/ui/components/Rail';
@@ -31,6 +32,7 @@ export default function ArtistScreen() {
   const params = useLocalSearchParams<{ id: string; origin?: string }>();
   const origin = parseOrigin(params.origin);
   const insets = useSafeAreaInsets();
+  const chromeInset = useChromeInset('detail');
   const cardW = useRailCardWidth();
   const { artist, albums, tracks, isLoading } = useArtist(params.id, origin);
 
@@ -59,12 +61,12 @@ export default function ArtistScreen() {
   const backdrop = artist.artworkUri ?? albums.find((a) => a.artworkUri)?.artworkUri ?? null;
 
   return (
-    <View style={styles.root}>
+    <ChromeHost overlay={<DockedMiniPlayer />}>
       <Backdrop />
       <FlashList
         data={tracks}
         keyExtractor={(t) => t.key}
-        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space.xl + chromeInset }}
         ListHeaderComponent={
           <>
             <DetailHeader
@@ -98,8 +100,7 @@ export default function ArtistScreen() {
         renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onMore} />}
       />
       <FloatingBack />
-      <DockedMiniPlayer />
-    </View>
+    </ChromeHost>
   );
 }
 

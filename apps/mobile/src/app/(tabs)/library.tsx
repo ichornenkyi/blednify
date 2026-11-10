@@ -33,6 +33,7 @@ import { onTrackMore } from '@/ui/components/TrackActions';
 import { TrackRow, TrackTableHeader } from '@/ui/components/TrackRow';
 import { haptics } from '@/ui/haptics';
 import { nav, type LibraryFilter } from '@/ui/nav';
+import { useChromeInset } from '@/ui/chrome';
 import { useGutter, useIsWide } from '@/ui/layout';
 import { makeStyles, radius, space, useColors } from '@/ui/theme';
 
@@ -93,6 +94,7 @@ export default function LibraryScreen() {
 
 function PlaylistsList() {
   const styles = useStyles();
+  const chromeInset = useChromeInset('tabs');
   const colors = useColors();
   const playlists = usePlaylists();
   const { adminMode, adminToken } = useSettings();
@@ -101,7 +103,7 @@ function PlaylistsList() {
     <FlashList
       data={playlists}
       keyExtractor={(p) => p.id}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={{ paddingBottom: space.xl + chromeInset }}
       ListHeaderComponent={
         <>
           <ListRow
@@ -147,6 +149,7 @@ function PlaylistsList() {
 
 function AlbumsGrid() {
   const styles = useStyles();
+  const chromeInset = useChromeInset('tabs');
   const wide = useIsWide();
   // Wide layout: as many ~190px columns as the page column fits.
   const [pageW, setPageW] = useState(0);
@@ -170,7 +173,7 @@ function AlbumsGrid() {
       data={albums}
       numColumns={columns}
       keyExtractor={(a) => `${a.origin}:${a.id}`}
-      contentContainerStyle={wide ? styles.gridContentWide : styles.gridContent}
+      contentContainerStyle={{ paddingHorizontal: wide ? space.xl : space.md, paddingBottom: space.xl + chromeInset }}
       ListEmptyComponent={
         <EmptyState
           icon="disc-outline"
@@ -252,6 +255,7 @@ function DeviceList() {
 
 function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactElement; extra?: ReactNode }) {
   const styles = useStyles();
+  const chromeInset = useChromeInset('tabs');
   const wide = useIsWide();
   const gutter = useGutter();
   const play = (index: number) => {
@@ -262,7 +266,7 @@ function TrackList({ tracks, empty, extra }: { tracks: AppTrack[]; empty: ReactE
     <FlashList
       data={tracks}
       keyExtractor={(t) => t.key}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={{ paddingBottom: space.xl + chromeInset }}
       ListEmptyComponent={empty}
       ListHeaderComponent={
         tracks.length > 0 ? (
@@ -290,9 +294,6 @@ const useStyles = makeStyles((colors) => ({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: space.md },
   chipsScroll: { flexGrow: 0 },
   chips: { gap: space.sm, paddingBottom: space.md },
-  listContent: { paddingBottom: space.xl },
-  gridContent: { paddingHorizontal: space.md, paddingBottom: space.xl },
-  gridContentWide: { paddingHorizontal: space.xl, paddingBottom: space.xl },
   gridCell: { flex: 1, paddingHorizontal: space.xs + 2, paddingBottom: space.lg },
   playRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.lg, paddingRight: space.md, paddingVertical: space.sm },
   newTile: {

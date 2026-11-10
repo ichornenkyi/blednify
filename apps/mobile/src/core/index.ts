@@ -109,11 +109,14 @@ export { useAdminInfo } from './admin';
 // Settings
 export {
   saveConnection,
+  setNavStyle,
   setThemePref,
   themeStore,
+  useNavStyle,
   useServerBase,
   useSettings,
   useThemePref,
+  type NavStyle,
   type ThemePref,
 } from './settings';
 
