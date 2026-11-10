@@ -141,13 +141,14 @@ export const trackStreamUrl = (base: string, id: string) => `${base}/api/tracks/
 export const trackArtworkUrl = (base: string, id: string) => `${base}/api/tracks/${seg(id)}/artwork`;
 
 /** The server's resize buckets (apps/server/src/artwork.ts). Asking for exactly these lets nearby sizes share a cached image. */
-const ARTWORK_SIZES = [16, 64, 128, 256, 512, 1024] as const;
+const ARTWORK_SIZES = [64, 128, 256, 512, 1024] as const;
 
 /**
- * A server cover scaled down for a slot `px` device pixels wide; a bucket a few percent short still counts as
- * big enough. Anything that is not a full-size server cover (a downloaded file, an already sized URL) is unchanged.
+ * A server cover scaled down for a slot `px` device pixels wide. Downloaded files, other image endpoints
+ * and already sized URLs are unchanged.
  */
 export function sizedArtworkUrl(uri: string, px: number): string {
+  if (!/^https?:\/\//i.test(uri) && !uri.startsWith('/')) return uri;
   if (!/\/api\/tracks\/[^/?#]+\/artwork$/.test(uri)) return uri;
-  return `${uri}?size=${ARTWORK_SIZES.find((s) => s >= px * 0.9) ?? ARTWORK_SIZES[ARTWORK_SIZES.length - 1]}`;
+  return `${uri}?size=${ARTWORK_SIZES.find((s) => s >= px) ?? ARTWORK_SIZES[ARTWORK_SIZES.length - 1]}`;
 }

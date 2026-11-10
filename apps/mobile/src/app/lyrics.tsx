@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -20,7 +19,6 @@ import {
   hasLyrics,
   player,
   useActiveLyric,
-  useImageSource,
   useLyrics,
   usePlayer,
   usePrefetchLyrics,
@@ -28,6 +26,7 @@ import {
   type LyricLine,
   type Lyrics,
 } from '@/core';
+import { ArtworkBackdrop } from '@/ui/components/Artwork';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Icon } from '@/ui/components/Icon';
 import { IconButton } from '@/ui/components/IconButton';
@@ -115,13 +114,10 @@ function LyricsScreenContent() {
 
 /** Blurred cover tinted with the album's colour, expanding the lyrics card. */
 function Backdrop({ track, tint }: { track: AppTrack; tint: string }) {
-  const source = useImageSource(track.artworkUri);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <View style={[StyleSheet.absoluteFill, { backgroundColor: tint }]} />
-      {source ? (
-        <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={90} cachePolicy="memory-disk" transition={300} />
-      ) : null}
+      <ArtworkBackdrop uri={track.artworkUri} blurRadius={90} transition={300} />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: tint, opacity: 0.5 }]} />
       <LinearGradient
         colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.65)']}

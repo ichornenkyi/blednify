@@ -34,7 +34,7 @@ export function imageSourceFor(uri: string): ImageSource {
  */
 export function imageUriForWidth(uri: string, width: number | undefined): string {
   if (Platform.OS !== 'web' || !width) return uri;
-  return sizedArtworkUrl(uri, Math.ceil(width * Math.min(PixelRatio.get(), 3)));
+  return sizedArtworkUrl(uri, Math.ceil(width * PixelRatio.get()));
 }
 
 /**
@@ -44,6 +44,7 @@ export function imageUriForWidth(uri: string, width: number | undefined): string
 export function useImageSource(uri: string | null | undefined, width?: number): ImageSource | null {
   const serverUrl = useStore(settingsStore, (s) => s.serverUrl);
   const accessToken = useStore(settingsStore, (s) => s.accessToken);
+  const sizedUri = uri ? imageUriForWidth(uri, width) : uri;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- credentials are read from the store; deps mark when to rebuild
-  return useMemo(() => (uri ? imageSourceFor(imageUriForWidth(uri, width)) : null), [uri, width, serverUrl, accessToken]);
+  return useMemo(() => (sizedUri ? imageSourceFor(sizedUri) : null), [sizedUri, serverUrl, accessToken]);
 }

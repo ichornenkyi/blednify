@@ -136,6 +136,7 @@ export { APP_ICONS, appIconById, appIconSupported, setAppIcon, useAppIcon, type 
 
 // Images (adds the access token for server URLs)
 export { fileStorageSupported } from './platform';
+export { sizedArtworkUrl } from './api';
 export { imageSourceFor, useImageSource, type ImageSource } from './auth';
 
 // Utilities

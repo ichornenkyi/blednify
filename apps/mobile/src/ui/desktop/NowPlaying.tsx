@@ -1,10 +1,9 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { hasLyrics, player, useImageSource, useLyrics, usePlayer, usePrefetchLyrics, type AppTrack } from '@/core';
+import { hasLyrics, player, useLyrics, usePlayer, usePrefetchLyrics, type AppTrack } from '@/core';
 
-import { Artwork } from '../components/Artwork';
+import { Artwork, ArtworkBackdrop } from '../components/Artwork';
 import { EmptyState } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { LikeButton } from '../components/LikeButton';
@@ -164,10 +163,9 @@ function UpNext() {
 
 function Backdrop({ uri }: { uri: string | null }) {
   const colors = useColors();
-  const source = useImageSource(uri);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {uri ? <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={90} cachePolicy="memory-disk" transition={400} /> : null}
+      <ArtworkBackdrop uri={uri} blurRadius={90} transition={400} />
       <LinearGradient
         colors={uri ? ['rgba(10,10,12,0.55)', 'rgba(10,10,12,0.8)', 'rgba(10,10,12,0.94)'] : [colors.accentDeep, colors.bg, colors.bg]}
         locations={[0, 0.55, 1]}

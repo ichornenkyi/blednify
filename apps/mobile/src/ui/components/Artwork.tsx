@@ -1,15 +1,15 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { gradientFor, makeStyles, radius as radii } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
-import { useImageSource } from '@/core';
+import { sizedArtworkUrl, useImageSource } from '@/core';
 
-/** Assumed width, in points, of artwork that fills its parent: a column of the albums grid. */
-const FILL_WIDTH = 170;
+/** A blurred cover needs little source detail, even behind a full-screen surface. */
+const BACKDROP_PX = 64;
 
 export type ArtworkProps = {
   uri: string | null | undefined;
@@ -39,13 +39,19 @@ function initials(label: string) {
 export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIcon, recyclingKey, priority, style }: ArtworkProps) {
   const styles = useStyles();
   const [failedUri, setFailedUri] = useState<string | null>(null);
-  const source = useImageSource(uri, size ?? FILL_WIDTH);
+  const [measuredWidth, setMeasuredWidth] = useState<number>();
+  const measure = Platform.OS === 'web' && size === undefined;
+  // Grid cells can be wider on desktop. Wait for their actual width instead of decoding an original
+  // or requesting a phone-sized thumbnail first. Native keeps its original source and layout path.
+  const source = useImageSource(measure && !measuredWidth ? null : uri, size ?? measuredWidth);
   const showImage = !!uri && uri !== failedUri;
   const borderRadius = round ? 9999 : radius;
   const box = size !== undefined ? { width: size, height: size } : styles.fill;
 
   return (
-    <View style={[styles.base, box, { borderRadius }, style]}>
+    <View
+      style={[styles.base, box, { borderRadius }, style]}
+      onLayout={measure ? (e) => setMeasuredWidth(Math.ceil(e.nativeEvent.layout.width)) : undefined}>
       {showImage ? (
         <Image
           source={source}
@@ -62,6 +68,27 @@ export function Artwork({ uri, label, size, radius = radii.sm, round, fallbackIc
         <Fallback label={label} icon={fallbackIcon} size={size} />
       )}
     </View>
+  );
+}
+
+/**
+ * Full-bleed cover behind a screen. Keep the original blur/tint, using a small source on web to reduce
+ * decoded image memory. Stretching an unblurred 16px cover visibly changes high-contrast artwork.
+ */
+export function ArtworkBackdrop({ uri, blurRadius, transition }: { uri: string | null | undefined; blurRadius: number; transition: number }) {
+  const web = Platform.OS === 'web';
+  const backdropUri = web && uri ? sizedArtworkUrl(uri, BACKDROP_PX) : uri;
+  const source = useImageSource(backdropUri);
+  if (!source) return null;
+  return (
+    <Image
+      source={source}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      blurRadius={blurRadius}
+      cachePolicy="memory-disk"
+      transition={transition}
+    />
   );
 }
 

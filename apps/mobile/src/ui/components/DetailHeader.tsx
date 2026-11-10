@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View, type ViewStyle } from 'react-native';
@@ -7,9 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable } from '../desktop/web';
 import { useGutter, useIsWide } from '../layout';
 import { makeStyles, radius, space, useColors, withAlpha } from '../theme';
+import { ArtworkBackdrop } from './Artwork';
 import { PrimaryButton } from './PrimaryButton';
 import { Text } from './Text';
-import { useImageSource } from '@/core';
 
 export type DetailHeaderProps = {
   /** Rendered artwork (Artwork / PlaylistArtwork) sized by the header. */
@@ -46,7 +45,6 @@ export function DetailHeader({
   const styles = useStyles();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const backdropSource = useImageSource(backdropUri);
   const { width } = useWindowDimensions();
   const wide = useIsWide();
   const gutter = useGutter();
@@ -55,9 +53,7 @@ export function DetailHeader({
 
   const backdrop = (
     <View style={[styles.backdrop, colors.backdrop !== 'none' && fadeOut]} pointerEvents="none">
-      {backdropUri ? (
-        <Image source={backdropSource} style={StyleSheet.absoluteFill} contentFit="cover" blurRadius={60} cachePolicy="memory-disk" transition={200} />
-      ) : null}
+      <ArtworkBackdrop uri={backdropUri} blurRadius={60} transition={200} />
       <LinearGradient
         colors={
           backdropUri

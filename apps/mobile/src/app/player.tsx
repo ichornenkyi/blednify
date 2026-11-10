@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -25,14 +24,13 @@ import { scheduleOnRN } from 'react-native-worklets';
 import {
   hasLyrics,
   player,
-  useImageSource,
   useLyrics,
   usePlayer,
   usePrefetchLyrics,
   type AppTrack,
   type RepeatMode,
 } from '@/core';
-import { Artwork } from '@/ui/components/Artwork';
+import { Artwork, ArtworkBackdrop } from '@/ui/components/Artwork';
 import { DownloadButton } from '@/ui/components/DownloadButton';
 import { EmptyState } from '@/ui/components/EmptyState';
 import { Icon } from '@/ui/components/Icon';
@@ -306,19 +304,9 @@ function NowPlaying({
 
 function Backdrop({ uri }: { uri: string | null }) {
   const colors = useColors();
-  const source = useImageSource(uri);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {uri ? (
-        <Image
-          source={source}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          blurRadius={70}
-          cachePolicy="memory-disk"
-          transition={300}
-        />
-      ) : null}
+      <ArtworkBackdrop uri={uri} blurRadius={70} transition={300} />
       <LinearGradient
         colors={
           uri
