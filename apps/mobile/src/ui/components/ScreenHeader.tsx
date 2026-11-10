@@ -9,6 +9,12 @@ import { IconButton } from './IconButton';
 import { Text } from './Text';
 
 /** Simple top bar for secondary screens: back, title, optional trailing actions. */
+/** Back, or Home for a page opened straight from a link (nothing to go back to). */
+function goBack() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/');
+}
+
 export function ScreenHeader({
   title,
   right,
@@ -22,7 +28,7 @@ export function ScreenHeader({
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.bar, { paddingTop: insets.top + space.xs }]}>
-      <IconButton icon={backIcon} label="Back" size={26} onPress={() => router.back()} />
+      <IconButton icon={backIcon} label="Back" size={26} onPress={goBack} />
       <Text variant="subheading" numberOfLines={1} style={styles.title}>
         {title}
       </Text>
@@ -38,7 +44,7 @@ export function FloatingBack() {
   const wide = useIsWide();
   return (
     <View style={[styles.floating, wide && styles.floatingWide, { top: insets.top + (wide ? space.lg : space.xs) }]} pointerEvents="box-none">
-      <IconButton icon="chevron-back" label="Back" variant="scrim" size={24} diameter={40} onPress={() => router.back()} />
+      <IconButton icon="chevron-back" label="Back" variant="scrim" size={24} diameter={40} onPress={goBack} />
     </View>
   );
 }

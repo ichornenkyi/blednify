@@ -24,6 +24,7 @@ import { confirm } from './ConfirmSheet';
 import { useColors } from '../theme';
 import { SheetAction, SheetHeader } from './ActionSheet';
 import { PlaylistPicker } from './PlaylistPicker';
+import { openShare } from './ShareSheet';
 import { Text } from './Text';
 
 export type TrackActionContext = {
@@ -85,6 +86,16 @@ function TrackActions({ track, context }: { track: AppTrack; context: TrackActio
         }}
       />
       <SheetAction icon="add-circle-outline" label="Add to playlist" keepOpen onPress={() => showSheet(<PlaylistPicker tracks={[track]} />)} />
+      {track.origin === 'remote' ? (
+        <SheetAction
+          icon="share-outline"
+          label="Share"
+          keepOpen
+          onPress={() =>
+            openShare({ target: { kind: 'track', id: track.id }, title: track.title, subtitle: track.artist, artworkUri: track.artworkUri })
+          }
+        />
+      ) : null}
       <SheetAction
         icon={liked ? 'heart' : 'heart-outline'}
         iconColor={liked ? colors.accent : undefined}

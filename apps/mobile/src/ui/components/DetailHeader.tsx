@@ -22,7 +22,8 @@ export type DetailHeaderProps = {
   onSubtitlePress?: () => void;
   meta?: string;
   onPlay?: () => void;
-  onShuffle?: () => void;
+  /** `null` hides Shuffle (a single song); undefined shows it disabled (an empty list). */
+  onShuffle?: (() => void) | null;
   /** Extra action buttons rendered next to Play / Shuffle. */
   actions?: ReactNode;
   children?: ReactNode;
@@ -104,7 +105,7 @@ export function DetailHeader({
         </View>
         <View style={styles.buttons}>
           <PrimaryButton label="Play" icon="play" onPress={() => onPlay?.()} disabled={disabled} style={styles.wideButton} />
-          <PrimaryButton label="Shuffle" icon="shuffle" variant="surface" onPress={() => onShuffle?.()} disabled={!onShuffle} style={styles.wideButton} />
+          {onShuffle === null ? null : <PrimaryButton label="Shuffle" icon="shuffle" variant="surface" onPress={() => onShuffle?.()} disabled={!onShuffle} style={styles.wideButton} />}
           {actions}
         </View>
         {/* Full-bleed children (track table header) line up with the list rows, not the padded titles. */}
@@ -139,7 +140,7 @@ export function DetailHeader({
       </View>
       <View style={styles.buttons}>
         <PrimaryButton label="Play" icon="play" onPress={() => onPlay?.()} disabled={disabled} style={styles.flex} />
-        <PrimaryButton label="Shuffle" icon="shuffle" variant="surface" onPress={() => onShuffle?.()} disabled={!onShuffle} style={styles.flex} />
+        {onShuffle === null ? null : <PrimaryButton label="Shuffle" icon="shuffle" variant="surface" onPress={() => onShuffle?.()} disabled={!onShuffle} style={styles.flex} />}
         {actions}
       </View>
       {children}

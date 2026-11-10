@@ -93,7 +93,7 @@ export default function PlaylistScreen() {
                   icon="ellipsis-horizontal"
                   label="Playlist options"
                   variant="filled"
-                  onPress={() => openPlaylistActions(playlist, { onDeleted: () => router.back() })}
+                  onPress={() => openPlaylistActions(playlist, { onDeleted: () => router.back(), tracks })}
                 />
               </>
             }>

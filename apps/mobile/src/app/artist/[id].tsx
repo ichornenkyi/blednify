@@ -9,9 +9,12 @@ import { AlbumCard } from '@/ui/components/AlbumCard';
 import { Artwork } from '@/ui/components/Artwork';
 import { DetailHeader } from '@/ui/components/DetailHeader';
 import { EmptyState } from '@/ui/components/EmptyState';
+import { IconButton } from '@/ui/components/IconButton';
 import { Loading } from '@/ui/components/Loading';
 import { ChromeHost, useChromeInset } from '@/ui/chrome';
 import { DockedMiniPlayer } from '@/ui/components/MiniPlayer';
+import { OpenInApp } from '@/ui/components/OpenInApp';
+import { openShare } from '@/ui/components/ShareSheet';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
 import { Rail, useRailCardWidth } from '@/ui/components/Rail';
 import { FloatingBack } from '@/ui/components/ScreenHeader';
@@ -77,6 +80,18 @@ export default function ArtistScreen() {
               meta={[plural(artist.albumCount || albums.length, 'album'), plural(artist.trackCount || tracks.length, 'track')].join(' · ')}
               onPlay={tracks.length ? () => player.playTracks(tracks, 0) : undefined}
               onShuffle={tracks.length ? () => player.playTracks(tracks, undefined, { shuffle: true }) : undefined}
+              actions={
+                artist.origin === 'remote' ? (
+                  <IconButton
+                    icon="share-outline"
+                    label="Share artist"
+                    variant="filled"
+                    onPress={() =>
+                      openShare({ target: { kind: 'artist', id: artist.id }, title: artist.name, subtitle: 'Artist', artworkUri: backdrop })
+                    }
+                  />
+                ) : undefined
+              }
             />
             <Rail
               title="Albums"
@@ -100,6 +115,7 @@ export default function ArtistScreen() {
         renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onMore} />}
       />
       <FloatingBack />
+      {artist.origin === 'remote' ? <OpenInApp path={`/artist/${params.id}`} /> : null}
     </ChromeHost>
   );
 }

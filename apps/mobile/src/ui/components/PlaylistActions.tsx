@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { createPlaylist, deletePlaylist, renamePlaylist, type Playlist } from '@/core';
+import { createPlaylist, deletePlaylist, renamePlaylist, shareableIds, type AppTrack, type Playlist } from '@/core';
 
 import { attempt } from '../actions';
 import { nav } from '../nav';
@@ -8,6 +8,7 @@ import { showSheet, type SheetAnchor } from '../overlay';
 import { confirm } from './ConfirmSheet';
 import { SheetAction, SheetHeader } from './ActionSheet';
 import { PromptSheet } from './PromptSheet';
+import { openShare } from './ShareSheet';
 
 /** Ask for a name, create the playlist and open it. */
 export function promptNewPlaylist() {
@@ -24,10 +25,30 @@ export function promptNewPlaylist() {
   );
 }
 
-export function openPlaylistActions(p: Playlist, opts: { onDeleted?: () => void; anchor?: SheetAnchor } = {}) {
+export function openPlaylistActions(
+  p: Playlist,
+  opts: { onDeleted?: () => void; anchor?: SheetAnchor; tracks?: readonly AppTrack[] } = {},
+) {
+  // Only songs on the server can be opened by someone else.
+  const shareable = opts.tracks ? shareableIds(opts.tracks) : [];
   showSheet(
     <View>
       <SheetHeader title={p.name} subtitle={`${p.trackCount} ${p.trackCount === 1 ? 'track' : 'tracks'}`} />
+      {shareable.length ? (
+        <SheetAction
+          icon="share-outline"
+          label={shareable.length < p.trackCount ? `Share ${shareable.length} server songs` : 'Share'}
+          keepOpen
+          onPress={() =>
+            openShare({
+              target: { kind: 'playlist', name: p.name, trackIds: shareable },
+              title: p.name,
+              subtitle: `${shareable.length} ${shareable.length === 1 ? 'song' : 'songs'}`,
+              artworkUri: p.artworkUris[0] ?? null,
+            })
+          }
+        />
+      ) : null}
       <SheetAction
         icon="pencil-outline"
         label="Rename"

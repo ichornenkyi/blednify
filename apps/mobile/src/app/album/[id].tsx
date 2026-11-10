@@ -12,8 +12,10 @@ import { IconButton } from '@/ui/components/IconButton';
 import { Loading } from '@/ui/components/Loading';
 import { ChromeHost, useChromeInset } from '@/ui/chrome';
 import { DockedMiniPlayer } from '@/ui/components/MiniPlayer';
+import { OpenInApp } from '@/ui/components/OpenInApp';
 import { PlaylistPicker } from '@/ui/components/PlaylistPicker';
 import { PrimaryButton } from '@/ui/components/PrimaryButton';
+import { openShare } from '@/ui/components/ShareSheet';
 import { FloatingBack } from '@/ui/components/ScreenHeader';
 import { openTrackActions } from '@/ui/components/TrackActions';
 import { TrackRow, TrackTableHeader } from '@/ui/components/TrackRow';
@@ -99,6 +101,16 @@ export default function AlbumScreen() {
                   disabled={!tracks.length}
                   onPress={() => showSheet(<PlaylistPicker tracks={tracks} />)}
                 />
+                {origin === 'remote' ? (
+                  <IconButton
+                    icon="share-outline"
+                    label="Share album"
+                    variant="filled"
+                    onPress={() =>
+                      openShare({ target: { kind: 'album', id: album.id }, title: album.title, subtitle: album.artist, artworkUri: album.artworkUri })
+                    }
+                  />
+                ) : null}
               </>
             }>
             {tracks.length ? <TrackTableHeader /> : null}
@@ -108,6 +120,7 @@ export default function AlbumScreen() {
         renderItem={({ item, index }) => <TrackRow track={item} index={index} onPress={play} onMore={onMore} leading="number" showDuration />}
       />
       <FloatingBack />
+      {origin === 'remote' ? <OpenInApp path={`/album/${params.id}`} /> : null}
     </ChromeHost>
   );
 }
