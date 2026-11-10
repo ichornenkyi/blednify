@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <!-- viewport-fit=cover: draw under the notch / home indicator; safe areas come from env(safe-area-inset-*). -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>%WEB_TITLE%</title>
     <!-- Installable from Safari: Share → Add to Home Screen opens it full screen, like an app. -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -20,6 +20,10 @@
       body {
         height: 100%;
         background: #0a0a0c;
+      }
+      html {
+        /* Avoid double-tap zoom without disabling pinch zoom. */
+        touch-action: manipulation;
       }
       body {
         overflow: hidden;
@@ -40,6 +44,26 @@
         display: flex;
         height: 100%;
         flex: 1;
+      }
+      /* WebKit 301994: a normal-flow, full-height document lets iPhone home-screen apps paint below
+         the shortened viewport. Safari tabs keep percentage heights so controls clear the toolbar. */
+      @media (display-mode: standalone) {
+        html,
+        body {
+          height: 100lvh;
+        }
+        body {
+          position: static;
+          overflow: visible;
+        }
+        #root {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 100lvh;
+          overflow: hidden;
+        }
       }
     </style>
   </head>
