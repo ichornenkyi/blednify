@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import {
   GestureDetector,
   useNativeGesture,
@@ -49,9 +49,10 @@ import { haptics } from '@/ui/haptics';
 import { useIsWide } from '@/ui/layout';
 import { nav } from '@/ui/nav';
 import { showSheet } from '@/ui/overlay';
-import { ForceDark, makeStyles, radius, space, useColors } from '@/ui/theme';
+import { ForceDark, makeStyles, radius, space, useColors, webLayer } from '@/ui/theme';
 
 const DISMISS_DISTANCE = 140;
+const IS_WEB = Platform.OS === 'web';
 
 function dismiss() {
   if (router.canGoBack()) router.back();
@@ -119,7 +120,8 @@ function PlayerScreenContent() {
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: y.get() }],
-    borderRadius: interpolate(y.get(), [0, 80], [0, radius.xl], 'clamp'),
+    // Changing a clip's radius on every drag frame repaints the full sheet in browsers.
+    borderRadius: IS_WEB ? (y.get() > 0 ? radius.xl : 0) : interpolate(y.get(), [0, 80], [0, radius.xl], 'clamp'),
   }));
 
   return (
@@ -347,7 +349,7 @@ function PulsingArtwork({
   }, [size, base, fit]);
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.get() * fit.get() }],
-    shadowOpacity: interpolate(pulse.get(), [0.86, 1], [0.25, 0.6]),
+    shadowOpacity: IS_WEB ? (playing ? 0.6 : 0.25) : interpolate(pulse.get(), [0.86, 1], [0.25, 0.6]),
   }));
   // Counter the fit scale so the on-screen corner radius stays radius.lg.
   const corner = (radius.lg * base) / size;
@@ -441,7 +443,7 @@ function Transport() {
 }
 
 const useStyles = makeStyles((colors) => ({
-  sheet: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
+  sheet: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden', ...webLayer },
   scrollView: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   empty: { flex: 1, justifyContent: 'center' },
@@ -455,6 +457,7 @@ const useStyles = makeStyles((colors) => ({
   // overflow visible: the art's layout box is its max size, scaled down to fit.
   artArea: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
   artShadow: {
+    ...webLayer,
     position: 'absolute',
     borderRadius: radius.lg,
     backgroundColor: colors.surface2,

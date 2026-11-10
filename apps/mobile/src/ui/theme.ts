@@ -1,9 +1,12 @@
 import { DarkTheme, DefaultTheme, type Theme } from 'expo-router';
 import { createContext, createElement, useContext, type ReactNode } from 'react';
-import { StyleSheet, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 import { useStore } from 'zustand';
 
 import { themeStore, type ThemePref } from '@/core';
+
+/** Only moving sheets/cover art opt into a compositor layer; native styles stay unchanged. */
+export const webLayer: ViewStyle = Platform.OS === 'web' ? ({ willChange: 'transform' } as ViewStyle) : {};
 
 // ---------------------------------------------------------------------------------------------
 // Palette
