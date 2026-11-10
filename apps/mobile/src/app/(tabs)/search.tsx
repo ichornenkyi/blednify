@@ -1,6 +1,7 @@
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useDeferredValue, useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { useFocusEffect, useNavigation } from 'expo-router';
+import { useCallback, useDeferredValue, useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -66,6 +67,11 @@ export default function SearchScreen() {
     }, 30);
     return () => clearTimeout(t);
   }, [focusTick]);
+  // Leaving the tab: drop focus. A focused field on an off-screen tab would take typed shortcuts, and when
+  // a page closes over it the browser scrolls the tab pager sideways to bring the field into view. The
+  // browser also hands focus back to it when a page above closes, so refuse focus while hidden too.
+  const navigation = useNavigation();
+  useFocusEffect(useCallback(() => () => input.current?.blur(), []));
   const deferred = useDeferredValue(query.trim());
   const history = useSearchHistory();
   const { tracks, albums, artists, isLoading } = useSearch(deferred);
@@ -124,7 +130,10 @@ export default function SearchScreen() {
           ref={input}
           value={query}
           onChangeText={setQuery}
-          onFocus={() => setIsFocused(true)}
+          onFocus={() => {
+            if (navigation.isFocused()) setIsFocused(true);
+            else input.current?.blur();
+          }}
           onBlur={() => setIsFocused(false)}
           onSubmitEditing={() => {
             const q = query.trim();

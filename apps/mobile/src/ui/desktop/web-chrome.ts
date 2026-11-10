@@ -36,4 +36,19 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 `;
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors.bg);
   }, [colors]);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    // overflow: hidden only clips; the browser still scrolls such a box to reveal a focused or
+    // scrolled-into-view child. RN's overflow: hidden never scrolls, and the tab pager is one: a scrolled
+    // pager shows half of two tabs. Scroll events fire before paint, so the reset never shows.
+    const unscroll = (e: Event) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      const style = getComputedStyle(el);
+      if (el.scrollLeft && style.overflowX === 'hidden') el.scrollLeft = 0;
+      if (el.scrollTop && style.overflowY === 'hidden') el.scrollTop = 0;
+    };
+    document.addEventListener('scroll', unscroll, true);
+    return () => document.removeEventListener('scroll', unscroll, true);
+  }, []);
 }
