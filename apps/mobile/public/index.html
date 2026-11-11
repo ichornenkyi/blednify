@@ -44,6 +44,8 @@
         display: flex;
         height: 100%;
         flex: 1;
+        /* Keep offscreen pager scenes from widening the mobile viewport after a resize. */
+        overflow: hidden;
       }
       /* WebKit 301994: a normal-flow, full-height document lets iPhone home-screen apps paint below
          the shortened viewport. Safari tabs keep percentage heights so controls clear the toolbar. */

@@ -13,6 +13,7 @@ import { closeSheet, useOverlay } from '../overlay';
 import { makeStyles, radius, space, useColors, webLayer } from '../theme';
 import { Artwork } from './Artwork';
 import { Icon, type IconName } from './Icon';
+import { SheetPressBoundary } from './SheetPressBoundary';
 import { Text } from './Text';
 import { TopLayer } from './TopLayer';
 
@@ -119,17 +120,19 @@ function BottomSheetHost() {
   return (
     <TopLayer gestures>
       <View style={StyleSheet.absoluteFill} pointerEvents={sheet ? 'auto' : 'none'}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} accessibilityLabel="Close" />
-        </Animated.View>
-        <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + space.sm, maxHeight: screenH * 0.86 }, sheetStyle]}>
-            <View style={styles.grabber} />
-            <SheetGesture value={{ pan, scrollY }}>
-              <View key={rendered.id}>{rendered.content}</View>
-            </SheetGesture>
+        <SheetPressBoundary key={Platform.OS === 'web' ? rendered.id : undefined}>
+          <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} accessibilityLabel="Close" />
           </Animated.View>
-        </GestureDetector>
+          <GestureDetector gesture={pan}>
+            <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + space.sm, maxHeight: screenH * 0.86 }, sheetStyle]}>
+              <View style={styles.grabber} />
+              <SheetGesture value={{ pan, scrollY }}>
+                <View key={rendered.id}>{rendered.content}</View>
+              </SheetGesture>
+            </Animated.View>
+          </GestureDetector>
+        </SheetPressBoundary>
       </View>
     </TopLayer>
   );

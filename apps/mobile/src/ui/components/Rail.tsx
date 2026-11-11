@@ -1,6 +1,6 @@
 import { FlashList, type FlashListRef, type ListRenderItem } from '@shopify/flash-list';
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { useGutter, useIsWide } from '../layout';
 import { makeStyles, space } from '../theme';
@@ -37,6 +37,9 @@ export function Rail<T>({
   const styles = useStyles();
   const wide = useIsWide();
   const gutter = useGutter();
+  // Only the desktop arrows consume scroll position. Web phone rails should scroll on the
+  // compositor without re-rendering the whole FlashList on every scroll event.
+  const trackScroll = Platform.OS !== 'web' || wide;
   const list = useRef<FlashListRef<T>>(null);
   const [scroll, setScroll] = useState({ x: 0, max: 0, viewport: 0 });
   if (data.length === 0) return null;
@@ -74,15 +77,15 @@ export function Rail<T>({
         contentContainerStyle={{ paddingHorizontal: gutter }}
         ItemSeparatorComponent={Gap}
         scrollEventThrottle={64}
-        onScroll={(e) => {
+        onScroll={trackScroll ? (e) => {
           const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
           setScroll({ x: contentOffset.x, max: contentSize.width - layoutMeasurement.width, viewport: layoutMeasurement.width });
-        }}
-        onContentSizeChange={(w) => setScroll((s) => ({ ...s, max: w - s.viewport }))}
-        onLayout={(e) => {
+        } : undefined}
+        onContentSizeChange={trackScroll ? (w) => setScroll((s) => ({ ...s, max: w - s.viewport })) : undefined}
+        onLayout={trackScroll ? (e) => {
           const viewport = e.nativeEvent.layout.width;
           setScroll((s) => ({ ...s, viewport, max: s.max + s.viewport - viewport }));
-        }}
+        } : undefined}
       />
     </View>
   );

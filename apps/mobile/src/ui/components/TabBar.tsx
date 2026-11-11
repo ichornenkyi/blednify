@@ -71,18 +71,20 @@ export function TabBar({ state, emitter, navigateToTab, insets }: MaterialTopTab
  * mid-swipe instead of waiting for the page to settle.
  */
 type Position = Animated.AnimatedInterpolation<number>;
-const tabsStore = create<{ names: readonly string[]; keys: readonly string[]; position: Position; jumpTo: (key: string) => void }>(() => ({
+const tabsStore = create<{ names: readonly string[]; keys: readonly string[]; position: Position; webIndex: number; jumpTo: (key: string) => void }>(() => ({
   names: [],
   keys: [],
   position: new Animated.Value(0).interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
+  webIndex: 0,
   jumpTo: () => {},
 }));
 
 export function TabBarBridge({ state, position, jumpTo }: MaterialTopTabBarProps) {
   const { routes } = state;
+  const webIndex = Platform.OS === 'web' ? state.index : 0;
   useEffect(() => {
-    tabsStore.setState({ names: routes.map((r) => r.name), keys: routes.map((r) => r.key), position, jumpTo });
-  }, [routes, position, jumpTo]);
+    tabsStore.setState({ names: routes.map((r) => r.name), keys: routes.map((r) => r.key), position, jumpTo, webIndex });
+  }, [routes, position, jumpTo, webIndex]);
   return null;
 }
 
@@ -107,10 +109,18 @@ function FloatingTabBar() {
   const [width, setWidth] = useState(0);
   const slot = names.length > 0 ? (width - PILL_PAD * 2) / names.length : 0;
   // Web mirrors the position into a shared value (see WEB_MOTION).
-  const pos = useSharedValue(0);
+  const pos = useSharedValue(WEB_MOTION ? tabsStore.getState().webIndex : 0);
   // The tab nearest the pager's position: flips (with a tick) as a swipe crosses the middle, not when it settles.
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(() => WEB_MOTION ? tabsStore.getState().webIndex : 0);
+  const [webPosition, setWebPosition] = useState(WEB_MOTION ? position : null);
+  // The web pager can reach its initial offset before the live listener attaches.
+  // Reset only when binding a position; animation frames still control active afterwards.
+  if (WEB_MOTION && webPosition !== position) {
+    setWebPosition(position);
+    setActive(tabsStore.getState().webIndex);
+  }
   useEffect(() => {
+    if (WEB_MOTION) pos.set(tabsStore.getState().webIndex);
     let last = -1;
     const id = position.addListener(({ value }) => {
       if (WEB_MOTION) pos.set(value);
