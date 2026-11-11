@@ -24,6 +24,9 @@ After changing the patch or upgrading tab-view, verify these cases with real poi
   Release the long press and confirm the sheet stays open. Then start a new touch on the
   scrim and confirm the sheet actually disappears before testing the next gesture. Repeat
   with the opening finger over a sheet action: releasing must not activate that action.
+  On WebKit, a touch and its compatibility click can carry different pointer IDs. Fresh
+  taps on the scrim and sheet actions must still work; ownership is based on where the
+  gesture began rather than comparing IDs across event types.
 - Swipe the mini player to skip tracks: the track must change while the selected tab stays put.
 - Swipe empty page space to change tabs; a short pull must rebound and cancellation must
   preserve the committed tab.
@@ -42,6 +45,14 @@ After changing the patch or upgrading tab-view, verify these cases with real poi
 Check pointer ownership and movement while the finger is down, not just the final URL. A
 successful empty-space swipe does not cover the nested-scroller regression.
 
-For CDP automation, use one input session and contact for both taps and drags. Check that
+For Chromium CDP automation, use one input session and contact for both taps and drags. Check that
 each single-finger touch-start reports one active contact; overlapping synthetic contacts
 would test a multi-touch sequence instead of the user's swipe.
+
+Use a persistent browser profile when testing SQLite/OPFS in Linux WebKit: its private
+contexts can reject file storage. Confirm touch events are trusted and single-contact.
+Linux WPE protocol touches exercise the responder, while native wheel input separately
+checks scrolling; neither reproduces iOS touch inertia. Activating the standalone CSS
+branch in a test response is a layout simulation, not an installed iPhone app. Real status
+bar/home-indicator insets, keyboard zoom, background audio and frame pacing still need
+an iPhone check.
