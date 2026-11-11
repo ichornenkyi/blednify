@@ -105,30 +105,35 @@ export function ChromeSurface({ radius, style, children }: { radius: number; sty
   const chrome = useChromeStyle();
   const target = useContext(BlurTargetContext);
   if (chrome !== 'glass') return <View style={[styles.solid, { borderRadius: radius }, style]}>{children}</View>;
+  const round = { borderRadius: radius };
+  // The shadow and the clip live on different views. Android's blur draws the whole blurred screen and
+  // relies on the clip to cut it to the pill; on the view that also casts the shadow, that clip leaked
+  // a band of blur under the pill, over its own shadow.
   return (
-    <View style={[styles.glass, { borderRadius: radius }, style]}>
-      {NATIVE_BLUR ? (
-        <BlurView
-          pointerEvents="none"
-          blurTarget={target ?? undefined}
-          blurMethod="dimezisBlurViewSdk31Plus"
-          // Android derives both the blur radius (intensity / reduction) and the opacity of its own
-          // tint from intensity, and the radius is applied to a downscaled copy, so a small one goes a long way.
-          intensity={16}
-          blurReductionFactor={2}
-          tint={colors.isLight ? 'light' : 'dark'}
-          style={[StyleSheet.absoluteFill, { borderRadius: radius }]}
+    <View style={[styles.glass, round, style]}>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, round]}>
+        {NATIVE_BLUR ? (
+          <BlurView
+            blurTarget={target ?? undefined}
+            blurMethod="dimezisBlurViewSdk31Plus"
+            // Android derives both the blur radius (intensity / reduction) and the opacity of its own
+            // tint from intensity, and the radius is applied to a downscaled copy, so a small one goes a long way.
+            intensity={16}
+            blurReductionFactor={2}
+            tint={colors.isLight ? 'light' : 'dark'}
+            style={[StyleSheet.absoluteFill, round]}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, WEB_BLUR]} />
+        )}
+        <View style={[StyleSheet.absoluteFill, styles.glassTint]} />
+        {/* Light catching the top edge. */}
+        <LinearGradient
+          colors={[colors.isLight ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.13)', 'rgba(255,255,255,0)']}
+          style={styles.sheen}
         />
-      ) : (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, WEB_BLUR]} />
-      )}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassTint]} />
-      {/* Light catching the top edge. */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={[colors.isLight ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.13)', 'rgba(255,255,255,0)']}
-        style={styles.sheen}
-      />
+      </View>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.glassEdge, round]} />
       {children}
     </View>
   );
@@ -172,11 +177,10 @@ const useStyles = makeStyles((colors) => ({
     boxShadow: colors.isLight ? '0 6px 20px rgba(0,0,0,0.14)' : '0 8px 24px rgba(0,0,0,0.45)',
   },
   glass: {
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.isLight ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.14)',
     boxShadow: colors.isLight ? '0 8px 28px rgba(0,0,0,0.16)' : '0 10px 32px rgba(0,0,0,0.5)',
   },
+  clip: { overflow: 'hidden' },
+  glassEdge: { borderWidth: 1, borderColor: colors.isLight ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.14)' },
   // Keeps text readable over any artwork. Without a working blur the tint has to do it alone.
   glassTint: { backgroundColor: withAlpha(colors.surface2, !CAN_BLUR ? 0.94 : NATIVE_BLUR ? 0.34 : 0.45) },
   sheen: { position: 'absolute', left: 0, right: 0, top: 0, height: '55%' },
