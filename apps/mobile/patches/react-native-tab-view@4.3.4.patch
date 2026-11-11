@@ -1,5 +1,5 @@
 diff --git a/lib/module/PanResponderAdapter.js b/lib/module/PanResponderAdapter.js
-index 22c170523d49834810c734aafbe4c4a5746e6637..7ae46e360d321066b5117553ea8022f4e3b57cd9 100644
+index 22c170523d49834810c734aafbe4c4a5746e6637..936e40d1b958bae9203eec47158deff3ae5b2ef4 100644
 --- a/lib/module/PanResponderAdapter.js
 +++ b/lib/module/PanResponderAdapter.js
 @@ -1,7 +1,7 @@
@@ -7,93 +7,67 @@ index 22c170523d49834810c734aafbe4c4a5746e6637..7ae46e360d321066b5117553ea8022f4
  
  import * as React from 'react';
 -import { Animated, Keyboard, PanResponder, StyleSheet, View } from 'react-native';
-+import { Animated, Keyboard, PanResponder, Platform, StyleSheet, View } from 'react-native';
++import { Animated, Easing, Keyboard, PanResponder, Platform, StyleSheet, View } from 'react-native';
  import useLatestCallback from 'use-latest-callback';
  import { useAnimatedValue } from "./useAnimatedValue.js";
  import { jsx as _jsx } from "react/jsx-runtime";
-@@ -32,6 +32,11 @@ export function PanResponderAdapter({
+@@ -32,6 +32,10 @@ export function PanResponderAdapter({
      index
    } = navigationState;
    const panX = useAnimatedValue(0);
 +
-+  // Web uses native scrolling for child rails and compositor-driven settling.
++  // Horizontal web scrollers own their gestures; the pager and tab bar share panX.
 +  const sheetRef = React.useRef(null);
-+  const webAnimationRef = React.useRef(null);
 +  const childOwnsGesture = React.useRef(false);
    const listenersRef = React.useRef([]);
    const navigationStateRef = React.useRef(navigationState);
    const layoutRef = React.useRef(layout);
-@@ -43,6 +48,48 @@ export function PanResponderAdapter({
+@@ -43,12 +47,25 @@ export function PanResponderAdapter({
    const swipeDistanceThreshold = layout.width / 1.75;
    const jumpToIndex = useLatestCallback((index, animate = animationEnabled) => {
      const offset = -index * layoutRef.current.width;
 +
-+    // Keep all per-frame settling work in the browser, not RN Animated's JS spring.
-+    const node = sheetRef.current;
-+    if (Platform.OS === 'web' && node?.animate) {
-+      const from = getComputedStyle(node).transform;
-+      const oldAnimation = webAnimationRef.current;
-+      webAnimationRef.current = null;
-+      oldAnimation?.cancel();
++    if (Platform.OS === 'web') {
 +      panX.stopAnimation();
 +      panX.flattenOffset();
-+      panX.setValue(offset);
 +      currentIndexRef.current = index;
-+      const complete = () => {
-+        onIndexChangeRef.current(index);
-+        onTabSelectRef.current?.({ index });
-+        pendingIndexRef.current = undefined;
-+      };
-+      if (!animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-+        complete();
-+        return;
-+      }
-+      const direction = layoutDirection === 'rtl' ? -1 : 1;
-+      let animation;
-+      try {
-+        animation = node.animate(
-+          [{ transform: from }, { transform: `translateX(${offset * direction}px)` }],
-+          { duration: 320, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'both' }
-+        );
-+      } catch {
-+        complete();
-+        return;
-+      }
-+      webAnimationRef.current = animation;
-+      pendingIndexRef.current = index;
-+      animation.onfinish = () => {
-+        if (webAnimationRef.current !== animation) return;
-+        webAnimationRef.current = null;
-+        animation.cancel();
-+        complete();
-+      };
-+      return;
++      animate = animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 +    }
++
      const {
        timing,
        ...transitionConfig
-@@ -81,6 +128,12 @@ export function PanResponderAdapter({
+     } = DefaultTransitionSpec;
+     if (animate) {
+-      Animated.parallel([timing(panX, {
++      Animated.parallel([Platform.OS === 'web' ? Animated.timing(panX, {
++        toValue: offset,
++        duration: 320,
++        easing: Easing.bezier(0.16, 1, 0.3, 1),
++        useNativeDriver: false
++      }) : timing(panX, {
+         ...transitionConfig,
+         toValue: offset,
+         useNativeDriver: false
+@@ -81,6 +98,11 @@ export function PanResponderAdapter({
    });
    React.useLayoutEffect(() => {
      const offset = -navigationStateRef.current.index * layout.width;
 +    if (Platform.OS === 'web') {
-+      const animation = webAnimationRef.current;
-+      webAnimationRef.current = null;
-+      animation?.cancel();
++      panX.stopAnimation();
++      panX.flattenOffset();
 +      pendingIndexRef.current = undefined;
 +    }
      panX.setValue(offset);
    }, [layout.width, panX]);
    React.useEffect(() => {
-@@ -92,17 +145,32 @@ export function PanResponderAdapter({
+@@ -92,11 +114,15 @@ export function PanResponderAdapter({
        jumpToIndex(index);
      }
    }, [jumpToIndex, keyboardDismissMode, layout.width, index]);
 +  React.useEffect(() => () => {
-+    const animation = webAnimationRef.current;
-+    webAnimationRef.current = null;
-+    animation?.cancel();
-+  }, []);
++    if (Platform.OS === 'web') panX.stopAnimation();
++  }, [panX]);
 +
    const isMovingHorizontally = (_, gestureState) => {
      return Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 2) && Math.abs(gestureState.vx) > Math.abs(gestureState.vy * 2);
@@ -104,26 +78,19 @@ index 22c170523d49834810c734aafbe4c4a5746e6637..7ae46e360d321066b5117553ea8022f4
        return false;
      }
      const diffX = layoutDirection === 'rtl' ? -gestureState.dx : gestureState.dx;
-     return isMovingHorizontally(event, gestureState) && (diffX >= DEAD_ZONE && currentIndexRef.current > 0 || diffX <= -DEAD_ZONE && currentIndexRef.current < routes.length - 1);
-   };
-   const startGesture = () => {
-+    if (Platform.OS === 'web' && webAnimationRef.current) {
-+      const node = sheetRef.current;
-+      const transform = node ? getComputedStyle(node).transform : 'none';
-+      const x = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
-+      const animation = webAnimationRef.current;
-+      webAnimationRef.current = null;
-+      animation.cancel();
-+      panX.setValue(x * (layoutDirection === 'rtl' ? -1 : 1));
-+    }
-     onSwipeStart?.();
-     if (keyboardDismissMode === 'on-drag') {
+@@ -108,23 +134,30 @@ export function PanResponderAdapter({
        Keyboard.dismiss();
-@@ -110,21 +178,24 @@ export function PanResponderAdapter({
+     }
      panX.stopAnimation();
-     // @ts-expect-error: _value is private, but docs use it as well
-     panX.setOffset(panX._value);
-+    if (Platform.OS === 'web') panX.setValue(0);
+-    // @ts-expect-error: _value is private, but docs use it as well
+-    panX.setOffset(panX._value);
++    if (Platform.OS === 'web') {
++      // Preserve the live position without a transient double offset (and extra tab ticks).
++      panX.extractOffset();
++    } else {
++      // @ts-expect-error: _value is private, but docs use it as well
++      panX.setOffset(panX._value);
++    }
    };
    const respondToGesture = (_, gestureState) => {
      const diffX = layoutDirection === 'rtl' ? -gestureState.dx : gestureState.dx;
@@ -141,13 +108,14 @@ index 22c170523d49834810c734aafbe4c4a5746e6637..7ae46e360d321066b5117553ea8022f4
      if (layout.width) {
        // @ts-expect-error: _offset is private, but docs use it as well
        const position = (panX._offset + diffX) / -layout.width;
-       const next = position > index ? Math.ceil(position) : Math.floor(position);
+-      const next = position > index ? Math.ceil(position) : Math.floor(position);
 -      if (next !== index) {
++      const next = position > routeIndex ? Math.ceil(position) : Math.floor(position);
 +      if (next !== routeIndex) {
          listenersRef.current.forEach(listener => listener(next));
        }
      }
-@@ -159,11 +230,34 @@ export function PanResponderAdapter({
+@@ -159,11 +192,34 @@ export function PanResponderAdapter({
      onIndexChange(index);
    });
    const panResponder = PanResponder.create({
@@ -183,7 +151,7 @@ index 22c170523d49834810c734aafbe4c4a5746e6637..7ae46e360d321066b5117553ea8022f4
      onPanResponderRelease: finishGesture,
      onPanResponderTerminationRequest: () => true
    });
-@@ -179,6 +273,7 @@ export function PanResponderAdapter({
+@@ -179,6 +235,7 @@ export function PanResponderAdapter({
      addEnterListener,
      jumpTo,
      render: children => /*#__PURE__*/_jsx(Animated.View, {
@@ -192,10 +160,14 @@ index 22c170523d49834810c734aafbe4c4a5746e6637..7ae46e360d321066b5117553ea8022f4
          width: routes.length * layout.width,
          transform: [{
 diff --git a/src/PanResponderAdapter.tsx b/src/PanResponderAdapter.tsx
-index 69a98f51c1cfcb984de30617449496042678e8c6..ae20253a6de1903b6b2275cf264fe4886055d0bb 100644
+index 69a98f51c1cfcb984de30617449496042678e8c6..946f9c0f50955f68636374f1da22028f2edee684 100644
 --- a/src/PanResponderAdapter.tsx
 +++ b/src/PanResponderAdapter.tsx
-@@ -4,6 +4,7 @@ import {
+@@ -1,9 +1,11 @@
+ import * as React from 'react';
+ import {
+   Animated,
++  Easing,
    type GestureResponderEvent,
    Keyboard,
    PanResponder,
@@ -203,94 +175,76 @@ index 69a98f51c1cfcb984de30617449496042678e8c6..ae20253a6de1903b6b2275cf264fe488
    type PanResponderGestureState,
    StyleSheet,
    View,
-@@ -68,6 +69,11 @@ export function PanResponderAdapter<T extends Route>({
+@@ -68,6 +70,10 @@ export function PanResponderAdapter<T extends Route>({
  
    const panX = useAnimatedValue(0);
  
-+  // Web uses native scrolling for child rails and compositor-driven settling.
++  // Horizontal web scrollers own their gestures; the pager and tab bar share panX.
 +  const sheetRef = React.useRef<View>(null);
-+  const webAnimationRef = React.useRef<Animation | null>(null);
 +  const childOwnsGesture = React.useRef(false);
 +
    const listenersRef = React.useRef<Listener[]>([]);
  
    const navigationStateRef = React.useRef(navigationState);
-@@ -84,6 +90,48 @@ export function PanResponderAdapter<T extends Route>({
+@@ -84,15 +90,29 @@ export function PanResponderAdapter<T extends Route>({
      (index: number, animate = animationEnabled) => {
        const offset = -index * layoutRef.current.width;
  
-+      // Keep all per-frame settling work in the browser, not RN Animated's JS spring.
-+      const node = sheetRef.current as unknown as HTMLElement | null;
-+      if (Platform.OS === 'web' && node?.animate) {
-+        const from = getComputedStyle(node).transform;
-+        const oldAnimation = webAnimationRef.current;
-+        webAnimationRef.current = null;
-+        oldAnimation?.cancel();
++      if (Platform.OS === 'web') {
 +        panX.stopAnimation();
 +        panX.flattenOffset();
-+        panX.setValue(offset);
 +        currentIndexRef.current = index;
-+        const complete = () => {
-+          onIndexChangeRef.current(index);
-+          onTabSelectRef.current?.({ index });
-+          pendingIndexRef.current = undefined;
-+        };
-+        if (!animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-+          complete();
-+          return;
-+        }
-+        const direction = layoutDirection === 'rtl' ? -1 : 1;
-+        let animation: Animation;
-+        try {
-+          animation = node.animate(
-+            [{ transform: from }, { transform: `translateX(${offset * direction}px)` }],
-+            { duration: 320, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'both' }
-+          );
-+        } catch {
-+          complete();
-+          return;
-+        }
-+        webAnimationRef.current = animation;
-+        pendingIndexRef.current = index;
-+        animation.onfinish = () => {
-+          if (webAnimationRef.current !== animation) return;
-+          webAnimationRef.current = null;
-+          animation.cancel();
-+          complete();
-+        };
-+        return;
++        animate = animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 +      }
 +
        const { timing, ...transitionConfig } = DefaultTransitionSpec;
  
        if (animate) {
-@@ -120,6 +168,12 @@ export function PanResponderAdapter<T extends Route>({
+         Animated.parallel([
+-          timing(panX, {
+-            ...transitionConfig,
+-            toValue: offset,
+-            useNativeDriver: false,
+-          }),
++          Platform.OS === 'web'
++            ? Animated.timing(panX, {
++                toValue: offset,
++                duration: 320,
++                easing: Easing.bezier(0.16, 1, 0.3, 1),
++                useNativeDriver: false,
++              })
++            : timing(panX, {
++                ...transitionConfig,
++                toValue: offset,
++                useNativeDriver: false,
++              }),
+         ]).start(({ finished }) => {
+           if (finished) {
+             onIndexChangeRef.current(index);
+@@ -120,6 +140,11 @@ export function PanResponderAdapter<T extends Route>({
    React.useLayoutEffect(() => {
      const offset = -navigationStateRef.current.index * layout.width;
  
 +    if (Platform.OS === 'web') {
-+      const animation = webAnimationRef.current;
-+      webAnimationRef.current = null;
-+      animation?.cancel();
++      panX.stopAnimation();
++      panX.flattenOffset();
 +      pendingIndexRef.current = undefined;
 +    }
      panX.setValue(offset);
    }, [layout.width, panX]);
  
-@@ -134,6 +188,12 @@ export function PanResponderAdapter<T extends Route>({
+@@ -134,6 +159,10 @@ export function PanResponderAdapter<T extends Route>({
      }
    }, [jumpToIndex, keyboardDismissMode, layout.width, index]);
  
 +  React.useEffect(() => () => {
-+    const animation = webAnimationRef.current;
-+    webAnimationRef.current = null;
-+    animation?.cancel();
-+  }, []);
++    if (Platform.OS === 'web') panX.stopAnimation();
++  }, [panX]);
 +
    const isMovingHorizontally = (
      _: GestureResponderEvent,
      gestureState: PanResponderGestureState
-@@ -148,7 +208,7 @@ export function PanResponderAdapter<T extends Route>({
+@@ -148,7 +177,7 @@ export function PanResponderAdapter<T extends Route>({
      event: GestureResponderEvent,
      gestureState: PanResponderGestureState
    ) => {
@@ -299,31 +253,23 @@ index 69a98f51c1cfcb984de30617449496042678e8c6..ae20253a6de1903b6b2275cf264fe488
        return false;
      }
  
-@@ -163,6 +223,15 @@ export function PanResponderAdapter<T extends Route>({
-   };
+@@ -170,8 +199,13 @@ export function PanResponderAdapter<T extends Route>({
+     }
  
-   const startGesture = () => {
-+    if (Platform.OS === 'web' && webAnimationRef.current) {
-+      const node = sheetRef.current as unknown as HTMLElement | null;
-+      const transform = node ? getComputedStyle(node).transform : 'none';
-+      const x = transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41;
-+      const animation = webAnimationRef.current;
-+      webAnimationRef.current = null;
-+      animation.cancel();
-+      panX.setValue(x * (layoutDirection === 'rtl' ? -1 : 1));
-+    }
-     onSwipeStart?.();
- 
-     if (keyboardDismissMode === 'on-drag') {
-@@ -172,6 +241,7 @@ export function PanResponderAdapter<T extends Route>({
      panX.stopAnimation();
-     // @ts-expect-error: _value is private, but docs use it as well
-     panX.setOffset(panX._value);
-+    if (Platform.OS === 'web') panX.setValue(0);
+-    // @ts-expect-error: _value is private, but docs use it as well
+-    panX.setOffset(panX._value);
++    if (Platform.OS === 'web') {
++      // Preserve the live position without a transient double offset (and extra tab ticks).
++      panX.extractOffset();
++    } else {
++      // @ts-expect-error: _value is private, but docs use it as well
++      panX.setOffset(panX._value);
++    }
    };
  
    const respondToGesture = (
-@@ -181,11 +251,13 @@ export function PanResponderAdapter<T extends Route>({
+@@ -181,11 +215,13 @@ export function PanResponderAdapter<T extends Route>({
      const diffX =
        layoutDirection === 'rtl' ? -gestureState.dx : gestureState.dx;
  
@@ -339,16 +285,19 @@ index 69a98f51c1cfcb984de30617449496042678e8c6..ae20253a6de1903b6b2275cf264fe488
      ) {
        return;
      }
-@@ -196,7 +268,7 @@ export function PanResponderAdapter<T extends Route>({
+@@ -194,9 +230,9 @@ export function PanResponderAdapter<T extends Route>({
+       // @ts-expect-error: _offset is private, but docs use it as well
+       const position = (panX._offset + diffX) / -layout.width;
        const next =
-         position > index ? Math.ceil(position) : Math.floor(position);
+-        position > index ? Math.ceil(position) : Math.floor(position);
++        position > routeIndex ? Math.ceil(position) : Math.floor(position);
  
 -      if (next !== index) {
 +      if (next !== routeIndex) {
          listenersRef.current.forEach((listener) => listener(next));
        }
      }
-@@ -269,11 +341,34 @@ export function PanResponderAdapter<T extends Route>({
+@@ -269,11 +305,34 @@ export function PanResponderAdapter<T extends Route>({
    });
  
    const panResponder = PanResponder.create({
@@ -384,7 +333,7 @@ index 69a98f51c1cfcb984de30617449496042678e8c6..ae20253a6de1903b6b2275cf264fe488
      onPanResponderRelease: finishGesture,
      onPanResponderTerminationRequest: () => true,
    });
-@@ -299,6 +394,7 @@ export function PanResponderAdapter<T extends Route>({
+@@ -299,6 +358,7 @@ export function PanResponderAdapter<T extends Route>({
      jumpTo,
      render: (children) => (
        <Animated.View

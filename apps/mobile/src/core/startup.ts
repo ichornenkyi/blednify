@@ -1,6 +1,7 @@
 import { resumeDownloads } from './downloads';
 import { resumeImports } from './imports';
 import { loadLibIndex } from './lib-index';
+import { startLibrarySync } from './library-sync';
 import { configureAudio, refreshQueueTracks } from './player/engine';
 import { fileStorageSupported } from './platform';
 import { startPruning } from './prune';
@@ -23,6 +24,7 @@ export function startCore(): Promise<void> {
     .then(() => {
       refreshQueueTracks();
       startPruning();
+      startLibrarySync();
       void resumeImports().catch((e) => console.warn('[core] imports resume failed', e));
       if (fileStorageSupported) void resumeDownloads().catch((e) => console.warn('[core] downloads resume failed', e));
     })

@@ -37,6 +37,12 @@ export function loadLibIndex(): Promise<void> {
   return loading;
 }
 
+/** Re-reads likes and downloads after the database changed underneath (library restore). */
+export function loadLibIndexAgain(): Promise<void> {
+  loading = null;
+  return loadLibIndex();
+}
+
 export function setLiked(key: string, liked: boolean): void {
   const next = new Set(libIndex.getState().liked);
   if (liked) next.add(key);

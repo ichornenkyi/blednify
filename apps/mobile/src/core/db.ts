@@ -78,6 +78,15 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE playlists ADD COLUMN cover TEXT;
   ALTER TABLE playlists ADD COLUMN import_id TEXT;
   `,
+  // Library backup: deletions the server copy has to learn about (see core/library-sync).
+  `
+  CREATE TABLE sync_tombstones (
+    kind TEXT NOT NULL,
+    id TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (kind, id)
+  );
+  `,
 ];
 
 let dbPromise: Promise<SQLiteDatabase> | null = null;

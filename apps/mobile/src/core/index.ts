@@ -106,6 +106,15 @@ export {
 } from './imports';
 export { useAdminInfo } from './admin';
 
+// Library backup
+export {
+  formatLibraryKey,
+  normalizeLibraryKey,
+  switchLibraryKey,
+  syncLibrary,
+  useLibrarySync,
+} from './library-sync';
+
 // Sharing
 export {
   parseSharedIds,

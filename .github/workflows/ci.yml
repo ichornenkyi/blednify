@@ -164,3 +164,34 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/blednify-server:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Publishes the web app (iPhone PWA, desktop) at blednify.vetos.site once the checks pass on main.
+  # Runs on the self-hosted runner on the home server (vetos-prodesk1) that serves the site; the job
+  # copies the export into ~/apps/blednify/web, which the server container mounts read-only.
+  # The repository is public: fork pull requests need approval before any workflow runs, and this
+  # job only ever starts for pushes to main.
+  web-deploy:
+    name: Web · deploy to blednify.vetos.site
+    needs: [mobile-check, server]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, blednify-deploy]
+    concurrency:
+      group: web-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      # bun and node (fnm's default alias) live in the runner user's home, outside the service's PATH.
+      - name: Tools
+        run: |
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/share/fnm/aliases/default/bin" >> "$GITHUB_PATH"
+      - name: Install
+        working-directory: apps/mobile
+        run: bun install --frozen-lockfile
+      - name: Export and publish
+        run: sh tools/web/deploy.sh
+      - name: Check the live site serves the new bundle
+        run: |
+          bundle=$(grep -o 'index-[a-f0-9]*\.js' "$HOME/apps/blednify/web/index.html")
+          curl -fsS -m 20 https://blednify.vetos.site/ | grep -q "$bundle"
+          echo "live: $bundle"
