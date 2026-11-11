@@ -180,6 +180,11 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
+      # bun and node (fnm's default alias) live in the runner user's home, outside the service's PATH.
+      - name: Tools
+        run: |
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/share/fnm/aliases/default/bin" >> "$GITHUB_PATH"
       - name: Install
         working-directory: apps/mobile
         run: bun install --frozen-lockfile
