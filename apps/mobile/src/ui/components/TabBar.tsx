@@ -1,6 +1,6 @@
 import type { MaterialTopTabBarProps } from 'expo-router/js-top-tabs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { create, useStore } from 'zustand';
 
 import { ChromeDock, ChromeSurface, NAV_PILL_HEIGHT } from '../chrome';
@@ -70,18 +70,20 @@ export function TabBar({ state, emitter, navigateToTab, insets }: MaterialTopTab
  * mid-swipe instead of waiting for the page to settle.
  */
 type Position = Animated.AnimatedInterpolation<number>;
-const tabsStore = create<{ names: readonly string[]; keys: readonly string[]; position: Position; jumpTo: (key: string) => void }>(() => ({
+const tabsStore = create<{ names: readonly string[]; keys: readonly string[]; position: Position; webIndex: number; jumpTo: (key: string) => void }>(() => ({
   names: [],
   keys: [],
   position: new Animated.Value(0).interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
+  webIndex: 0,
   jumpTo: () => {},
 }));
 
 export function TabBarBridge({ state, position, jumpTo }: MaterialTopTabBarProps) {
   const { routes } = state;
+  const webIndex = Platform.OS === 'web' ? state.index : 0;
   useEffect(() => {
-    tabsStore.setState({ names: routes.map((r) => r.name), keys: routes.map((r) => r.key), position, jumpTo });
-  }, [routes, position, jumpTo]);
+    tabsStore.setState({ names: routes.map((r) => r.name), keys: routes.map((r) => r.key), position, jumpTo, webIndex });
+  }, [routes, position, jumpTo, webIndex]);
   return null;
 }
 
@@ -106,7 +108,14 @@ function FloatingTabBar() {
   const [width, setWidth] = useState(0);
   const slot = names.length > 0 ? (width - PILL_PAD * 2) / names.length : 0;
   // The tab nearest the pager's position: flips (with a tick) as a swipe crosses the middle, not when it settles.
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(() => Platform.OS === 'web' ? tabsStore.getState().webIndex : 0);
+  const [webPosition, setWebPosition] = useState(Platform.OS === 'web' ? position : null);
+  // The web pager can reach its initial offset before the live listener attaches.
+  // Reset only when binding a position; animation frames still control active afterwards.
+  if (Platform.OS === 'web' && webPosition !== position) {
+    setWebPosition(position);
+    setActive(tabsStore.getState().webIndex);
+  }
   useEffect(() => {
     let last = -1;
     const id = position.addListener(({ value }) => {

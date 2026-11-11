@@ -33,6 +33,9 @@ After changing the patch or upgrading tab-view, verify these cases with real poi
   wide; the web root clips offscreen scenes to prevent them from expanding the viewport.
 - Check tab selection by keyboard, direct tab URLs and reduced motion. On desktop, check
   rail arrow buttons and resizing to/from phone width.
+- For Floating and Glass, open `/library` or `/search` directly, then tap Home. Repeat
+  after opening a playlist/detail page and going back. The live listener must start from
+  the current web tab rather than leaving Home's action incorrectly marked active.
 
 Check pointer ownership and movement while the finger is down, not just the final URL. A
 successful empty-space swipe does not cover the nested-scroller regression.
