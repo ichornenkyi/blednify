@@ -22,7 +22,8 @@ After changing the patch or upgrading tab-view, verify these cases with real poi
   row's end: an outward swipe must not navigate to Search.
 - Tap and long-press a card after scrolling; playback and its action sheet must still work.
   Release the long press and confirm the sheet stays open. Then start a new touch on the
-  scrim and confirm the sheet actually disappears before testing the next gesture.
+  scrim and confirm the sheet actually disappears before testing the next gesture. Repeat
+  with the opening finger over a sheet action: releasing must not activate that action.
 - Swipe the mini player to skip tracks: the track must change while the selected tab stays put.
 - Swipe empty page space to change tabs; a short pull must rebound and cancellation must
   preserve the committed tab.

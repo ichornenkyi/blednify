@@ -1,5 +1,5 @@
 import { createContext, use, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
-import { BackHandler, Keyboard, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { BackHandler, Keyboard, Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { GestureDetector, ScrollView, usePanGesture, type PanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +13,7 @@ import { closeSheet, useOverlay } from '../overlay';
 import { makeStyles, radius, space, useColors, webLayer } from '../theme';
 import { Artwork } from './Artwork';
 import { Icon, type IconName } from './Icon';
-import { SheetDismissArea } from './SheetDismissArea';
+import { SheetPressBoundary } from './SheetPressBoundary';
 import { Text } from './Text';
 import { TopLayer } from './TopLayer';
 
@@ -120,17 +120,19 @@ function BottomSheetHost() {
   return (
     <TopLayer gestures>
       <View style={StyleSheet.absoluteFill} pointerEvents={sheet ? 'auto' : 'none'}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
-          <SheetDismissArea key={Platform.OS === 'web' ? rendered.id : undefined} onDismiss={closeSheet} />
-        </Animated.View>
-        <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + space.sm, maxHeight: screenH * 0.86 }, sheetStyle]}>
-            <View style={styles.grabber} />
-            <SheetGesture value={{ pan, scrollY }}>
-              <View key={rendered.id}>{rendered.content}</View>
-            </SheetGesture>
+        <SheetPressBoundary key={Platform.OS === 'web' ? rendered.id : undefined}>
+          <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} accessibilityLabel="Close" />
           </Animated.View>
-        </GestureDetector>
+          <GestureDetector gesture={pan}>
+            <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + space.sm, maxHeight: screenH * 0.86 }, sheetStyle]}>
+              <View style={styles.grabber} />
+              <SheetGesture value={{ pan, scrollY }}>
+                <View key={rendered.id}>{rendered.content}</View>
+              </SheetGesture>
+            </Animated.View>
+          </GestureDetector>
+        </SheetPressBoundary>
       </View>
     </TopLayer>
   );
