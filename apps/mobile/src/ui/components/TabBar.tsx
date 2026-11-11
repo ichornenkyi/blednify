@@ -1,6 +1,7 @@
 import type { MaterialTopTabBarProps } from 'expo-router/js-top-tabs';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { Animated, Platform, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import Reanimated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated';
 import { create, useStore } from 'zustand';
 
 import { ChromeDock, ChromeSurface, NAV_PILL_HEIGHT } from '../chrome';
@@ -107,18 +108,22 @@ function FloatingTabBar() {
   const jumpTo = useStore(tabsStore, (s) => s.jumpTo);
   const [width, setWidth] = useState(0);
   const slot = names.length > 0 ? (width - PILL_PAD * 2) / names.length : 0;
+  // Web mirrors the position into a shared value (see WEB_MOTION).
+  const pos = useSharedValue(WEB_MOTION ? tabsStore.getState().webIndex : 0);
   // The tab nearest the pager's position: flips (with a tick) as a swipe crosses the middle, not when it settles.
-  const [active, setActive] = useState(() => Platform.OS === 'web' ? tabsStore.getState().webIndex : 0);
-  const [webPosition, setWebPosition] = useState(Platform.OS === 'web' ? position : null);
+  const [active, setActive] = useState(() => WEB_MOTION ? tabsStore.getState().webIndex : 0);
+  const [webPosition, setWebPosition] = useState(WEB_MOTION ? position : null);
   // The web pager can reach its initial offset before the live listener attaches.
   // Reset only when binding a position; animation frames still control active afterwards.
-  if (Platform.OS === 'web' && webPosition !== position) {
+  if (WEB_MOTION && webPosition !== position) {
     setWebPosition(position);
     setActive(tabsStore.getState().webIndex);
   }
   useEffect(() => {
+    if (WEB_MOTION) pos.set(tabsStore.getState().webIndex);
     let last = -1;
     const id = position.addListener(({ value }) => {
+      if (WEB_MOTION) pos.set(value);
       const next = Math.round(value);
       if (next === last) return;
       if (last !== -1) haptics.select();
@@ -126,41 +131,72 @@ function FloatingTabBar() {
       setActive(next);
     });
     return () => position.removeListener(id);
-  }, [position]);
-  const x = useMemo(
-    () => {
-      const last = Math.max(1, names.length - 1);
-      return position.interpolate({ inputRange: [0, last], outputRange: [0, last * slot], extrapolate: 'clamp' });
-    },
-    [position, slot, names.length],
-  );
+  }, [position, pos]);
+  const motion: Motion = WEB_MOTION ? { kind: 'web', pos } : { kind: 'native', position };
   return (
     <ChromeSurface radius={NAV_PILL_HEIGHT / 2} style={styles.pill}>
       <View style={styles.pillRow} accessibilityRole="tablist" onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        {slot > 0 ? <Animated.View pointerEvents="none" style={[styles.highlight, { width: slot, transform: [{ translateX: x }] }]} /> : null}
-        {names.map((name, i) => (
-          <FloatingTab
-            key={name}
-            name={name}
-            index={i}
-            position={position}
-            focused={i === active}
-            onPress={() => {
-              const key = keys[i];
-              if (i !== active && key) jumpTo(key);
-            }}
-          />
-        ))}
+        {/* JS-driven Animated only notifies listeners of a node some view is bound to; this one keeps it bound. */}
+        {WEB_MOTION ? <Animated.View pointerEvents="none" style={[styles.probe, { transform: [{ translateX: position }] }]} /> : null}
+        {slot > 0 ? <Highlight motion={motion} slot={slot} count={names.length} /> : null}
+        {names.map((name, i) => {
+          const tab = TABS[name];
+          if (!tab) return null;
+          return (
+            <Pressable
+              key={name}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: i === active }}
+              accessibilityLabel={tab.label}
+              style={styles.pillTab}
+              onPress={() => {
+                const key = keys[i];
+                if (i !== active && key) jumpTo(key);
+              }}>
+              <TabFace motion={motion} index={i} tab={tab} />
+            </Pressable>
+          );
+        })}
       </View>
     </ChromeSurface>
   );
 }
 
-/** Icon only until it is the active tab, then its label opens beside it; both track the pager position. */
-function FloatingTab({ name, index, position, focused, onPress }: { name: string; index: number; position: Position; focused: boolean; onPress: () => void }) {
+/**
+ * The pill follows the pager position. Native binds it with the native driver, so it runs on the UI
+ * thread. react-native-web has no native driver: its `Animated` re-renders every bound view through
+ * React on every frame, which stutters mid-swipe. Web copies the position into a Reanimated shared value
+ * instead, and Reanimated writes the styles straight to the DOM.
+ */
+const WEB_MOTION = Platform.OS === 'web';
+type Motion = { kind: 'native'; position: Position } | { kind: 'web'; pos: SharedValue<number> };
+type Tab = (typeof TABS)[string];
+
+function Highlight({ motion, slot, count }: { motion: Motion; slot: number; count: number }) {
+  return motion.kind === 'web' ? <WebHighlight pos={motion.pos} slot={slot} count={count} /> : <NativeHighlight position={motion.position} slot={slot} count={count} />;
+}
+
+function TabFace({ motion, index, tab }: { motion: Motion; index: number; tab: Tab }) {
+  return motion.kind === 'web' ? <WebTabFace pos={motion.pos} index={index} tab={tab} /> : <NativeTabFace position={motion.position} index={index} tab={tab} />;
+}
+
+function NativeHighlight({ position, slot, count }: { position: Position; slot: number; count: number }) {
   const styles = useStyles();
-  const colors = useColors();
-  const tab = TABS[name];
+  const x = useMemo(() => {
+    const last = Math.max(1, count - 1);
+    return position.interpolate({ inputRange: [0, last], outputRange: [0, last * slot], extrapolate: 'clamp' });
+  }, [position, slot, count]);
+  return <Animated.View pointerEvents="none" style={[styles.highlight, { width: slot, transform: [{ translateX: x }] }]} />;
+}
+
+function WebHighlight({ pos, slot, count }: { pos: SharedValue<number>; slot: number; count: number }) {
+  const styles = useStyles();
+  const style = useAnimatedStyle(() => ({ transform: [{ translateX: Math.min(Math.max(pos.get(), 0), Math.max(1, count - 1)) * slot }] }));
+  return <Reanimated.View pointerEvents="none" style={[styles.highlight, { width: slot }, style]} />;
+}
+
+/** Icon only until it is the active tab, then its label opens beside it; both track the pager position. */
+function NativeTabFace({ position, index, tab }: { position: Position; index: number; tab: Tab }) {
   const [labelWidth, setLabelWidth] = useState(0);
   const { on, off, shift, labelOpacity } = useMemo(() => {
     const p = position.interpolate({ inputRange: [index - 1, index, index + 1], outputRange: [0, 1, 0], extrapolate: 'clamp' });
@@ -169,38 +205,82 @@ function FloatingTab({ name, index, position, focused, onPress }: { name: string
       off: p.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
       // Inactive, the icon sits centred and the (invisible) label hangs off its right side.
       shift: p.interpolate({ inputRange: [0, 1], outputRange: [(labelWidth + space.sm) / 2, 0] }),
-      labelOpacity: p.interpolate({ inputRange: [0.35, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
+      labelOpacity: p.interpolate({ inputRange: [LABEL_FROM, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
     };
   }, [position, index, labelWidth]);
-  if (!tab) return null;
   return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityState={{ selected: focused }}
-      accessibilityLabel={tab.label}
-      style={styles.pillTab}
-      onPress={onPress}>
-      <Animated.View style={[styles.pillGroup, { transform: [{ translateX: shift }] }]}>
-        <View style={styles.pillIcon}>
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: off }]}>
-            <Icon name={tab.icon} size={24} color={colors.textSecondary} strokeWidth={2} />
-          </Animated.View>
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: on }]}>
-            <Icon name={tab.iconActive} size={24} color={colors.text} strokeWidth={2.6} />
-          </Animated.View>
-        </View>
-        <Animated.View style={[styles.pillLabel, { opacity: labelOpacity }]} onLayout={(e) => setLabelWidth(e.nativeEvent.layout.width)}>
-          <Text variant="bodyStrong" color={colors.text} numberOfLines={1}>
-            {tab.label}
-          </Text>
-        </Animated.View>
-      </Animated.View>
-    </Pressable>
+    <FaceLayout
+      View={Animated.View as FaceView}
+      tab={tab}
+      group={{ transform: [{ translateX: shift }] }}
+      off={{ opacity: off }}
+      on={{ opacity: on }}
+      label={{ opacity: labelOpacity }}
+      onLabelWidth={setLabelWidth}
+    />
+  );
+}
+
+function WebTabFace({ pos, index, tab }: { pos: SharedValue<number>; index: number; tab: Tab }) {
+  const labelWidth = useSharedValue(0);
+  const near = (v: number) => {
+    'worklet';
+    return Math.max(0, 1 - Math.abs(v - index));
+  };
+  const group = useAnimatedStyle(() => ({ transform: [{ translateX: ((1 - near(pos.get())) * (labelWidth.get() + space.sm)) / 2 }] }));
+  const off = useAnimatedStyle(() => ({ opacity: 1 - near(pos.get()) }));
+  const on = useAnimatedStyle(() => ({ opacity: near(pos.get()) }));
+  const label = useAnimatedStyle(() => ({ opacity: interpolate(near(pos.get()), [LABEL_FROM, 1], [0, 1], Extrapolation.CLAMP) }));
+  return <FaceLayout View={Reanimated.View as FaceView} tab={tab} group={group} off={off} on={on} label={label} onLabelWidth={(w) => labelWidth.set(w)} />;
+}
+
+/** The label starts fading in once the tab is this close to active. */
+const LABEL_FROM = 0.35;
+
+/** Either Animated flavour's View; each face passes styles of its own kind, so they are opaque here. */
+type AnyStyle = unknown;
+type FaceView = ComponentType<{ style?: AnyStyle; onLayout?: (e: LayoutChangeEvent) => void; children?: ReactNode }>;
+function FaceLayout({
+  View: AView,
+  tab,
+  group,
+  off,
+  on,
+  label,
+  onLabelWidth,
+}: {
+  View: FaceView;
+  tab: Tab;
+  group: AnyStyle;
+  off: AnyStyle;
+  on: AnyStyle;
+  label: AnyStyle;
+  onLabelWidth: (width: number) => void;
+}) {
+  const styles = useStyles();
+  const colors = useColors();
+  return (
+    <AView style={[styles.pillGroup, group]}>
+      <View style={styles.pillIcon}>
+        <AView style={[StyleSheet.absoluteFill, off]}>
+          <Icon name={tab.icon} size={24} color={colors.textSecondary} strokeWidth={2} />
+        </AView>
+        <AView style={[StyleSheet.absoluteFill, on]}>
+          <Icon name={tab.iconActive} size={24} color={colors.text} strokeWidth={2.6} />
+        </AView>
+      </View>
+      <AView style={[styles.pillLabel, label]} onLayout={(e) => onLabelWidth(e.nativeEvent.layout.width)}>
+        <Text variant="bodyStrong" color={colors.text} numberOfLines={1}>
+          {tab.label}
+        </Text>
+      </AView>
+    </AView>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
   pill: { height: NAV_PILL_HEIGHT },
+  probe: { position: 'absolute', width: 0, height: 0 },
   pillRow: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: PILL_PAD },
   highlight: {
     position: 'absolute',

@@ -11,7 +11,8 @@ Touch events still reach the child so tapping and long-press actions keep workin
 Web tab settling uses a bounded 320ms timing animation on the pager's existing Animated
 value. The highlight, icon crossfade and labels from upstream follow this same value during
 both dragging and settling. JavaScript still drives web frames; this preserves live tracking
-while shortening the old spring. Resize, cancellation and reduced motion are handled on web.
+while shortening the old spring. Upstream's Reanimated web tab faces and pager GPU layer
+are retained. Resize, cancellation and reduced motion are handled on web.
 Both source and compiled module are patched; native animation code stays unchanged.
 
 After changing the patch or upgrading tab-view, verify these cases with real pointer input:
